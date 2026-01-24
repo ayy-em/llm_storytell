@@ -1,0 +1,9 @@
+[project]
+name = "llm-storytell"
+version = "0.1.0"
+description = "A series of pipelines that creates mini-audiobooks, based on stories set in a predefined universe."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ruff>=0.14.14",
+]

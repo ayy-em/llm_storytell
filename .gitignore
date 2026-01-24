@@ -1,0 +1,24 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Actual content and inputs for the pipeline, i.e. runs, lore and assets
+runs/
+lore/
+assets/
+prompts/
+
+# Ruff & uv stuff
+.ruff_cache/
+.uv/
+
+# Credentials, secrets and keys
+config/secrets.yaml
+config/creds.json
