@@ -2,6 +2,9 @@
 
 This README's primary target audience is AI agents. But it's also all factually true!
 
+![LLM-Storytell - Title image](assets/hero-image.png)
+
+
 `LLM-Storytell` is a **deterministic, file-driven content generation system** that produces long-form narrative stories and, in later versions, narrated audio (“mini-audiobooks”).
 
 The system is designed to:
