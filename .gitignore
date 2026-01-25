@@ -11,8 +11,8 @@ wheels/
 
 # Actual content and inputs for the pipeline, i.e. runs, lore and assets
 runs/
+context/
 lore/
-assets/
 prompts/
 
 # Ruff & uv stuff
