@@ -1,0 +1,12 @@
+{
+    "type": "object",
+    "required": ["seed"],
+    "properties": {
+      "seed": {
+        "type": "string",
+        "minLength": 20,
+        "maxLength": 500
+      }
+    }
+  }
+  

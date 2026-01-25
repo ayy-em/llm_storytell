@@ -1,0 +1,14 @@
+{
+    "type": "object",
+    "required": ["section_id", "summary", "continuity_updates"],
+    "properties": {
+      "section_id": { "type": "integer" },
+      "summary": { "type": "string", "minLength": 200 },
+      "continuity_updates": {
+        "type": "object",
+        "additionalProperties": { "type": "string" }
+      }
+    },
+    "additionalProperties": false
+  }
+  

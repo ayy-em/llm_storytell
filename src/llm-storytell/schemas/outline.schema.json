@@ -1,0 +1,23 @@
+{
+    "type": "object",
+    "required": ["beats"],
+    "properties": {
+      "beats": {
+        "type": "array",
+        "minItems": 10,
+        "maxItems": 14,
+        "items": {
+          "type": "object",
+          "required": ["beat_id", "title", "summary"],
+          "properties": {
+            "beat_id": { "type": "integer" },
+            "title": { "type": "string", "minLength": 3 },
+            "summary": { "type": "string", "minLength": 20 }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "additionalProperties": false
+  }
+  

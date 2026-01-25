@@ -1,0 +1,28 @@
+{
+    "type": "object",
+    "required": [
+      "section_id",
+      "local_summary",
+      "new_entities",
+      "new_locations",
+      "unresolved_threads"
+    ],
+    "properties": {
+      "section_id": { "type": "integer" },
+      "local_summary": { "type": "string", "minLength": 100 },
+      "new_entities": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "new_locations": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "unresolved_threads": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "additionalProperties": false
+  }
+  

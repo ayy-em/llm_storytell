@@ -1,0 +1,16 @@
+{
+    "type": "object",
+    "required": ["issues_found", "changes_applied"],
+    "properties": {
+      "issues_found": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "changes_applied": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "additionalProperties": false
+  }
+  
