@@ -49,6 +49,7 @@ The orchestrator and pipeline code will be added in later tasks.
   - `make fmt` (format)
   - `make check` (format + lint + test)
 - A placeholder smoke test (`tests/test_smoke.py`) that imports the package
+- If any deliverable already exists, validate it against acceptance criteria and only modify as required
 
 **Acceptance criteria**
 - `uv sync` works on a clean clone
