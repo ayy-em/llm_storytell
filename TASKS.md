@@ -67,6 +67,57 @@ _Result_: (fill when complete)
 
 ---
 
+### [ ] T001a Define output schemas
+**Goal**
+Define and validate JSON schemas for all structured pipeline outputs.
+
+**Deliverables**
+- JSON Schema files for:
+  - outline output
+  - section metadata
+  - section summary
+  - critic report
+- Schema validation utility function
+- Unit tests validating:
+  - valid fixtures pass
+  - invalid fixtures fail
+
+**Acceptance criteria**
+- Schemas are enforced during pipeline execution
+- Tests cover both valid and invalid cases
+
+**Allowed files**
+- `src/llm-storytell/schemas/**`
+- `src/llm-storytell/validators.py`
+- `tests/test_schemas.py`
+- `tests/fixtures/**`
+
+_Result_:
+
+---
+
+### [ ] T001b Create golden test fixtures
+**Goal**
+Create reusable fixture files for schema and pipeline testing.
+
+**Deliverables**
+- Valid and invalid JSON fixtures for:
+  - outline
+  - section metadata
+  - summaries
+  - critic report
+
+**Acceptance criteria**
+- Fixtures are used by schema tests
+- Fixtures contain no placeholder text like "TODO"
+
+**Allowed files**
+- `tests/fixtures/**`
+
+_Result_:
+
+---
+
 ### [ ] T002 Config + credentials loader
 **Goal**
 Implement config loading and credential reading from `config/creds.json`.
@@ -78,10 +129,12 @@ Implement config loading and credential reading from `config/creds.json`.
   - valid creds file
   - missing file
   - missing OPENAI_KEY
+- Support for OPENAI_API_KEY env var as an override
 
 **Acceptance criteria**
 - Tests cover happy path + failure modes
 - No secrets logged
+- No credentials, keys or secrets committed to git
 
 **Allowed files**
 - `src/llm-storytell/config/**`
@@ -116,6 +169,28 @@ Create a minimal OpenAI API wrapper used by pipeline steps.
 
 **Commands**
 - `make test`
+
+_Result_:
+
+---
+
+### [ ] T003a Run-scoped logging
+**Goal**
+Implement structured logging scoped to a single pipeline run.
+
+**Deliverables**
+- Logger that writes to `runs/<run_id>/run.log`
+- Log step start/end, artifact writes, validation failures
+- Redact secrets automatically
+
+**Acceptance criteria**
+- Logs are created for every run
+- No secrets appear in logs
+- Tests verify log file creation
+
+**Allowed files**
+- `src/llm-storytell/logging.py`
+- `tests/test_logging.py`
 
 _Result_:
 
@@ -284,5 +359,27 @@ Finalize CLI and add an end-to-end run test using fully mocked LLM.
 **Allowed files**
 - `src/llm-storytell/cli.py`
 - `tests/test_e2e.py`
+
+_Result_:
+
+---
+
+### [ ] T011 Add CI pipeline
+**Goal**
+Add CI that enforces linting and tests on every push.
+
+**Context**
+Blocked until end-to-end smoke test exists.
+
+**Deliverables**
+- GitHub Actions workflow
+- Runs lint + tests
+
+**Acceptance criteria**
+- CI fails on lint or test failure
+- CI runs on PRs and main branch
+
+**Allowed files**
+- `.github/workflows/**`
 
 _Result_:

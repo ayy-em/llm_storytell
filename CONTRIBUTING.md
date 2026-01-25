@@ -52,6 +52,7 @@ If a dependency is not approved, remove it.
   ```
   runs/<run_id>/
   ```
+* All run artifacts are to be treated as immutable once the run is finished
 * All configuration must live under:
 
   ```
@@ -122,16 +123,14 @@ If you think something “should” be changed, write it down instead of changin
 
 * Prompt templates are **contracts**, not suggestions
 * Do not change prompt output formats unless:
-
   * The specification has changed
   * All downstream consumers are updated
 * Every prompt must clearly specify:
-
   * Required inputs
   * Required outputs
   * Output format (Markdown, JSON, etc.)
 
-If a prompt output is ambiguous, fix the prompt, not the parser.
+If a prompt output is ambiguous, fix the prompt, not the parser. Output schemas defined in src/llm-storytell/* are authoritative.
 
 ---
 

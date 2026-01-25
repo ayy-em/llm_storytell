@@ -8,8 +8,9 @@ This project implements a **deterministic, file-driven content generation pipeli
 * Reproducible (given identical inputs)
 * Extensible via configuration and prompt files
 * Orchestrated via a single CLI entry point
+* Schemas are authoritative: outputs should always adhere to (and be validated against) schemas in src/llm-storytell/schemas/*
 
-The pipeline is intentionally **sequential**, not conversational. All long-term memory is explicit and persisted to disk.
+The pipeline is intentionally **sequential**, not conversational. All long-term memory is explicit and persisted to disk. All run outputs are to be treated as immutable after completion.
 
 ---
 
@@ -34,7 +35,7 @@ No audio generation, embeddings, or external storage are included in v1.0.
 ### Command
 
 ```bash
-python -m grimnarrator run --seed "<story description>"
+python -m llm-storytell run --seed "<story description>"
 ```
 
 ### Required arguments
@@ -49,7 +50,7 @@ python -m grimnarrator run --seed "<story description>"
 ### Optional arguments (v1.0 defaults)
 
 * `--sections` (default: 12, min: 10, max: 14)
-* `--run-id` (optional override, otherwise timestamp-based)
+* `--run-id` (optional override, default id convention is `run-0001-DD.MM.YY-HH.ss`)
 * `--config-path` (default: `config/`)
 
 ---
