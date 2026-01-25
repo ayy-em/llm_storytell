@@ -1,0 +1,12 @@
+- Always read: SPEC.md, CONTRIBUTING.md, TASKS.md before coding.
+- Pick the first unchecked task in TASKS.md only.
+- Produce a plan (5–15 bullets) before editing files.
+- Touch only “Allowed files” for that task.
+- Implement + add tests.
+- Run:
+    - `uv run ruff format .`
+    - `uv run ruff check .`
+    - `uv run pytest -q`
+- If any command fails: fix and rerun until green.
+- Update TASKS.md: mark task [x], add a Result note.
+- Stop. Do not start the next task unless instructed.

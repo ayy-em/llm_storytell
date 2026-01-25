@@ -17,6 +17,18 @@ The system is designed to:
 
 This repository prioritizes **reproducibility and control** over creativity or interactivity.
 
+## Note: Cursor IDE
+
+This repository includes a `.cursor/` directory with project-level rules
+used by Cursor’s Agent mode.
+
+If you are using Cursor:
+- Do not delete or modify `.cursor/rules/`
+- These rules define the required task workflow, scope control, and validation steps
+
+If you are not using Cursor:
+- Treat the rules as documentation of the intended agent workflow
+
 ---
 
 ## What this is (and is not)

@@ -44,9 +44,10 @@ The orchestrator and pipeline code will be added in later tasks.
 - `pyproject.toml` configured for Python 3.12, ruff, pytest
 - `src/llm-storytell/__init__.py` and minimal package structure
 - `Makefile` (or `scripts/`) with:
-  - `make test`
-  - `make lint`
-  - `make fmt`
+  - `make test` (test)
+  - `make lint` (lint)
+  - `make fmt` (format)
+  - `make check` (format + lint + test)
 - A placeholder smoke test (`tests/test_smoke.py`) that imports the package
 
 **Acceptance criteria**

@@ -13,6 +13,7 @@ The primary goal is **correctness, reproducibility, and determinism**, not cleve
 * Package management is done via **uv**
 * Linting and formatting are enforced via **ruff**
 * All code must pass linting and formatting checks before being considered complete
+* Automated contributors must respect repository-level agent rules (e.g. .cursor/rules/).
 
 ### Formatting and linting rules
 
@@ -182,6 +183,7 @@ A task is considered complete only if:
 * No new linting errors are introduced
 * The change does not break existing pipeline steps
 * The code can be run from a clean checkout without manual intervention
+* Rules defined at repository level (e.g. at `/.cursor/rules`) are respected
 
 If any of the above is not true, the task is not done.
 
