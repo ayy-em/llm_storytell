@@ -133,3 +133,28 @@ Abstract LLM access behind a provider interface.
 
 ---
 
+### [x] T0005 Pipeline definition loader (2026-01-27)
+
+**Goal**
+Load and validate `config/pipeline.yaml`.
+
+**Deliverables**
+
+* YAML parser
+* Required field validation
+* Step ordering preserved
+
+**Acceptance criteria**
+
+* Invalid pipeline configs fail early
+* Parsed structure usable by orchestrator
+
+**Allowed files**
+
+* `src/llm-storytell/pipeline/**`
+* `tests/test_pipeline_loader.py`
+
+*Result*: Created `src/llm-storytell/pipeline/loader.py` with comprehensive YAML parsing and validation. Implemented data models (PipelineConfig, PipelineStep, LLMConfig, LoopConfig, OutputConfig, etc.) using dataclasses matching the approved YAML structure. Added PyYAML dependency to `pyproject.toml` and documented in `docs/decisions/0001-tech-stack.md`. Created 22 unit tests covering valid configs, error cases, step ordering, loops, multiple outputs, and validation. All checks pass: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (70 passed total).
+
+---
+

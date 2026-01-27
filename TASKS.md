@@ -72,29 +72,6 @@ Each task includes:
 
 ---
 
-### [ ] T0005 Pipeline definition loader
-
-**Goal**
-Load and validate `config/pipeline.yaml`.
-
-**Deliverables**
-
-* YAML parser
-* Required field validation
-* Step ordering preserved
-
-**Acceptance criteria**
-
-* Invalid pipeline configs fail early
-* Parsed structure usable by orchestrator
-
-**Allowed files**
-
-* `src/llm-storytell/pipeline/**`
-* `tests/test_pipeline_loader.py`
-
-*Result*:
-
 ---
 
 ## v1.0 – Context & prompt handling
