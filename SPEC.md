@@ -108,6 +108,13 @@ LLM-Storytell/
 Generated content must never be committed.
 
 ---
+## Approved third-party libraries
+
+* requests for HTTP
+* httpx if async is needed
+* pydantic for validation
+* tenacity for retries (optional)
+* polars, numpy and pandas
 
 ## CLI Interface
 
