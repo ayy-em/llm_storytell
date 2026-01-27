@@ -72,32 +72,6 @@ Each task includes:
 
 ---
 
-### [ ] T0004 LLM provider abstraction (OpenAI only)
-
-**Goal**
-Abstract LLM access behind a provider interface.
-
-**Deliverables**
-
-* `LLMProvider` interface
-* OpenAI implementation only
-* Retry logic
-* Provider metadata returned with responses
-
-**Acceptance criteria**
-
-* No pipeline step imports OpenAI SDK directly
-* Provider can be swapped without changing step code
-
-**Allowed files**
-
-* `src/llm-storytell/llm/**`
-* `tests/test_llm_provider.py`
-
-*Result*:
-
----
-
 ### [ ] T0005 Pipeline definition loader
 
 **Goal**

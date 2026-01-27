@@ -398,9 +398,16 @@ class LLMProvider:
     def generate(self, prompt: str, **kwargs) -> LLMResult
 ```
 
+* The provider returns a structured result (`LLMResult`) that includes:
+  * provider name
+  * model identifier
+  * prompt / completion / total token counts (when available from the backend)
+
 ### Initial implementation
 
-* OpenAI provider only
+* OpenAI-backed provider only (`OpenAIProvider`)
+* Token usage from the OpenAI response (`usage.prompt_tokens`, `usage.completion_tokens`, `usage.total_tokens`) is surfaced through `LLMResult`
+* Pipeline steps use this metadata together with `record_token_usage()` to log and persist token usage into `run.log` and `state.json.token_usage[]`
 
 ### Rationale
 

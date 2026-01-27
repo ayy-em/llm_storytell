@@ -106,3 +106,30 @@ Implement platform-level logging and token usage tracking.
 *Result*: Extended `RunLogger` in `logging.py` with methods: `log_stage_start()`, `log_stage_end()`, `log_artifact_write()`, `log_validation_failure()`, `log_token_usage()`. Created `src/llm-storytell/llm/token_tracking.py` with `TokenUsage` dataclass and `record_token_usage()` function that logs to `run.log` and returns dict for `state.json`. Created `tests/test_logging.py` with 12 tests covering all new functionality, including mocked token usage scenarios and secret protection. All tests pass (40 total). Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q`.
 
 ---
+
+### [x] T0004 LLM provider abstraction (OpenAI only) (2026-01-27)
+
+**Goal**
+Abstract LLM access behind a provider interface.
+
+**Deliverables**
+
+* `LLMProvider` interface
+* OpenAI implementation only
+* Retry logic
+* Provider metadata returned with responses
+
+**Acceptance criteria**
+
+* No pipeline step imports OpenAI SDK directly
+* Provider can be swapped without changing step code
+
+**Allowed files**
+
+* `src/llm-storytell/llm/**`
+* `tests/test_llm_provider.py`
+
+*Result*: Implemented `LLMResult`, `LLMProvider` base class, and `OpenAIProvider` in `src/llm-storytell/llm/__init__.py` with retry logic and provider/model/token metadata in `LLMResult`. Added `tests/test_llm_provider.py` covering the interface, OpenAI happy-path behaviour, retry handling, and token usage extraction (including derived totals and missing usage). All checks pass: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q`.
+
+---
+

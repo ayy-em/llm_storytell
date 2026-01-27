@@ -134,6 +134,15 @@ Later versions will allow explicit user control via CLI flags.
 Detailed mechanics live in `SPEC.md`.
 README stays readable.
 
+### LLM provider abstraction (v1.0)
+
+All LLM calls go through a small provider interface (`LLMProvider`) instead of using vendor SDKs directly. The default implementation is an OpenAI-backed provider that returns an `LLMResult` object containing:
+
+- Provider and model identifiers
+- Prompt / completion / total token counts (when the backend reports them)
+
+Pipeline steps are responsible for taking this metadata and recording token usage into `run.log` and `state.json` via the logging and token-tracking utilities.
+
 ---
 
 ## Repository structure (simplified)
