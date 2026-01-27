@@ -39,11 +39,8 @@ If any command fails:
 - Rerun until all are green
 
 ## Task completion
-- Update `TASKS.md`:
-  - Mark the task `[x]`
-  - Append a short **Result** note (what changed + commands run)
-- Do not delete tasks.
-- Do not start the next task unless explicitly instructed.
+- In `TASKS.md`: mark completed task [x] and add "Result" note, then remove the task from `TASKS.md`
+- Append to `COMPLETED_TASKS.md`: paste the completed task (including Result note), ideally including completion date in task's header; optionally include commit hash
 
 ## Version control (per task)
 - After checks are green, prepare a **single commit** for this task only.

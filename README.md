@@ -145,6 +145,7 @@ LLM-Storytell/
   SPEC.md
   CONTRIBUTING.md
   TASKS.md
+  COMPLETED_TASKS.md
 
   config/
   prompts/
@@ -232,7 +233,7 @@ Before making changes:
 * Read `SPEC.md`
 * Read `CONTRIBUTING.md`
 * Follow `.cursor/rules/`
-* Work one task at a time from `TASKS.md`
+* Work one task at a time from `TASKS.md` (completed tasks are moved to `COMPLETED_TASKS.md`)
 
 If something is unclear, stop.
 

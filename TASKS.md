@@ -1,8 +1,12 @@
 # TASKS
 
-This file is the execution queue for automated coding agents.
+* This file is the active execution queue of tasks for AI agents.
+* Completed tasks must be moved to COMPLETED_TASKS.md.
+* Completed tasks should not be present in this file.
 
 The goal of **v1.0** is a **local, deterministic, multi-app-ready content generation pipeline** that can successfully run the `grim-narrator` app end-to-end and produce a final script.
+
+
 
 ---
 

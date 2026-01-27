@@ -56,6 +56,7 @@ LLM-Storytell/
   SPEC.md
   CONTRIBUTING.md
   TASKS.md
+  COMPLETED_TASKS.md
 
   config/
     pipeline.yaml

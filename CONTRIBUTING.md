@@ -177,7 +177,7 @@ A task is considered complete only if:
 * The change does not break existing pipeline steps
 * The code can be run from a clean checkout without manual intervention
 * Rules defined at repository level (e.g. `/.cursor/rules`) are respected
-* The task is marked `[x]` in `TASKS.md` with a Result note
+* The completed task is marked [x] in TASKS.md with a Result note, then moved to COMPLETED_TASKS.md.
 
 If any of the above is not true, the task is not done.
 
