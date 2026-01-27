@@ -190,3 +190,28 @@ Load and select context files for a run.
 
 ---
 
+### [x] T0011 Prompt renderer (2026-01-27)
+
+**Goal**
+Render prompt templates deterministically.
+
+**Deliverables**
+
+* Template renderer
+* Strict missing-variable errors
+* No silent fallbacks
+
+**Acceptance criteria**
+
+* Rendering is reproducible
+* Errors point to missing inputs
+
+**Allowed files**
+
+* `src/llm-storytell/prompt_render.py`
+* `tests/test_prompt_render.py`
+
+*Result*: Created `src/llm-storytell/prompt_render.py` with `render_prompt()` function that reads template files and renders them using Python's `str.format()`. Implemented strict variable validation that extracts all placeholders and raises `MissingVariableError` if any are missing. Created custom exception classes: `PromptRenderError` (base), `MissingVariableError`, and `TemplateNotFoundError`. All errors include actionable messages with template path and missing variable names. Handles Unicode content, format specifiers, escaped braces, and multiline templates. Created 20 comprehensive unit tests covering successful rendering, missing variables (single and multiple), file not found, format errors, placeholder extraction, and deterministic behavior. All checks pass: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (109 passed total).
+
+---
+

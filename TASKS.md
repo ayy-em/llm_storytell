@@ -70,29 +70,6 @@ Each task includes:
 
 ---
 
-### [ ] T0011 Prompt renderer
-
-**Goal**
-Render prompt templates deterministically.
-
-**Deliverables**
-
-* Template renderer
-* Strict missing-variable errors
-* No silent fallbacks
-
-**Acceptance criteria**
-
-* Rendering is reproducible
-* Errors point to missing inputs
-
-**Allowed files**
-
-* `src/llm-storytell/prompt_render.py`
-* `tests/test_prompt_render.py`
-
-*Result*:
-
 ---
 
 ## v1.0 – Pipeline stages (grim-narrator app)
