@@ -40,8 +40,9 @@ The goal of **v1.0** is a **local, deterministic, multi-app-ready content genera
   * README.md
   * SPEC.md
 * Proposals must be bullet-pointed and minimal.
-* If new third-party dependencies were added, document the decision-making process by creating a new .md file in `docs/decisions/`
+* If new third-party dependencies were added, document the decision-making process by creating a new .md file in `docs/decisions/`.
 * Do not modify documentation unless explicitly instructed.
+* After solution for a task is approved, mark the task as [x] done in `TASKS.md`, and move the whole completed task's section to `COMPLETED_TASKS.md`.
 
 ### Version Control
 * After completing a task, checking for spec/doc drift is peformed and all linter checks and tests pass, prepare changes for a single commit.
@@ -63,21 +64,6 @@ Each task includes:
 * Allowed files (hard constraint)
 * Commands to run
 * Notes (optional)
-
----
-
-## v1.0 – Context & prompt handling
-
----
-
----
-
-## v1.0 – Pipeline stages (grim-narrator app)
-
-
----
-
----
 
 ---
 
@@ -116,7 +102,7 @@ Prove the pipeline works end-to-end.
 
 ---
 
-## Post-v1.0 backlog (do not start yet)
+## Post-v1.0 backlog (**do not start** yet)
 
 ### [ ] T0100 CI pipeline
 
