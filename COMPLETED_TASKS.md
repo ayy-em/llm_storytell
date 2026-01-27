@@ -158,3 +158,35 @@ Load and validate `config/pipeline.yaml`.
 
 ---
 
+### [x] T0010 Context loader (app-aware, randomized) (2026-01-27)
+
+**Goal**
+Load and select context files for a run.
+
+**Deliverables**
+
+* Always load:
+
+  * lore bible
+  * style rules
+* Randomly select:
+
+  * 1 location
+  * 2–3 characters
+* Persist selections to state
+* Log selections
+
+**Acceptance criteria**
+
+* Context selection varies across runs
+* Same run artifacts always reflect same selection
+
+**Allowed files**
+
+* `src/llm-storytell/context/**`
+* `tests/test_context_loader.py`
+
+*Result*: Created `src/llm-storytell/context/loader.py` with `ContextLoader` class and `ContextSelection` dataclass. Implemented always-loaded files (lore_bible.md, style/*.md), randomized selection of 1 location and 2-3 characters using run_id as deterministic seed. Added `log_context_selection()` method to `RunLogger`. Paths normalized to forward slashes for cross-platform compatibility. Handles missing directories gracefully, warns but doesn't fail if fewer than 2 characters available. Created 19 comprehensive unit tests covering all scenarios including minimal apps, large context libraries, reproducibility, and Unicode content. All checks pass: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (89 passed total).
+
+---
+

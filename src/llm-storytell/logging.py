@@ -138,3 +138,29 @@ class RunLogger:
             f"prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}, "
             f"total_tokens={total_tokens}"
         )
+
+    def log_context_selection(
+        self,
+        always_loaded: list[str],
+        selected_location: str | None,
+        selected_characters: list[str],
+    ) -> None:
+        """Log context file selections for a run.
+
+        Args:
+            always_loaded: List of relative paths to always-loaded files.
+            selected_location: Relative path to selected location file, or None.
+            selected_characters: List of relative paths to selected character files.
+        """
+        self.info("Context selection:")
+        self.info(f"  Always loaded: {', '.join(sorted(always_loaded))}")
+        if selected_location:
+            self.info(f"  Selected location: {selected_location}")
+        else:
+            self.info("  Selected location: (none)")
+        if selected_characters:
+            self.info(
+                f"  Selected characters: {', '.join(sorted(selected_characters))}"
+            )
+        else:
+            self.info("  Selected characters: (none)")

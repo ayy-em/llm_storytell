@@ -68,36 +68,6 @@ Each task includes:
 
 ## v1.0 – Context & prompt handling
 
-### [ ] T0010 Context loader (app-aware, randomized)
-
-**Goal**
-Load and select context files for a run.
-
-**Deliverables**
-
-* Always load:
-
-  * lore bible
-  * style rules
-* Randomly select:
-
-  * 1 location
-  * 2–3 characters
-* Persist selections to state
-* Log selections
-
-**Acceptance criteria**
-
-* Context selection varies across runs
-* Same run artifacts always reflect same selection
-
-**Allowed files**
-
-* `src/llm-storytell/context/**`
-* `tests/test_context_loader.py`
-
-*Result*:
-
 ---
 
 ### [ ] T0011 Prompt renderer
