@@ -69,3 +69,40 @@ Create and initialize a run in a deterministic, inspectable way.
 *Result*: Created `run_dir.py` with `initialize_run()` function (atomic creation via temp directory + rename), `logging.py` with `RunLogger` class. Writes `inputs.json`, `state.json`, `run.log`, and `artifacts/` directory. 28 tests pass. Commands: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q`.
 
 ---
+
+### [x] T0003 Universal logging + token accounting (2026-01-27)
+
+**Goal**
+Implement platform-level logging and token usage tracking.
+
+**Deliverables**
+
+* Run-scoped logger writing to `run.log`
+* Structured log events for:
+
+  * stage start/end
+  * artifact writes
+  * validation failures
+* Token usage tracking per LLM call:
+
+  * provider
+  * model
+  * prompt tokens
+  * completion tokens
+* Persist token usage into `state.json`
+
+**Acceptance criteria**
+
+* Logs exist for every run
+* No secrets logged
+* Token usage visible even in mocked tests
+
+**Allowed files**
+
+* `src/llm-storytell/logging.py`
+* `src/llm-storytell/llm/**`
+* `tests/test_logging.py`
+
+*Result*: Extended `RunLogger` in `logging.py` with methods: `log_stage_start()`, `log_stage_end()`, `log_artifact_write()`, `log_validation_failure()`, `log_token_usage()`. Created `src/llm-storytell/llm/token_tracking.py` with `TokenUsage` dataclass and `record_token_usage()` function that logs to `run.log` and returns dict for `state.json`. Created `tests/test_logging.py` with 12 tests covering all new functionality, including mocked token usage scenarios and secret protection. All tests pass (40 total). Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q`.
+
+---

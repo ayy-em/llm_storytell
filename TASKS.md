@@ -70,41 +70,6 @@ Each task includes:
 
 ## v1.0 – Platform foundation (generic, app-agnostic)
 
-### [ ] T0003 Universal logging + token accounting
-
-**Goal**
-Implement platform-level logging and token usage tracking.
-
-**Deliverables**
-
-* Run-scoped logger writing to `run.log`
-* Structured log events for:
-
-  * stage start/end
-  * artifact writes
-  * validation failures
-* Token usage tracking per LLM call:
-
-  * provider
-  * model
-  * prompt tokens
-  * completion tokens
-* Persist token usage into `state.json`
-
-**Acceptance criteria**
-
-* Logs exist for every run
-* No secrets logged
-* Token usage visible even in mocked tests
-
-**Allowed files**
-
-* `src/llm-storytell/logging.py`
-* `src/llm-storytell/llm/**`
-* `tests/test_logging.py`
-
-*Result*:
-
 ---
 
 ### [ ] T0004 LLM provider abstraction (OpenAI only)

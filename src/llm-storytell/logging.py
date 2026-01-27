@@ -77,3 +77,64 @@ class RunLogger:
         self.info(f"Seed: {seed}")
         self.info(f"Context directory: {context_dir}")
         self.info(f"Prompts directory: {prompts_dir}")
+
+    def log_stage_start(self, stage_name: str) -> None:
+        """Log the start of a pipeline stage.
+
+        Args:
+            stage_name: Name of the pipeline stage (e.g., "outline", "section_01").
+        """
+        self.info(f"Stage started: {stage_name}")
+
+    def log_stage_end(self, stage_name: str, success: bool) -> None:
+        """Log the end of a pipeline stage.
+
+        Args:
+            stage_name: Name of the pipeline stage.
+            success: Whether the stage completed successfully.
+        """
+        status = "success" if success else "failure"
+        self.info(f"Stage ended: {stage_name} ({status})")
+
+    def log_artifact_write(self, file_path: Path, size_bytes: int) -> None:
+        """Log the creation of an artifact file.
+
+        Args:
+            file_path: Path to the artifact file (relative to run directory).
+            size_bytes: Size of the file in bytes.
+        """
+        self.info(f"Artifact written: {file_path} ({size_bytes} bytes)")
+
+    def log_validation_failure(self, step: str, error: str) -> None:
+        """Log a validation failure.
+
+        Args:
+            step: Name of the step that failed validation.
+            error: Description of the validation error.
+        """
+        self.error(f"Validation failure in {step}: {error}")
+
+    def log_token_usage(
+        self,
+        step: str,
+        provider: str,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        total_tokens: int,
+    ) -> None:
+        """Log token usage for an LLM call.
+
+        Args:
+            step: Name of the pipeline step that made the call.
+            provider: LLM provider name (e.g., "openai").
+            model: Model name (e.g., "gpt-4").
+            prompt_tokens: Number of prompt tokens used.
+            completion_tokens: Number of completion tokens used.
+            total_tokens: Total tokens used.
+        """
+        self.info(
+            f"Token usage [{step}]: provider={provider}, model={model}, "
+            f"prompt_tokens={prompt_tokens}, completion_tokens={completion_tokens}, "
+            f"total_tokens={total_tokens}"
+        )
