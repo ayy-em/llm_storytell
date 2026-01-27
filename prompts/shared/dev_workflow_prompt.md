@@ -18,6 +18,6 @@ After approval:
    Fix and rerun until all pass.
 
 Finish:
-7) Update `TASKS.md`: mark the task `[x]` and add a short **Result** note (what changed + commands run).
+7) Update `TASKS.md`: mark the task `[x]` and add a short **Result** note (what changed + commands run). Then move the section containing info on the completed task to `COMPLETED_TASKS.md`.
 8) Prepare a single commit for this task only. Commit message: `TXXXX: <short task description>`.
 9) Stop. Do not start the next task.
