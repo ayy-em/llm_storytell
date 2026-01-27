@@ -70,40 +70,6 @@ Each task includes:
 
 ## v1.0 – Platform foundation (generic, app-agnostic)
 
-### [x] T0002 Run initialization + state bootstrap
-
-**Goal**
-Create and initialize a run in a deterministic, inspectable way.
-
-**Deliverables**
-
-* Create `runs/<run_id>/`
-* Write:
-
-  * `inputs.json`
-  * `state.json`
-  * `run.log`
-* Log:
-
-  * app name
-  * seed
-  * resolved context paths
-
-**Acceptance criteria**
-
-* Run folder created exactly once
-* Failed runs do not leave partial state
-
-**Allowed files**
-
-* `src/llm-storytell/run_dir.py`
-* `src/llm-storytell/logging.py`
-* `tests/test_run_init.py`
-
-*Result*: Created `run_dir.py` with `initialize_run()` function (atomic creation via temp directory + rename), `logging.py` with `RunLogger` class. Writes `inputs.json`, `state.json`, `run.log`, and `artifacts/` directory. 28 tests pass. Commands: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q`.
-
----
-
 ### [ ] T0003 Universal logging + token accounting
 
 **Goal**
