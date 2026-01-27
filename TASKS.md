@@ -70,7 +70,7 @@ Each task includes:
 
 ## v1.0 – Platform foundation (generic, app-agnostic)
 
-### [ ] T0002 Run initialization + state bootstrap
+### [x] T0002 Run initialization + state bootstrap
 
 **Goal**
 Create and initialize a run in a deterministic, inspectable way.
@@ -100,7 +100,7 @@ Create and initialize a run in a deterministic, inspectable way.
 * `src/llm-storytell/logging.py`
 * `tests/test_run_init.py`
 
-*Result*:
+*Result*: Created `run_dir.py` with `initialize_run()` function (atomic creation via temp directory + rename), `logging.py` with `RunLogger` class. Writes `inputs.json`, `state.json`, `run.log`, and `artifacts/` directory. 28 tests pass. Commands: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q`.
 
 ---
 
