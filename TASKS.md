@@ -6,8 +6,6 @@
 
 The goal of **v1.0** is a **local, deterministic, multi-app-ready content generation pipeline** that can successfully run the `grim-narrator` app end-to-end and produce a final script.
 
-
-
 ---
 
 ## Global rules (apply to every task)
@@ -65,12 +63,6 @@ Each task includes:
 * Allowed files (hard constraint)
 * Commands to run
 * Notes (optional)
-
----
-
-## v1.0 – Platform foundation (generic, app-agnostic)
-
----
 
 ---
 
@@ -276,15 +268,3 @@ Prove the pipeline works end-to-end.
 * No grim-narrator assumptions in platform code
 * ruff checks are passed
 * README.md and SPEC.md are up-to-date and reflect scope, tech stack and other info truthfully.
-
----
-
-This TASKS.md is now:
-
-* aligned with your **actual repo**
-* safe for agents
-* future-proof without being aspirational fluff
-* suitable for kicking off **T0001** immediately
-
-Next step, when you’re ready:
-we’ll tighten `CONTRIBUTING.md`, `.cursor/rules`, and `CURSOR_WORKFLOW.md` so agents don’t get creative at 3am.
