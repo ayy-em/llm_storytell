@@ -16,7 +16,7 @@ wheels/
 runs/
 context/
 lore/
-prompts/apps/
+prompts/apps/**/*.md
 assets/
 
 # Ruff & uv stuff

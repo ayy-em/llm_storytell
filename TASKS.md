@@ -70,38 +70,6 @@ Each task includes:
 
 ## v1.0 – Platform foundation (generic, app-agnostic)
 
-### [ ] T0001 Runtime config + app resolution
-
-**Goal**
-Implement app discovery and validation.
-
-**Context**
-The pipeline must support multiple apps from day one, even if only one exists.
-
-**Deliverables**
-
-* Resolve `--app <name>` to:
-
-  * `context/<app>/`
-  * `prompts/apps/<app>/`
-* Fail clearly if app does not exist
-* Expose resolved paths to pipeline runtime
-
-**Acceptance criteria**
-
-* Running with invalid app name fails with actionable error
-* Valid app is resolved without hardcoding `grim-narrator`
-
-**Allowed files**
-
-* `src/llm-storytell/cli.py`
-* `src/llm-storytell/config/**`
-* `tests/test_app_resolution.py`
-
-*Result*:
-
----
-
 ### [ ] T0002 Run initialization + state bootstrap
 
 **Goal**
