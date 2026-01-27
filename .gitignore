@@ -6,6 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+# IDE
+.vscode/
+
 # Virtual environments
 .venv
 
@@ -13,7 +16,8 @@ wheels/
 runs/
 context/
 lore/
-prompts/
+prompts/apps/
+assets/
 
 # Ruff & uv stuff
 .ruff_cache/

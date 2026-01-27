@@ -2,386 +2,435 @@
 
 This file is the execution queue for automated coding agents.
 
-## Global rules (apply to every task)
-- Do not expand scope beyond the task.
-- Before implementation: propose a short solution design (5–15 bullets).
-- Implementation must include unit tests (or explicit justification why not).
-- All changes must pass:
-  - `uv run ruff check .`
-  - `uv run ruff format .`
-  - `uv run pytest -q`
-- New dependencies are not allowed unless explicitly requested by the task.
-  - If added, justify in `docs/decisions/0001-tech-stack.md`.
-- Touch only the files listed in “Allowed files”.
-- Persist outputs strictly under `runs/<run_id>/...` as per `SPEC.md`.
-- Do not delete tasks. Mark them complete (`[x]`) and append a short Result note.
+The goal of **v1.0** is a **local, deterministic, multi-app-ready content generation pipeline** that can successfully run the `grim-narrator` app end-to-end and produce a final script.
 
 ---
+
+## Global rules (apply to every task)
+
+### Fundamental
+* Read .cursor/rules/00-workflow.md
+* Read TASKS.md, read global rules and select the first unchecked task
+* Consult SPEC.md sections relevant to the task 
+
+### Main workflow rules
+* Do not expand scope beyond the task.
+* Before implementation: propose a short solution design (5–15 bullets).
+* Implementation must include unit tests (or explicit justification why not).
+* All changes must pass:
+  * `uv run ruff format .`
+  * `uv run ruff check .`
+  * `uv run pytest -q`
+* New dependencies are **not allowed** unless explicitly requested by the task.
+  * If added, justify in `docs/decisions/0001-tech-stack.md`.
+* Touch **only** the files listed in “Allowed files”.
+* Persist outputs strictly under `runs/<run_id>/...` as per `SPEC.md`.
+* Do not delete tasks.
+  * Mark them `[x]`
+  * Append a short **Result** note (what changed + commands run)
+
+### Post-implementation spec/doc drift detection 
+* After a task is accepted, briefly evaluate whether the change introduces:
+  * a new concept
+  * a new constraint
+  * a new required user-facing behavior
+* If so, propose (do not implement) updates to:
+  * README.md
+  * SPEC.md
+* Proposals must be bullet-pointed and minimal.
+* If new third-party dependencies were added, document the decision-making process by creating a new .md file in `docs/decisions/`
+* Do not modify documentation unless explicitly instructed.
+
+### Version Control
+* After completing a task, checking for spec/doc drift is peformed and all linter checks and tests pass, prepare changes for a single commit.
+* The commit must include only files touched by the task.
+* Commit message format: `TXXXX: <short task description>`
+* Do not push unless explicitly instructed.
+
+### End
+* Stop after completing one task.
 
 ## Task format
 
 Each task includes:
-- Goal
-- Context
-- Deliverables
-- Acceptance criteria
-- Allowed files (hard constraint)
-- Commands to run
-- Notes (optional)
+
+* Goal
+* Context
+* Deliverables
+* Acceptance criteria
+* Allowed files (hard constraint)
+* Commands to run
+* Notes (optional)
 
 ---
 
-## Backlog
+## v1.0 – Platform foundation (generic, app-agnostic)
 
-### [ ] T001 Repo bootstrap and tooling
+### [ ] T0001 Runtime config + app resolution
+
 **Goal**
-Create the minimal runnable Python project with linting/testing wired.
+Implement app discovery and validation.
 
 **Context**
-The orchestrator and pipeline code will be added in later tasks.
+The pipeline must support multiple apps from day one, even if only one exists.
 
 **Deliverables**
-- `pyproject.toml` configured for Python 3.12, ruff, pytest
-- `src/llm-storytell/__init__.py` and minimal package structure
-- `Makefile` (or `scripts/`) with:
-  - `make test` (test)
-  - `make lint` (lint)
-  - `make fmt` (format)
-  - `make check` (format + lint + test)
-- A placeholder smoke test (`tests/test_smoke.py`) that imports the package
-- If any deliverable already exists, validate it against acceptance criteria and only modify as required
+
+* Resolve `--app <name>` to:
+
+  * `context/<app>/`
+  * `prompts/apps/<app>/`
+* Fail clearly if app does not exist
+* Expose resolved paths to pipeline runtime
 
 **Acceptance criteria**
-- `uv sync` works on a clean clone
-- `make test`, `make lint`, `make fmt` all succeed
+
+* Running with invalid app name fails with actionable error
+* Valid app is resolved without hardcoding `grim-narrator`
 
 **Allowed files**
-- `pyproject.toml`
-- `Makefile` (or `scripts/*`)
-- `src/llm-storytell/**`
-- `tests/**`
 
-**Commands**
-- `uv sync`
-- `make fmt && make lint && make test`
+* `src/llm-storytell/cli.py`
+* `src/llm-storytell/config/**`
+* `tests/test_app_resolution.py`
 
-_Result_: (fill when complete)
+*Result*:
 
 ---
 
-### [ ] T001a Define output schemas
+### [ ] T0002 Run initialization + state bootstrap
+
 **Goal**
-Define and validate JSON schemas for all structured pipeline outputs.
+Create and initialize a run in a deterministic, inspectable way.
 
 **Deliverables**
-- JSON Schema files for:
-  - outline output
-  - section metadata
-  - section summary
-  - critic report
-- Schema validation utility function
-- Unit tests validating:
-  - valid fixtures pass
-  - invalid fixtures fail
+
+* Create `runs/<run_id>/`
+* Write:
+
+  * `inputs.json`
+  * `state.json`
+  * `run.log`
+* Log:
+
+  * app name
+  * seed
+  * resolved context paths
 
 **Acceptance criteria**
-- Schemas are enforced during pipeline execution
-- Tests cover both valid and invalid cases
+
+* Run folder created exactly once
+* Failed runs do not leave partial state
 
 **Allowed files**
-- `src/llm-storytell/schemas/**`
-- `src/llm-storytell/validators.py`
-- `tests/test_schemas.py`
-- `tests/fixtures/**`
 
-_Result_:
+* `src/llm-storytell/run_dir.py`
+* `src/llm-storytell/logging.py`
+* `tests/test_run_init.py`
+
+*Result*:
 
 ---
 
-### [ ] T001b Create golden test fixtures
+### [ ] T0003 Universal logging + token accounting
+
 **Goal**
-Create reusable fixture files for schema and pipeline testing.
+Implement platform-level logging and token usage tracking.
 
 **Deliverables**
-- Valid and invalid JSON fixtures for:
-  - outline
-  - section metadata
-  - summaries
-  - critic report
+
+* Run-scoped logger writing to `run.log`
+* Structured log events for:
+
+  * stage start/end
+  * artifact writes
+  * validation failures
+* Token usage tracking per LLM call:
+
+  * provider
+  * model
+  * prompt tokens
+  * completion tokens
+* Persist token usage into `state.json`
 
 **Acceptance criteria**
-- Fixtures are used by schema tests
-- Fixtures contain no placeholder text like "TODO"
+
+* Logs exist for every run
+* No secrets logged
+* Token usage visible even in mocked tests
 
 **Allowed files**
-- `tests/fixtures/**`
 
-_Result_:
+* `src/llm-storytell/logging.py`
+* `src/llm-storytell/llm/**`
+* `tests/test_logging.py`
+
+*Result*:
 
 ---
 
-### [ ] T002 Config + credentials loader
+### [ ] T0004 LLM provider abstraction (OpenAI only)
+
 **Goal**
-Implement config loading and credential reading from `config/creds.json`.
+Abstract LLM access behind a provider interface.
 
 **Deliverables**
-- A function to load creds and return the OpenAI key
-- Clear error messages when missing/invalid
-- Tests for:
-  - valid creds file
-  - missing file
-  - missing OPENAI_KEY
-- Support for OPENAI_API_KEY env var as an override
+
+* `LLMProvider` interface
+* OpenAI implementation only
+* Retry logic
+* Provider metadata returned with responses
 
 **Acceptance criteria**
-- Tests cover happy path + failure modes
-- No secrets logged
-- No credentials, keys or secrets committed to git
+
+* No pipeline step imports OpenAI SDK directly
+* Provider can be swapped without changing step code
 
 **Allowed files**
-- `src/llm-storytell/config/**`
-- `tests/test_config.py`
-- `config/creds.json` should NOT be committed
 
-**Commands**
-- `make test`
+* `src/llm-storytell/llm/**`
+* `tests/test_llm_provider.py`
 
-_Result_: 
+*Result*:
 
 ---
 
-### [ ] T003 OpenAI client wrapper
+### [ ] T0005 Pipeline definition loader
+
 **Goal**
-Create a minimal OpenAI API wrapper used by pipeline steps.
+Load and validate `config/pipeline.yaml`.
 
 **Deliverables**
-- `LLMClient` with a single method, e.g. `generate(prompt: str) -> str`
-- Request/response logging into the active run directory (redacting secrets)
-- Retry behavior (simple: N retries with backoff)
-- Tests that mock network calls (no live API calls in tests)
+
+* YAML parser
+* Required field validation
+* Step ordering preserved
 
 **Acceptance criteria**
-- Can call `LLMClient.generate()` from a smoke script
-- Tests do not require network or API key
+
+* Invalid pipeline configs fail early
+* Parsed structure usable by orchestrator
 
 **Allowed files**
-- `src/llm-storytell/llm_client.py`
-- `src/llm-storytell/logging.py` (if needed)
-- `tests/test_llm_client.py`
 
-**Commands**
-- `make test`
+* `src/llm-storytell/pipeline/**`
+* `tests/test_pipeline_loader.py`
 
-_Result_:
+*Result*:
 
 ---
 
-### [ ] T003a Run-scoped logging
+## v1.0 – Context & prompt handling
+
+### [ ] T0010 Context loader (app-aware, randomized)
+
 **Goal**
-Implement structured logging scoped to a single pipeline run.
+Load and select context files for a run.
 
 **Deliverables**
-- Logger that writes to `runs/<run_id>/run.log`
-- Log step start/end, artifact writes, validation failures
-- Redact secrets automatically
+
+* Always load:
+
+  * lore bible
+  * style rules
+* Randomly select:
+
+  * 1 location
+  * 2–3 characters
+* Persist selections to state
+* Log selections
 
 **Acceptance criteria**
-- Logs are created for every run
-- No secrets appear in logs
-- Tests verify log file creation
+
+* Context selection varies across runs
+* Same run artifacts always reflect same selection
 
 **Allowed files**
-- `src/llm-storytell/logging.py`
-- `tests/test_logging.py`
 
-_Result_:
+* `src/llm-storytell/context/**`
+* `tests/test_context_loader.py`
+
+*Result*:
 
 ---
 
-### [ ] T004 Run directory + artifact IO
+### [ ] T0011 Prompt renderer
+
 **Goal**
-Create run folder structure and helpers for writing artifacts.
+Render prompt templates deterministically.
 
 **Deliverables**
-- Utility to create `runs/<run_id>/` folder using timestamp default
-- Write `inputs.json` and initialize `state.json`
-- Helper functions for:
-  - write text file
-  - write json file
-  - read json file
+
+* Template renderer
+* Strict missing-variable errors
+* No silent fallbacks
 
 **Acceptance criteria**
-- Given a seed string, creates a run directory with expected files
-- Unit tests cover paths and file contents
+
+* Rendering is reproducible
+* Errors point to missing inputs
 
 **Allowed files**
-- `src/llm-storytell/io.py`
-- `src/llm-storytell/run_dir.py`
-- `tests/test_run_dir.py`
 
-_Result_:
+* `src/llm-storytell/prompt_render.py`
+* `tests/test_prompt_render.py`
+
+*Result*:
 
 ---
 
-### [ ] T005 Prompt renderer
+## v1.0 – Pipeline stages (grim-narrator app)
+
+### [ ] T0020 Outline stage
+
 **Goal**
-Render prompt templates with placeholders from state.
+Generate outline beats (N = 1–20).
 
 **Deliverables**
-- Template rendering (simple and deterministic)
-- Strict error on missing placeholders
-- Tests for:
-  - correct rendering
-  - missing variable failure
+
+* Load app-specific outline prompt
+* LLM call
+* Schema validation
+* Persist outline
 
 **Acceptance criteria**
-- Renderer produces stable output
-- Errors are clear and actionable
+
+* Outline length respects CLI/app config
+* Invalid output fails fast
 
 **Allowed files**
-- `src/llm-storytell/prompt_render.py`
-- `tests/test_prompt_render.py`
 
-_Result_:
+* `src/llm-storytell/steps/outline.py`
+* `prompts/apps/grim-narrator/**`
+* `tests/test_outline_step.py`
+
+*Result*:
 
 ---
 
-### [ ] T006 Pipeline YAML parser + step runner skeleton
+### [ ] T0021 Draft loop + summarization
+
 **Goal**
-Parse `config/pipeline.yaml` and execute steps in order (no LLM yet).
+Generate sections iteratively with continuity control.
 
 **Deliverables**
-- Load pipeline YAML
-- Validate required keys (step_id, prompt, outputs, etc.)
-- Skeleton runner that iterates steps and writes placeholder artifacts
+
+* Section generation loop
+* Per-section summarization
+* Rolling summary + continuity ledger
+* Artifacts written per section
 
 **Acceptance criteria**
-- Running `python -m llm-storytell run --seed "..."` creates run dir + state + placeholder artifacts
-- Unit tests for parser validation
+
+* Works for 1–20 sections
+* State updated only after successful steps
 
 **Allowed files**
-- `src/llm-storytell/pipeline/**`
-- `tests/test_pipeline_parser.py`
 
-_Result_:
+* `src/llm-storytell/steps/section.py`
+* `src/llm-storytell/steps/summarize.py`
+* `src/llm-storytell/continuity.py`
+* `tests/test_section_loop.py`
+
+*Result*:
 
 ---
 
-### [ ] T007 Implement Stage 1: Outline step
+### [ ] T0022 Critic / fixer stage
+
 **Goal**
-Implement outline pass per `SPEC.md`.
+Consolidate and correct the full draft.
 
 **Deliverables**
-- Prompt template `prompts/10_outline.md`
-- Runner integrates LLM call
-- Output JSON saved as `10_outline.json`
-- Schema validation (10–14 items)
-- Tests with mocked LLM output
+
+* Critic prompt
+* Final script
+* Editor report (schema-validated)
 
 **Acceptance criteria**
-- Outline stored in `state.json`
-- Validation fails correctly on malformed output
+
+* Final script exists
+* Report is machine-readable
 
 **Allowed files**
-- `prompts/10_outline.md`
-- `src/llm-storytell/steps/outline.py`
-- `tests/test_outline_step.py`
 
-_Result_:
+* `src/llm-storytell/steps/critic.py`
+* `tests/test_critic_step.py`
+
+*Result*:
 
 ---
 
-### [ ] T008 Implement Draft loop: Section generation + summarizer
+## v1.0 – CLI & verification
+
+### [ ] T0030 CLI integration + E2E smoke test
+
 **Goal**
-Implement iterative section generation and summarization per `SPEC.md`.
+Prove the pipeline works end-to-end.
 
 **Deliverables**
-- `prompts/20_section.md`
-- `prompts/21_summarize_section.md`
-- Loop runner for N sections
-- Rolling summary builder + continuity ledger merge logic
-- Artifacts per section written to disk
-- Tests covering:
-  - summary stitching respects token caps
-  - continuity ledger merge rules
-  - loop produces expected number of artifacts
+
+* CLI flags:
+
+  * `--app`
+  * `--seed`
+  * `--beats`
+  * `--run-id`
+* Fully mocked E2E test
 
 **Acceptance criteria**
-- Generates `20_section_01.md` .. `20_section_NN.md`
-- Updates `state.json` correctly after each section
-- Failures do not partially corrupt state
+
+* One command produces:
+
+  * final script
+  * logs
+  * state
+* No network or API key required for test
 
 **Allowed files**
-- `prompts/20_section.md`
-- `prompts/21_summarize_section.md`
-- `src/llm-storytell/steps/section.py`
-- `src/llm-storytell/steps/summarize.py`
-- `src/llm-storytell/continuity.py`
-- `tests/test_section_loop.py`
 
-_Result_:
+* `src/llm-storytell/cli.py`
+* `tests/test_e2e.py`
+
+*Result*:
 
 ---
 
-### [ ] T009 Implement Critic/Fixer consolidation pass
-**Goal**
-Consolidate all sections and produce `final_script.md` and `editor_report.json`.
+## Post-v1.0 backlog (do not start yet)
 
-**Deliverables**
-- `prompts/30_critic.md`
-- Consolidation logic
-- Report schema and validation
-- Tests with mocked critic output
+### [ ] T0100 CI pipeline
 
-**Acceptance criteria**
-- `final_script.md` exists and contains all sections in order
-- `editor_report.json` exists and is machine-readable
+### [ ] T0200 TTS pipeline
 
-**Allowed files**
-- `prompts/30_critic.md`
-- `src/llm-storytell/steps/critic.py`
-- `tests/test_critic_step.py`
+### [ ] T0300 Video generation
 
-_Result_:
+### [ ] T0400 Vector DB integration
+
+### [ ] T0500 Multi-provider routing
 
 ---
 
-### [ ] T010 CLI polish + end-to-end smoke test
-**Goal**
-Finalize CLI and add an end-to-end run test using fully mocked LLM.
+## Definition of Done (v1.0)
 
-**Deliverables**
-- CLI flags (`--sections`, `--run-id`, `--config-path`)
-- End-to-end test that executes the CLI with mocked LLM and asserts artifacts
-
-**Acceptance criteria**
-- One command produces a complete run with `final_script.md`
-- Test runs without network or API key
-
-**Allowed files**
-- `src/llm-storytell/cli.py`
-- `tests/test_e2e.py`
-
-_Result_:
+* `python -m llm-storytell run --app grim-narrator --seed "..."`
+  produces a valid final script
+* Run folder contains:
+  * logs
+  * state
+  * artifacts
+* Pipeline works for different beat counts
+* No grim-narrator assumptions in platform code
+* ruff checks are passed
+* README.md and SPEC.md are up-to-date and reflect scope, tech stack and other info truthfully.
 
 ---
 
-### [ ] T011 Add CI pipeline
-**Goal**
-Add CI that enforces linting and tests on every push.
+This TASKS.md is now:
 
-**Context**
-Blocked until end-to-end smoke test exists.
+* aligned with your **actual repo**
+* safe for agents
+* future-proof without being aspirational fluff
+* suitable for kicking off **T0001** immediately
 
-**Deliverables**
-- GitHub Actions workflow
-- Runs lint + tests
-
-**Acceptance criteria**
-- CI fails on lint or test failure
-- CI runs on PRs and main branch
-
-**Allowed files**
-- `.github/workflows/**`
-
-_Result_:
+Next step, when you’re ready:
+we’ll tighten `CONTRIBUTING.md`, `.cursor/rules`, and `CURSOR_WORKFLOW.md` so agents don’t get creative at 3am.

@@ -1,144 +1,179 @@
 # LLM-Storytell
 
-This README's primary target audience is AI agents. But it's also all factually true!
+## General info
+
+This README’s primary target audience is **AI agents working on this repository**.
+It is also accurate for humans who enjoy clarity.
 
 ![LLM-Storytell - Title image](assets/hero-image.png)
 
 
-`LLM-Storytell` is a **deterministic, file-driven content generation system** that produces long-form narrative stories and, in later versions, narrated audio (“mini-audiobooks”).
+The system is pipeline-first and app-configured: a single core pipeline operates over different “apps” (content profiles) that define tone, context, structure, and output expectations.
 
-The system is designed to:
+It is designed to support **multiple content “apps”** (profiles), each with its own:
 
-* Generate ~60-minute stories from a short textual seed
-* Operate entirely via a local CLI
-* Persist all intermediate artifacts to disk
-* Avoid implicit memory, hidden state, or conversational drift
-* Be extended by configuration and prompt files rather than code changes
+* Lore and world context
+* Tone and narration rules
+* Output length and structure
+* Audio / voice / background style (v1.1+)
 
-This repository prioritizes **reproducibility and control** over creativity or interactivity.
+The first app is **grim-narrator** (all the lore content is .gitignored tho). It will not be the last.
 
-## Note: Cursor IDE
+---
 
-This repository includes a `.cursor/` directory with project-level rules
-used by Cursor’s Agent mode.
+## Design goals
+
+The README intentionally avoids low-level mechanics; **`SPEC.md` is the source of truth** for execution details.
+
+The system is explicitly designed to:
+
+* Generate long-form content from short prompts
+* Be **reproducible and inspectable**
+* Be able to work with both extremely limited and over-supplied broader context
+* Avoid hidden memory or conversational drift
+* Persist *everything* to disk
+* Be extended by configuration and content files, not code changes
+* Be safe to operate via automated coding agents
+
+Creativity is allowed. Ambiguity is not.
+
+---
+
+## Cursor IDE note (important)
+
+This repository includes a `.cursor/` directory containing **project-level agent rules**.
 
 If you are using Cursor:
-- Do not delete or modify `.cursor/rules/`
-- These rules define the required task workflow, scope control, and validation steps
+
+* Do **not** delete or modify `.cursor/rules/`
+* If human, read `CURSOR_WORKFLOW.md`
+* These rules define the required task workflow, validation steps, and scope limits
 
 If you are not using Cursor:
-- Treat the rules as documentation of the intended agent workflow
+
+* Treat these rules as authoritative documentation of the intended agent workflow
 
 ---
 
-## What this is (and is not)
+## What this project is (and is not)
 
-**This is:**
+### This **is**
 
-* A pipeline orchestrator for long-form story generation
-* A structured sequence of LLM calls with explicit state management
-* A system intended to be extended by adding prompts, lore files, and config
+* A general-purpose **content generation pipeline**
+* A deterministic orchestration of LLM calls
+* A system for producing text, audio, and later video
+* A framework for multiple content profiles (“apps”)
 
-**This is not:**
+### This **is not**
 
 * A chat interface
-* An interactive storytelling system
-* A streaming or real-time generator
-* A cloud service
-* A “creative writing assistant”
+* An interactive storytelling engine
+* A real-time or streaming generator
+* A hosted service (yet)
+* A creative writing assistant
 
-If you are looking for vibes, look elsewhere. This is a conveyor belt.
-
----
-
-## How it works (high level)
-
-At a high level, the pipeline does the following:
-
-1. Accepts a **short story seed** (2–3 sentences)
-2. Generates a **fixed outline** (10–14 narrative beats)
-3. Iteratively expands each beat into a full section
-4. Maintains continuity via explicit summaries and ledgers
-5. Consolidates all sections into a final script
-6. (Later versions) Converts the script into narrated audio
-
-All intermediate outputs are written to disk and tracked in a growing `state.json` file.
-
-Nothing is remembered unless it is written down.
+This is infrastructure. Not vibes.
 
 ---
 
-## Pipeline stages (v1.0)
+## Core concept: apps / profiles
 
-1. **Outline pass**
+An **app** defines *what kind of content* is being generated.
 
-   * Produces 10–14 high-level narrative beats
-   * Establishes structure for the entire story
+Each app provides:
 
-2. **Draft pass (iterative)**
+* A lore bible
+* Context snippets (locations, characters, etc.)
+* Tone and narration rules
+* Expected output length
+* Audio and presentation defaults (future versions)
 
-   * Expands each outline beat into a full section
-   * Uses:
+Apps may range from minimal configurations (e.g. a single lore file and a short prompt producing a one-page story) to extensive setups with large rotating context libraries and long-form outputs.
 
-     * A rolling summary of prior sections
-     * A continuity ledger (names, places, facts)
-     * Static lore context
-   * After each section:
+Example apps:
 
-     * A summarization step extracts structured updates
+* `grim-narrator`
+  60-minute bleak, depressive, slow-paced stories
+* `toddler-bedtime` (future)
+  10-minute lighthearted stories, upbeat tone, calm voice
+* others later
 
-3. **Critic / Fixer / Editor pass**
+### MVP scope
 
-   * Consolidates all sections
-   * Detects contradictions and inconsistencies
-   * Reduces overused phrasing
-   * Enforces tone and narration rules
-   * Outputs a single final script
-
-See `SPEC.md` for the full technical specification.
+* Only **grim-narrator** exists
+* Architecture assumes more will be added
 
 ---
 
-## Repository structure
+## Context handling (MVP behavior)
+
+For the active app (e.g. `grim-narrator`), the pipeline may:
+
+* Always loads the app’s **lore bible**
+* Randomly selects per each run:
+  * 1 location file from `context/<app_name>/locations/`
+  * 2–3 character files from `context/<app_name>/characters/`
+* Injects these as contextual inputs into generation
+
+This selection is both app-defined, and varies **every run**, even with the same seed.
+
+Later versions will allow explicit user control via CLI flags.
+
+---
+
+## How it works (intentionally high-level)
+
+1. A short seed prompt is provided via CLI
+2. The active app’s rules and context are loaded
+3. A fixed multi-stage pipeline runs:
+   * outline → draft → critique
+4. All intermediate artifacts are persisted
+5. A final script is produced
+6. Later versions convert this into audio and video
+
+Detailed mechanics live in `SPEC.md`.
+README stays readable.
+
+---
+
+## Repository structure (simplified)
 
 ```
 LLM-Storytell/
+  pyproject.toml
   README.md
   SPEC.md
   CONTRIBUTING.md
-  pyproject.toml
+  TASKS.md
 
   config/
-    pipeline.yaml
-    model.yaml
-
   prompts/
-    00_seed.md
-    10_outline.md
-    20_section.md
-    30_critic.md
-
-  lore/
-    bible.md
-    snippets/
+    README.md
+    shared/
+    apps/
+      <app_name>/
+  context/
+    <app_name>/
+      characters/
+      locations/
+      style/
+      world/
+      lore_bible.md
 
   runs/
-    <timestamped runs appear here>
+    <immutable run outputs>
 
   src/
-    orchestrator/
-      runner.py
-      llm_client.py
-      validators.py
-      ...
+    llm_storytell/
+      pipeline/
+      steps/
+      schemas/
+  
+  tests/
+    fixtures/
 ```
 
-* **`prompts/`** contains all LLM prompt templates
-* **`lore/`** contains universe context and canon rules
-* **`runs/`** contains immutable execution artifacts
-* **`src/`** contains the orchestration logic only
-
-Generated content must never be committed.
+App-specific structure may evolve and change from app to app. Generated content must never be committed.
 
 ---
 
@@ -147,106 +182,86 @@ Generated content must never be committed.
 ### Prerequisites
 
 * Python **3.12**
-* `uv` installed
-* An OpenAI API key
+* `uv`
+* OpenAI API key
 
 ### Setup
 
-1. Clone the repository
+```bash
+git clone <repo-url>
+cd LLM-Storytell
+uv sync
+```
 
-   ```bash
-   git clone <repo-url>
-   cd LLM-Storytell
-   ```
+Create credentials file:
 
-2. Install dependencies
-
-   ```bash
-   uv sync
-   ```
-
-3. Create credentials file
-
-   Create `config/creds.json` with the following structure:
-
-   ```json
-   {
-     "OPENAI_KEY": "your_api_key_here"
-   }
-   ```
+```json
+// config/creds.json
+{
+  "OPENAI_KEY": "your_api_key_here"
+}
+```
 
 ---
 
-## Running the pipeline
-
-Run the pipeline via the CLI:
+## Running the pipeline (MVP)
 
 ```bash
-python -m grimnarrator run \
+python -m llm_storytell run \
+  --app grim-narrator \
   --seed "A low-level worker describes a single ordinary day in a decaying future city."
 ```
 
-On success, a new directory will appear under `runs/` containing:
+The `--app` argument selects the content profile to use. Only `grim-narrator` app exists in v1.0.
+On success, a new directory appears under `runs/` containing:
 
 * All intermediate artifacts
 * `state.json`
-* The final generated script
+* Final script output
 
-Example:
-
-```
-runs/2026-01-24_231045/
-  inputs.json
-  state.json
-  10_outline.json
-  20_section_01.md
-  ...
-  final_script.md
-```
+Runs are immutable once completed.
 
 ---
 
-## Configuration
+## Development model
 
-* Pipeline structure is defined in `config/pipeline.yaml`
-* Model selection and parameters live in `config/model.yaml`
-* Lore and universe constraints live under `lore/`
-
-You should be able to extend or modify behavior without touching orchestration code.
-
----
-
-## Development and contributions
-
-This repository is designed primarily for **automated coding agents** working under human supervision.
+This repository is designed for **agent-driven development**.
 
 Before making changes:
 
 * Read `SPEC.md`
 * Read `CONTRIBUTING.md`
-* Do not infer missing requirements
-* Do not expand scope unless instructed
+* Follow `.cursor/rules/`
+* Work one task at a time from `TASKS.md`
 
-If something is ambiguous, stop and ask.
-
----
-
-## Roadmap (brief)
-
-* **v1.0**: Text-only pipeline
-* **v1.1**: Text-to-speech narration
-* **v1.2**: Background music mixing and polish
-
-No commitments beyond that.
+If something is unclear, stop.
 
 ---
 
-## License / usage note
+## Roadmap (non-binding, directional)
+
+* **v1.0** – Local, text-only pipeline (multi-app capable)
+* **v1.0.1** - Add soft warnings when approaching context limits
+* **v1.1** – Text-to-speech audiobook output
+* **v1.2** – Background music mixing and audio polish
+* **v1.3** – Cloud execution + scheduled delivery (Telegram / email)
+* **v1.4** – One-command video generation
+* **v1.4.1** – Burned-in subtitles
+* **v1.5** – Vector database for large-scale context retrieval and rotation
+* **v1.6** – Multi-LLM provider support, routing, and cost-aware selection
+
+---
+
+## Usage note
 
 This project is intended for **local, personal experimentation**.
-If you use copyrighted universes as inspiration, ensure you understand the implications before distributing generated content.
+
+If you use copyrighted universes as inspiration, understand the implications before distributing outputs.
 
 ---
 
 If an AI agent is reading this:
-Follow the spec. Write boring code. Don’t get clever.
+
+Follow the spec.
+Follow the tasks.
+Write boring code.

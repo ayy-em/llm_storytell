@@ -2,31 +2,109 @@
 
 ## Overview
 
-This project implements a **deterministic, file-driven content generation pipeline** that produces long-form narrative text and, in later versions, narrated audio. The system is designed to be:
+This project implements a **deterministic, file-driven content generation pipeline** capable of producing long-form narrative text and, in later versions, narrated audio and video.
 
-* Fully runnable **locally**
-* Reproducible (given identical inputs)
-* Extensible via configuration and prompt files
-* Orchestrated via a single CLI entry point
-* Schemas are authoritative: outputs should always adhere to (and be validated against) schemas in src/llm-storytell/schemas/*
+The system is designed to be:
 
-The pipeline is intentionally **sequential**, not conversational. All long-term memory is explicit and persisted to disk. All run outputs are to be treated as immutable after completion.
+* Runnable **locally** (v1.x)
+* Reproducible given identical inputs
+* Extensible via configuration and content files
+* Driven by a single orchestrated pipeline
+* Safe for automated agent-driven development
+* Provider-agnostic with respect to LLM backends
+
+The pipeline is intentionally **sequential**, not conversational.
+All long-term memory is explicit and persisted to disk.
+All run outputs are treated as immutable after completion.
+
+Schemas are authoritative: all structured outputs must validate against schemas in
+`src/llm_storytell/schemas/`.
+
+The pipeline is designed to support **variable output scale**, ranging from:
+* Single-section, short-form stories generated from minimal context
+* Multi-section, long-form narratives using extensive rotating context
+
+While v1.0 ships with a single app (`grim-narrator`) and a default configuration, the orchestrator must not assume fixed story length, fixed beat count, or fixed context volume.
 
 ---
 
-## MVP / v1.0 – Text Generation Only
+## Concept: Apps (Content Profiles)
 
-### High-level scope
+An **app** defines a complete content profile, including:
 
-At MVP stage:
+* Lore and world rules
+* Context snippets (locations, characters, etc.)
+* Tone, narration, and stylistic constraints
+* Expected output length and structure
+* Audio / presentation defaults (v1.1+)
 
-* A **single content creation pipeline** exists
-* The pipeline is executed via a **CLI command**
-* The CLI accepts a **short textual seed** (2–3 sentences) describing the story concept
-* The orchestrator executes a fixed sequence of generation steps
-* All intermediate and final artifacts are persisted under a run-specific directory
+The pipeline itself is generic. Behavior changes based on the selected app.
 
-No audio generation, embeddings, or external storage are included in v1.0.
+### MVP apps
+
+* `grim-narrator` (only app in v1.0)
+
+The architecture must assume multiple apps from the beginning.
+
+---
+
+## Repository Structure (Authoritative)
+
+```
+LLM-Storytell/
+  README.md
+  SPEC.md
+  CONTRIBUTING.md
+  TASKS.md
+
+  config/
+    pipeline.yaml
+    model.yaml
+    creds.json (gitignored)
+
+  context/
+    <app_name>/
+      lore_bible.md
+      world/
+        *.md
+      locations/
+        *.md
+      characters/
+        *.md
+      style/
+        narration.md
+        tone.md
+
+  prompts/
+    README.md
+    shared/
+      dev_workflow_prompt.md
+    apps/
+      <app_name>/
+        00_seed.md
+        10_outline.md
+        20_section.md
+        21_summarize.md
+        30_critic.md
+
+  runs/
+    <run_id>/
+      run.log
+      inputs.json
+      state.json
+      artifacts/
+
+  src/
+    llm_storytell/
+      cli.py
+      pipeline/
+      steps/
+      schemas/
+      logging.py
+      llm/
+```
+
+Generated content must never be committed.
 
 ---
 
@@ -35,119 +113,154 @@ No audio generation, embeddings, or external storage are included in v1.0.
 ### Command
 
 ```bash
-python -m llm-storytell run --seed "<story description>"
+python -m llm_storytell run \
+  --app <app_name> \
+  --seed "<story description>"
 ```
 
 ### Required arguments
 
-* `--seed`
-  A short natural-language description (2–3 sentences) describing:
+* `--app`
 
-  * The general setting
-  * The point of view
-  * The type of story to be generated
+  * Name of the app to run
+  * Must correspond to a directory under `context/`
+* `--seed`
+
+  * Short natural-language description (2–3 sentences)
+  * Describes setting, POV, and general premise
 
 ### Optional arguments (v1.0 defaults)
 
-* `--sections` (default: 12, min: 10, max: 14)
-* `--run-id` (optional override, default id convention is `run-0001-DD.MM.YY-HH.ss`)
-* `--config-path` (default: `config/`)
+* `--beats`
+
+  * Optional override for number of outline beats
+  * Default: app-defined
+  * Allowed range: **1–20**
+* `--sections`
+
+  * Alias of `--beats` (one section per beat)
+  * Included for clarity; only one should be used
+* `--run-id`
+
+  * Optional override
+  * Default format: `run-YYYYMMDD-HHMMSS`
+* `--config-path`
+
+  * Default: `config/`
+
+Apps define *recommended* values. The pipeline enforces *absolute* limits.
+
+---
+
+## Context Loading (v1.0)
+
+Context loading is **app-defined but platform-executed**. The orchestrator supports minimal to extensive context sets, depending on app configuration.
+
+For the selected app:
+
+### Always loaded
+
+* `context/<app>/lore_bible.md`
+* `context/<app>/style/*.md`
+
+### Randomized per run
+
+* 1 file randomly selected from:
+
+  * `context/<app>/locations/`
+* 2–3 files randomly selected from:
+
+  * `context/<app>/characters/`
+
+Random selection is:
+
+* Logged
+* Persisted in `state.json`
+* Reproducible if the same run artifacts are reused
+
+Future versions will allow explicit selection via CLI flags.
+
+**Constraint**
+The pipeline must support:
+* Apps with only a single context file
+* Apps with large context libraries
+* Apps that rotate context per run
+
+No pipeline logic may assume a fixed number of context files.
 
 ---
 
 ## Pipeline Stages (v1.0)
 
+### Stage 0: Run Initialization
+
+**Purpose**
+
+* Establish deterministic run context
+
+**Actions**
+
+* Create `runs/<run_id>/`
+* Write `inputs.json`
+* Initialize `state.json`
+* Initialize `run.log`
+* Log selected app, seed, and randomly chosen context files
+
+---
+
 ### Stage 1: Outline Pass
 
 **Purpose**
-Generate a high-level narrative structure that constrains all later steps.
+Generate a high-level narrative structure.
 
 **Inputs**
 
-* `seed` (from CLI)
-* `style_rules` (from config)
-* `lore_bible` (static universal context)
+* `seed`
+* App style rules
+* Lore bible
+* Selected context snippets
 
 **Process**
 
-* Generate **10–14 outline beats**
-* Each beat represents a high-level narrative unit corresponding to one section
+* Generate **N outline beats** (N is app-defined or overriden via CLI, N ranges from 1 to 20)
 
 **Outputs**
 
-* `outline[]`
-  An ordered list of beats, each containing:
+* `10_outline.json`
+* Stored in `state.json.outline`
 
-  * `beat_id`
-  * `title`
-  * `summary` (2–4 sentences, no prose)
-  * `intended_tone` (optional label)
-
-**Persistence**
-
-* Written to:
-  `runs/<run_id>/10_outline.json`
-* Added to `state.json` under `outline`
+Validated against `outline.schema.json`.
 
 ---
 
-### Stage 2: Draft Pass (Iterative, Section-Based)
+### Stage 2: Draft Pass (Iterative)
 
-This stage runs **once per outline beat**.
+Runs once per outline beat. The draft pass must function correctly for any number of sections between **1 and 20**, inclusive.
 
 #### Inputs per section
 
-For section *N*:
+* Current outline beat
+* Rolling summary (400–900 tokens)
+* Continuity ledger
+* App style rules
+* Selected context snippets
 
-* `outline[N]`
-* `rolling_summary`
+#### Outputs per section
 
-  * Aggregated summaries of prior sections
-  * Target size: **400–900 tokens**
-* `continuity_ledger`
-* `style_rules`
-* Retrieved lore snippets relevant to the current beat (static lookup in v1.0)
+* `20_section_<NN>.md`
+* Section metadata block
+* Section summary JSON
 
-#### Section generation output
-
-For each section:
-
-* `section_content` (Markdown)
-* `section_metadata` (machine-readable block):
-
-  * `section_id`
-  * `new_entities`
-  * `new_locations`
-  * `timeline_updates`
-  * `unresolved_threads`
-  * `local_summary` (200–400 tokens)
-
-Persisted as:
-
-* `runs/<run_id>/20_section_<NN>.md`
+All structured outputs validated against schemas.
 
 ---
 
-### Post-section Summarization Step
-
-Immediately after each section generation.
+### Post-section Summarization
 
 **Purpose**
 
 * Prevent context drift
-* Extract structured continuity information
-* Produce compact summaries for downstream steps
-
-**Inputs**
-
-* Generated section content
-* Prior continuity ledger
-
-**Outputs**
-
-* `section_summary`
-* `continuity_updates`
-* `open_threads`
+* Extract structured continuity updates
 
 **State updates**
 
@@ -156,201 +269,197 @@ Immediately after each section generation.
 
 ---
 
-### Continuity Passer (Internal Mechanism)
-
-Before generating the next section, the orchestrator prepares inputs:
-
-* `rolling_summary`
-
-  * Concatenation of the last *N* section summaries
-  * Hard token cap enforced
-* Updated `continuity_ledger`
-* Next outline beat
-* Relevant lore snippets
-
-This is not a model call. It is deterministic orchestration logic.
-
----
-
 ### Stage 3: Critic / Fixer / Editor Pass
 
 **Purpose**
-Consolidate all sections into a single coherent document and apply corrective transformations.
+Consolidate and correct.
 
-**Inputs**
+**Checks**
 
-* All section contents
-* Final continuity ledger
-* Style rules
-
-**Checks performed**
-
-* Contradiction detection (names, locations, timeline)
-* Overused phrase detection and reduction
-* Narration consistency (POV, tense)
+* Contradictions
+* Overused phrasing
+* POV / tense consistency
 * Tone adherence
 
 **Outputs**
 
-* `final_script.md` (single document)
-* `editor_report.json` containing:
-
-  * Issues detected
-  * Changes applied
-  * Remaining warnings (if any)
+* `final_script.md`
+* `editor_report.json`
 
 ---
 
-## State Management
+## Logging (Universal, App-agnostic)
 
-Throughout the pipeline, the orchestrator maintains a persistent `state.json`.
+Logging is defined once at the platform level and applies uniformly to all apps. Each pipeline run produces a single authoritative log file:
+
+```
+runs/<run_id>/run.log
+```
+
+Logging behavior must not vary by app. Apps may influence content generation, but not observability.
+
+**Logged events (required)**
+
+* Run initialization (run_id, app, seed)
+* Selected context files (including randomized selections)
+* Each pipeline stage:
+    start timestamp
+    end timestamp
+    success / failure
+* Artifact creation (file path, size)
+* Validation failures
+* LLM provider metadata:
+    provider name
+    model name
+    prompt token count
+    completion token count
+    total tokens used
+
+**Explicitly not logged**
+
+- Secrets, credentials, or API keys
+
+Logging exists for:
+- Debugging content quirks
+- Cost visibility
+- Future alerting and guardrails
+
+### Token Usage Tracking (v1.0 required, alerting later)
+
+For each LLM call, the orchestrator must record:
+
+* Prompt token count
+* Completion token count
+* Total tokens consumed
+* Provider name
+
+These metrics must be:
+
+* Logged to `run.log`
+* Stored in `state.json` under a `token_usage[]` field
+---
+
+## State Management
 
 ### `state.json` structure
 
 ```json
 {
+  "app": "grim-narrator",
   "seed": "...",
-  "style_rules": {...},
+  "selected_context": {
+    "location": "...",
+    "characters": [...]
+  },
   "outline": [...],
   "sections": [...],
   "summaries": [...],
   "continuity_ledger": {...},
-  "retrieved_lore": [...]
+  "token_usage": [
+    {
+      "step": "...",
+      "provider": "openai",
+      "model": "gpt-x",
+      "prompt_tokens": ...,
+      "completion_tokens": ...,
+      "total_tokens": ...
+    }
+  ]
 }
 ```
 
-**Rules**
+### Rules
 
-* Each step reads from `state.json`
-* Each step writes new artifacts to disk
-* `state.json` is updated only after successful step completion
+* State is updated only after successful step completion
 * Failed steps do not mutate state
+* State is append-only where possible
+
+---
+
+## LLM Provider Abstraction (v1.0 requirement)
+
+LLM access must be abstracted from the beginning.
+
+### Design requirements
+
+* No step may directly call a vendor SDK
+* All calls go through a provider interface, e.g.:
+
+```python
+class LLMProvider:
+    def generate(self, prompt: str, **kwargs) -> LLMResult
+```
+
+### Initial implementation
+
+* OpenAI provider only
+
+### Rationale
+
+* Enables future support for:
+
+  * Multiple providers
+  * Local models
+  * Fallback strategies
+  * Cost-aware routing
 
 ---
 
 ## Pipeline Configuration
 
-The pipeline is defined declaratively in `config/pipeline.yaml`.
+Defined in `config/pipeline.yaml`.
 
-### Conceptual structure
+The pipeline is declarative:
 
-```yaml
-- step_id: 10_outline
-  prompt: prompts/10_outline.md
-  input_schema: OutlineRequest
-  output: 10_outline.json
-  validators:
-    - json_schema
-    - max_items: 14
+* Step order
+* Prompt template paths
+* Validators
+* Loop definitions
 
-- step_id: 20_section
-  loop:
-    from: 1
-    to: sections
-  prompt: prompts/20_section.md
-  outputs:
-    - section_markdown
-    - section_summary
-```
-
-The orchestrator executes steps strictly in order.
+The orchestrator executes strictly in order.
 
 ---
 
 ## Run Artifacts
 
-Each pipeline execution creates a new directory:
+Each run produces:
 
 ```
-runs/<timestamp>/
+runs/<run_id>/
+  run.log
   inputs.json
   state.json
-  10_outline.json
-  20_section_01.md
-  20_section_02.md
-  ...
-  outputs/
+  artifacts/
+    10_outline.json
+    20_section_01.md
+    ...
     final_script.md
     editor_report.json
 ```
 
-Runs are immutable once completed.
+Runs are immutable once complete.
 
 ---
 
-## v1.1 – Text-to-Speech (TTS)
+## Roadmap (Directional)
 
-### Additions
-
-A narration stage is appended after `final_script.md` generation.
-
-#### Narration Script Pass
-
-**Purpose**
-Prepare text explicitly for TTS.
-
-**Transformations**
-
-* Normalize punctuation
-* Insert pauses via paragraph breaks
-* Rare ellipses for major transitions
-* Optional pronunciation hints via phonetic parentheses
-
-**Output**
-
-* `narration_script.md`
+* **v1.0** – Local, text-only pipeline (multi-app capable)
+* **v1.0.1** - Add soft warnings when approaching context limits
+* **v1.1** – Text-to-speech audiobook output
+* **v1.2** – Background music mixing and audio polish
+* **v1.3** – Cloud execution + scheduled delivery (Telegram / email)
+* **v1.4** – One-command video generation
+* **v1.4.1** – Burned-in subtitles
+* **v1.5** – Vector database for large-scale context retrieval and rotation
+* **v1.6** – Multi-LLM provider support, routing, and cost-aware selection
 
 ---
 
-### TTS Generation
+## Non-goals (v1.x)
 
-**Process**
-
-* Split narration script into chunks representing **2–5 minutes of speech**
-* Generate audio per chunk
-* Retry-safe chunk handling
-
-**Outputs**
-
-* Individual WAV files per chunk
-* Concatenated narration audio:
-
-  * `run_id_story_audio.wav`
-  * `run_id_story_script.txt`
-
----
-
-## v1.2 – Background Music & Polish
-
-### Background Music Layering
-
-**Inputs**
-
-* `narration_full.wav`
-* `assets/bg-music.mp3`
-
-**Process**
-
-* Loop background music to narration length
-* Mix at low volume beneath narration
-* Apply light ducking when speech is present
-* Normalize final loudness
-
-**Output**
-
-* `run_id_final_audio.mp3`
-* `run_id_final_script.txt`
-
----
-
-## Non-goals (Explicit)
-
-The following are **out of scope** for v1.x:
-
-* Multi-user orchestration
-* Cloud execution
+* Interactive chat interfaces
 * Streaming generation
-* Automatic embeddings / vector stores
+* Multi-user concurrency
 * UI beyond CLI
 * Monetization or platform integration
 
@@ -358,8 +467,9 @@ The following are **out of scope** for v1.x:
 
 ## Definition of Done (v1.0)
 
-* CLI command produces a complete `final_script.md`
-* All steps are reproducible from `inputs.json`
+* CLI produces a complete `final_script.md`
+* Context selection is logged and reproducible
+* All structured outputs validate against schemas
 * No hidden state outside `runs/`
-* Pipeline failures are detectable and resumable
+* Pipeline failures are detectable and debuggable
 * No manual intervention required once invoked

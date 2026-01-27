@@ -7,19 +7,29 @@ The primary goal is **correctness, reproducibility, and determinism**, not cleve
 
 ---
 
+## Source of truth
+
+- `SPEC.md` is the authoritative description of pipeline behavior.
+- `README.md` is the authoritative user-facing overview and usage guide.
+- `TASKS.md` is the authoritative execution queue.
+- `.cursor/rules/*` defines the required agent workflow for this repository.
+
+If an implementation conflicts with `SPEC.md`, the implementation is wrong.
+
+---
+
 ## Code Style Basics
 
-* The project uses **Python 3.12**
-* Package management is done via **uv**
-* Linting and formatting are enforced via **ruff**
-* All code must pass linting and formatting checks before being considered complete
-* Automated contributors must respect repository-level agent rules (e.g. .cursor/rules/).
+- The project uses **Python 3.12**
+- Package management is done via **uv**
+- Linting and formatting are enforced via **ruff**
+- Automated contributors must respect repository-level agent rules (e.g. `.cursor/rules/`).
 
 ### Formatting and linting rules
 
-* Do not manually format code. Run the formatter.
-* Do not disable lint rules unless explicitly instructed.
-* Do not introduce alternative formatters or linters.
+- Do not manually format code. Run the formatter.
+- Do not disable lint rules unless explicitly instructed.
+- Do not introduce alternative formatters or linters.
 
 If ruff reports an error, it must be fixed. Explanations are not fixes.
 
@@ -27,18 +37,14 @@ If ruff reports an error, it must be fixed. Explanations are not fixes.
 
 ## Dependencies
 
-* Every new dependency **must be justified** in:
+- Every new dependency **must be justified** in `docs/decisions/0001-tech-stack.md`
+- Justification must include:
+  - What problem the dependency solves
+  - Why the standard library is insufficient
+  - Why an existing dependency cannot be reused
 
-  ```
-  docs/decisions/0001-tech-stack.md
-  ```
-* Justification must include:
-
-  * What problem the dependency solves
-  * Why the standard library is insufficient
-  * Why an existing dependency cannot be reused
-* Do **not** add dependencies “for convenience”
-* Do **not** add optional dependencies without explicit instruction
+- Do **not** add dependencies “for convenience”
+- Do **not** add optional dependencies without explicit instruction
 
 If a dependency is not approved, remove it.
 
@@ -46,52 +52,36 @@ If a dependency is not approved, remove it.
 
 ## Project Structure Rules
 
-* Do not change the directory structure unless explicitly instructed
-* Do not introduce new top-level directories
-* All generated artifacts must go under:
+- Do not change the directory structure unless explicitly instructed
+- Do not introduce new top-level directories unless told to do so
+- All generated artifacts must go under `runs/<run_id>/`
+- All run artifacts are to be treated as immutable once the run is finished
+- All configuration must live under `config/`, all API keys, secrets and tokens in `config/creds.json`
+- All prompt templates must live under `prompts/`
+- Hardcoded paths outside these conventions are not allowed.
 
-  ```
-  runs/<run_id>/
-  ```
-* All run artifacts are to be treated as immutable once the run is finished
-* All configuration must live under:
+---
 
-  ```
-  config/
-  ```
-* All prompt templates must live under:
+## Schemas and contracts
 
-  ```
-  prompts/
-  ```
+- Structured outputs must validate against schemas in `src/llm-storytell/schemas/`.
+- Prompts are contracts: do not change output formats unless:
+  - `SPEC.md` changes, and
+  - downstream consumers and tests are updated.
 
-Hardcoded paths outside these conventions are not allowed.
+If a prompt output is ambiguous, fix the prompt, not the parser.
 
 ---
 
 ## State and Determinism
 
-* All pipeline state must be explicit and persisted to disk
-* The orchestrator must not rely on in-memory-only state
-* Given the same inputs, the pipeline must produce the same outputs (excluding timestamps)
+- All pipeline state must be explicit and persisted to disk
+- The orchestrator must not rely on in-memory-only state
+- Given the same inputs, the pipeline must produce the same outputs (excluding timestamps)
 
 Do not introduce hidden state, global variables, or implicit caches.
 
 ---
-
-## Tests
-
-### General rules
-
-* Every new feature **must include tests**
-* Bug fixes **must include a regression test**
-* Tests must be runnable via a single command:
-
-  ```bash
-  make test
-  ```
-
-  or equivalent
 
 ### What to test
 
@@ -120,18 +110,31 @@ If you think something “should” be changed, write it down instead of changin
 
 ---
 
-## Pipeline and Prompts
+## Version control
 
-* Prompt templates are **contracts**, not suggestions
-* Do not change prompt output formats unless:
-  * The specification has changed
-  * All downstream consumers are updated
-* Every prompt must clearly specify:
-  * Required inputs
-  * Required outputs
-  * Output format (Markdown, JSON, etc.)
+### One task = one commit
 
-If a prompt output is ambiguous, fix the prompt, not the parser. Output schemas defined in src/llm-storytell/* are authoritative.
+* Each completed task must result in **exactly one commit**.
+
+* The commit must include only files relevant to the task.
+
+* Commit message format:
+
+  ```
+  TXXXX: <short task description>
+  ```
+
+* Do not push unless explicitly instructed by the repo owner.
+
+---
+
+## Documentation updates (proposal-first)
+
+After a task is accepted:
+
+* Assess whether the change introduces new concepts, constraints, or user-facing behavior.
+* If yes, **propose** minimal updates to `README.md` and/or `SPEC.md`.
+* Do not edit documentation unless explicitly instructed.
 
 ---
 
@@ -146,16 +149,6 @@ If a prompt output is ambiguous, fix the prompt, not the parser. Output schemas 
   * Clear reason for failure
 
 Silent failure is considered a bug.
-
----
-
-## Commits (if applicable)
-
-If committing changes:
-
-* Each commit should correspond to **one task**
-* Commit messages should be descriptive and boring
-* Do not bundle multiple unrelated changes into one commit
 
 ---
 
@@ -183,7 +176,8 @@ A task is considered complete only if:
 * No new linting errors are introduced
 * The change does not break existing pipeline steps
 * The code can be run from a clean checkout without manual intervention
-* Rules defined at repository level (e.g. at `/.cursor/rules`) are respected
+* Rules defined at repository level (e.g. `/.cursor/rules`) are respected
+* The task is marked `[x]` in `TASKS.md` with a Result note
 
 If any of the above is not true, the task is not done.
 
