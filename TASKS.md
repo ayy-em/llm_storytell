@@ -79,29 +79,6 @@ Each task includes:
 
 ---
 
-### [ ] T0022 Critic / fixer stage
-
-**Goal**
-Consolidate and correct the full draft.
-
-**Deliverables**
-
-* Critic prompt
-* Final script
-* Editor report (schema-validated)
-
-**Acceptance criteria**
-
-* Final script exists
-* Report is machine-readable
-
-**Allowed files**
-
-* `src/llm-storytell/steps/critic.py`
-* `tests/test_critic_step.py`
-
-*Result*:
-
 ---
 
 ## v1.0 – CLI & verification

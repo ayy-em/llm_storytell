@@ -64,6 +64,31 @@ Generate sections iteratively with continuity control.
 
 ---
 
+### [x] T0022 Critic / fixer stage (2026-01-27)
+
+**Goal**
+Consolidate and correct the full draft.
+
+**Deliverables**
+
+* Critic prompt
+* Final script
+* Editor report (schema-validated)
+
+**Acceptance criteria**
+
+* Final script exists
+* Report is machine-readable
+
+**Allowed files**
+
+* `src/llm-storytell/steps/critic.py`
+* `tests/test_critic_step.py`
+
+*Result*: Created `critic.py` with `execute_critic_step()` that loads all section artifacts deterministically, strips YAML frontmatter strictly, combines sections into full draft, calls LLM with critic prompt, and validates LLM response structure strictly (top-level object with required keys `final_script` and `editor_report`, no extra keys). Validates `editor_report` against `critic_report.schema.json`. Writes `final_script.md` and `editor_report.json` to artifacts. Updates state with normalized paths (`final_script_path` and `editor_report_path`). Fails fast on missing sections, gaps in numbering (with precise error listing missing indices), and malformed frontmatter. Created comprehensive test suite `test_critic_step.py` with 22 tests covering successful execution, section loading/combining, context loading, frontmatter stripping, error handling (missing sections, gaps, malformed frontmatter, invalid LLM responses, schema validation), and logging. All checks pass: `uv run ruff format .` (2 files reformatted), `uv run ruff check .` (all checks passed), `uv run pytest -q` (161 passed).
+
+---
+
 ### [x] T0002 Run initialization + state bootstrap (2026-01-27)
 
 **Goal**
