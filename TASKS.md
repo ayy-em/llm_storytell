@@ -77,32 +77,6 @@ Each task includes:
 
 ---
 
-### [ ] T0021 Draft loop + summarization
-
-**Goal**
-Generate sections iteratively with continuity control.
-
-**Deliverables**
-
-* Section generation loop
-* Per-section summarization
-* Rolling summary + continuity ledger
-* Artifacts written per section
-
-**Acceptance criteria**
-
-* Works for 1–20 sections
-* State updated only after successful steps
-
-**Allowed files**
-
-* `src/llm-storytell/steps/section.py`
-* `src/llm-storytell/steps/summarize.py`
-* `src/llm-storytell/continuity.py`
-* `tests/test_section_loop.py`
-
-*Result*:
-
 ---
 
 ### [ ] T0022 Critic / fixer stage

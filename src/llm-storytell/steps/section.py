@@ -1,14 +1,18 @@
-"""Outline generation step for the pipeline.
+"""Section generation step for the pipeline.
 
-Generates a high-level narrative structure (outline beats) from a story seed
-and app context, validates the output, and persists it to artifacts and state.
+Generates a single narrative section from an outline beat, using rolling
+summary and continuity ledger to maintain narrative consistency.
 """
 
 import json
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+from ..continuity import build_rolling_summary, get_continuity_context
 from ..llm import LLMProvider, LLMProviderError
 from ..llm.token_tracking import record_token_usage
 from ..logging import RunLogger
@@ -16,8 +20,8 @@ from ..prompt_render import MissingVariableError, TemplateNotFoundError, render_
 from ..schemas import SchemaValidationError, validate_json_schema
 
 
-class OutlineStepError(Exception):
-    """Raised when outline step execution fails."""
+class SectionStepError(Exception):
+    """Raised when section step execution fails."""
 
     pass
 
@@ -32,44 +36,19 @@ def _load_state(run_dir: Path) -> dict[str, Any]:
         State dictionary.
 
     Raises:
-        OutlineStepError: If state.json cannot be loaded.
+        SectionStepError: If state.json cannot be loaded.
     """
     state_path = run_dir / "state.json"
     if not state_path.exists():
-        raise OutlineStepError(f"State file not found: {state_path}")
+        raise SectionStepError(f"State file not found: {state_path}")
 
     try:
         with state_path.open(encoding="utf-8") as f:
             return json.load(f)
     except json.JSONDecodeError as e:
-        raise OutlineStepError(f"Invalid JSON in state.json: {e}") from e
+        raise SectionStepError(f"Invalid JSON in state.json: {e}") from e
     except OSError as e:
-        raise OutlineStepError(f"Error reading state.json: {e}") from e
-
-
-def _load_inputs(run_dir: Path) -> dict[str, Any]:
-    """Load inputs.json from run directory.
-
-    Args:
-        run_dir: Path to the run directory.
-
-    Returns:
-        Inputs dictionary.
-
-    Raises:
-        OutlineStepError: If inputs.json cannot be loaded.
-    """
-    inputs_path = run_dir / "inputs.json"
-    if not inputs_path.exists():
-        raise OutlineStepError(f"Inputs file not found: {inputs_path}")
-
-    try:
-        with inputs_path.open(encoding="utf-8") as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        raise OutlineStepError(f"Invalid JSON in inputs.json: {e}") from e
-    except OSError as e:
-        raise OutlineStepError(f"Error reading inputs.json: {e}") from e
+        raise SectionStepError(f"Error reading state.json: {e}") from e
 
 
 def _load_context_files(context_dir: Path, state: dict[str, Any]) -> dict[str, str]:
@@ -83,18 +62,18 @@ def _load_context_files(context_dir: Path, state: dict[str, Any]) -> dict[str, s
         Dictionary mapping context file names to their contents.
 
     Raises:
-        OutlineStepError: If required context files cannot be loaded.
+        SectionStepError: If required context files cannot be loaded.
     """
     context_vars: dict[str, str] = {}
 
     # Load lore bible (always required)
     lore_bible_path = context_dir / "lore_bible.md"
     if not lore_bible_path.exists():
-        raise OutlineStepError(f"Lore bible not found: {lore_bible_path}")
+        raise SectionStepError(f"Lore bible not found: {lore_bible_path}")
     try:
         context_vars["lore_bible"] = lore_bible_path.read_text(encoding="utf-8")
     except OSError as e:
-        raise OutlineStepError(f"Error reading lore bible: {e}") from e
+        raise SectionStepError(f"Error reading lore bible: {e}") from e
 
     # Load style files (always required)
     style_dir = context_dir / "style"
@@ -105,7 +84,7 @@ def _load_context_files(context_dir: Path, state: dict[str, Any]) -> dict[str, s
                 content = style_file.read_text(encoding="utf-8")
                 style_parts.append(f"## {style_file.stem}\n\n{content}")
             except OSError as e:
-                raise OutlineStepError(
+                raise SectionStepError(
                     f"Error reading style file {style_file}: {e}"
                 ) from e
     context_vars["style_rules"] = "\n\n".join(style_parts) if style_parts else ""
@@ -122,7 +101,7 @@ def _load_context_files(context_dir: Path, state: dict[str, Any]) -> dict[str, s
                     encoding="utf-8"
                 )
             except OSError as e:
-                raise OutlineStepError(
+                raise SectionStepError(
                     f"Error reading location file {location_path}: {e}"
                 ) from e
 
@@ -136,7 +115,7 @@ def _load_context_files(context_dir: Path, state: dict[str, Any]) -> dict[str, s
                 content = char_path.read_text(encoding="utf-8")
                 character_parts.append(f"## {char_name}\n\n{content}")
             except OSError as e:
-                raise OutlineStepError(
+                raise SectionStepError(
                     f"Error reading character file {char_path}: {e}"
                 ) from e
     context_vars["character_context"] = (
@@ -146,20 +125,58 @@ def _load_context_files(context_dir: Path, state: dict[str, Any]) -> dict[str, s
     return context_vars
 
 
+def _parse_markdown_with_frontmatter(content: str) -> tuple[dict[str, Any], str]:
+    """Parse markdown content with YAML frontmatter.
+
+    Extracts YAML frontmatter (between --- markers) and the remaining
+    markdown content.
+
+    Args:
+        content: Full markdown content with frontmatter.
+
+    Returns:
+        Tuple of (frontmatter_dict, markdown_body).
+
+    Raises:
+        SectionStepError: If frontmatter cannot be parsed.
+    """
+    # Match YAML frontmatter between --- markers
+    frontmatter_pattern = r"^---\s*\n(.*?)\n---\s*\n(.*)$"
+    match = re.match(frontmatter_pattern, content, re.DOTALL)
+
+    if not match:
+        raise SectionStepError(
+            "Section content missing YAML frontmatter (expected --- markers)"
+        )
+
+    frontmatter_text = match.group(1)
+    markdown_body = match.group(2)
+
+    try:
+        frontmatter = yaml.safe_load(frontmatter_text)
+        if not isinstance(frontmatter, dict):
+            raise SectionStepError("Frontmatter must be a YAML dictionary")
+        return frontmatter, markdown_body
+    except yaml.YAMLError as e:
+        raise SectionStepError(f"Invalid YAML in frontmatter: {e}") from e
+
+
 def _update_state(
-    run_dir: Path, outline_data: dict[str, Any], token_usage: dict[str, Any]
+    run_dir: Path,
+    section_metadata: dict[str, Any],
+    token_usage: dict[str, Any],
 ) -> None:
-    """Update state.json with outline and token usage.
+    """Update state.json with section metadata and token usage.
 
     Uses atomic write (temp file + rename) to avoid partial state.
 
     Args:
         run_dir: Path to the run directory.
-        outline_data: The validated outline data to store.
+        section_metadata: The validated section metadata to append.
         token_usage: Token usage dictionary to append.
 
     Raises:
-        OutlineStepError: If state update fails.
+        SectionStepError: If state update fails.
     """
     state_path = run_dir / "state.json"
 
@@ -168,10 +185,12 @@ def _update_state(
         with state_path.open(encoding="utf-8") as f:
             state = json.load(f)
     except (json.JSONDecodeError, OSError) as e:
-        raise OutlineStepError(f"Error reading state for update: {e}") from e
+        raise SectionStepError(f"Error reading state for update: {e}") from e
 
-    # Update state
-    state["outline"] = outline_data.get("beats", [])
+    # Update state: append section and token usage
+    if "sections" not in state:
+        state["sections"] = []
+    state["sections"].append(section_metadata)
     state["token_usage"].append(token_usage)
 
     # Atomic write
@@ -193,21 +212,22 @@ def _update_state(
     except OSError as e:
         if temp_file and temp_file.exists():
             temp_file.unlink()
-        raise OutlineStepError(f"Error writing updated state: {e}") from e
+        raise SectionStepError(f"Error writing updated state: {e}") from e
 
 
-def execute_outline_step(
+def execute_section_step(
     run_dir: Path,
     context_dir: Path,
     prompts_dir: Path,
     llm_provider: LLMProvider,
     logger: RunLogger,
+    section_index: int,
     schema_base: Path | None = None,
 ) -> None:
-    """Execute the outline generation step.
+    """Execute the section generation step for a single outline beat.
 
-    Loads context, renders prompt, calls LLM, validates output, and persists
-    results to artifacts and state.
+    Generates a narrative section from an outline beat, using rolling
+    summary and continuity ledger to maintain consistency.
 
     Args:
         run_dir: Path to the run directory.
@@ -215,73 +235,112 @@ def execute_outline_step(
         prompts_dir: Path to the app's prompts directory.
         llm_provider: LLM provider instance.
         logger: Run logger instance.
+        section_index: Zero-based index of the section to generate
+            (0 for first section, 1 for second, etc.).
         schema_base: Base path for schema resolution. If None, uses
             src/llm-storytell/schemas relative to run_dir.
 
     Raises:
-        OutlineStepError: If any step fails.
+        SectionStepError: If any step fails.
     """
-    logger.log_stage_start("outline")
+    logger.log_stage_start(f"section_{section_index:02d}")
 
     try:
-        # Load state and inputs
+        # Load state
         state = _load_state(run_dir)
-        inputs = _load_inputs(run_dir)
 
-        seed = state.get("seed")
-        if not seed:
-            raise OutlineStepError("Seed not found in state.json")
+        # Validate outline exists
+        outline = state.get("outline", [])
+        if not outline:
+            raise SectionStepError("Outline not found in state.json")
+        if section_index < 0 or section_index >= len(outline):
+            raise SectionStepError(
+                f"Section index {section_index} out of range "
+                f"(outline has {len(outline)} beats)"
+            )
 
-        beats_count = inputs.get("beats")
-        if beats_count is None:
-            raise OutlineStepError("Beats count not found in inputs.json")
-        if not isinstance(beats_count, int) or beats_count < 1 or beats_count > 20:
-            raise OutlineStepError(f"Invalid beats count: {beats_count} (must be 1-20)")
+        # Get the outline beat for this section
+        beat = outline[section_index]
+        if not isinstance(beat, dict):
+            raise SectionStepError(
+                f"Invalid outline beat format at index {section_index}"
+            )
+
+        # Build rolling summary from existing summaries
+        summaries = state.get("summaries", [])
+        rolling_summary = build_rolling_summary(summaries)
+
+        # Get continuity context
+        continuity_ledger = state.get("continuity_ledger", {})
+        continuity_context = get_continuity_context(continuity_ledger)
 
         # Load context files
         context_vars = _load_context_files(context_dir, state)
 
         # Load and render prompt template
-        prompt_path = prompts_dir / "10_outline.md"
+        prompt_path = prompts_dir / "20_section.md"
         if not prompt_path.exists():
-            raise OutlineStepError(f"Prompt template not found: {prompt_path}")
+            raise SectionStepError(f"Prompt template not found: {prompt_path}")
+
+        # Section ID is 1-based for display
+        section_id = section_index + 1
 
         prompt_vars = {
-            "seed": seed,
+            "section_id": section_id,
+            "section_index": section_index,
+            "outline_beat": json.dumps(beat, indent=2),
+            "rolling_summary": rolling_summary,
+            "continuity_context": continuity_context,
             "lore_bible": context_vars["lore_bible"],
             "style_rules": context_vars["style_rules"],
             "location_context": context_vars["location_context"],
             "character_context": context_vars["character_context"],
-            "beats_count": beats_count,
         }
 
         try:
             rendered_prompt = render_prompt(prompt_path, prompt_vars)
         except TemplateNotFoundError as e:
-            raise OutlineStepError(f"Prompt template not found: {e}") from e
+            raise SectionStepError(f"Prompt template not found: {e}") from e
         except MissingVariableError as e:
-            raise OutlineStepError(f"Missing variables in prompt template: {e}") from e
+            raise SectionStepError(f"Missing variables in prompt template: {e}") from e
 
         # Call LLM provider
         try:
             result = llm_provider.generate(
                 rendered_prompt,
-                step="outline",
+                step=f"section_{section_index:02d}",
                 temperature=0.7,
             )
         except LLMProviderError as e:
-            raise OutlineStepError(f"LLM provider error: {e}") from e
+            raise SectionStepError(f"LLM provider error: {e}") from e
 
-        # Parse JSON response
+        # Parse markdown with frontmatter
         try:
-            outline_data = json.loads(result.content)
-        except json.JSONDecodeError as e:
-            raise OutlineStepError(f"Invalid JSON in LLM response: {e}") from e
+            frontmatter, section_text = _parse_markdown_with_frontmatter(result.content)
+        except SectionStepError:
+            raise
+        except Exception as e:
+            raise SectionStepError(f"Error parsing section content: {e}") from e
 
-        # Validate against schema
+        # Ensure section_id in frontmatter matches
+        frontmatter["section_id"] = section_id
+
+        # Extract only schema-required fields for validation
+        # The schema only validates metadata, not all frontmatter fields
+        schema_fields = {
+            "section_id",
+            "local_summary",
+            "new_entities",
+            "new_locations",
+            "unresolved_threads",
+        }
+        metadata_for_validation = {
+            k: v for k, v in frontmatter.items() if k in schema_fields
+        }
+
+        # Validate frontmatter against schema
         if schema_base is None:
             # Default to src/llm-storytell/schemas relative to project root
-            # Find project root by looking for SPEC.md or pyproject.toml
             current = Path.cwd()
             project_root = None
             for parent in [current] + list(current.parents):
@@ -291,32 +350,30 @@ def execute_outline_step(
                     project_root = parent
                     break
             if project_root is None:
-                # Fallback: assume we're in src/llm-storytell/steps
-                # and go up to project root
                 project_root = Path(__file__).parent.parent.parent.parent
             schema_base_path = project_root / "src" / "llm-storytell" / "schemas"
         else:
             schema_base_path = Path(schema_base)
 
-        schema_path = schema_base_path / "outline.schema.json"
+        schema_path = schema_base_path / "section.schema.json"
         try:
-            validate_json_schema(outline_data, schema_path, logger)
+            validate_json_schema(metadata_for_validation, schema_path, logger)
         except SchemaValidationError as e:
-            raise OutlineStepError(f"Schema validation failed: {e}") from e
+            raise SectionStepError(f"Schema validation failed: {e}") from e
 
-        # Validate beat count matches requested count
-        beats = outline_data.get("beats", [])
-        if len(beats) != beats_count:
-            error_msg = (
-                f"Outline has {len(beats)} beats, but {beats_count} were requested"
-            )
-            logger.log_validation_failure(step="outline", error=error_msg)
-            raise OutlineStepError(error_msg)
+        # Reconstruct full section content with frontmatter
+        frontmatter_yaml = yaml.dump(
+            frontmatter, default_flow_style=False, sort_keys=False
+        )
+        # Remove trailing newline from yaml.dump output
+        frontmatter_yaml = frontmatter_yaml.rstrip()
+        full_section_content = f"---\n{frontmatter_yaml}\n---\n\n{section_text}"
 
         # Write artifact
         artifacts_dir = run_dir / "artifacts"
         artifacts_dir.mkdir(exist_ok=True)
-        artifact_path = artifacts_dir / "10_outline.json"
+        artifact_filename = f"20_section_{section_id:02d}.md"
+        artifact_path = artifacts_dir / artifact_filename
 
         # Atomic write
         temp_file = None
@@ -329,23 +386,23 @@ def execute_outline_step(
                 suffix=".tmp",
             ) as f:
                 temp_file = Path(f.name)
-                json.dump(outline_data, f, indent=2, ensure_ascii=False)
+                f.write(full_section_content)
 
             temp_file.replace(artifact_path)
             temp_file = None
 
             # Log artifact creation
             size_bytes = artifact_path.stat().st_size
-            logger.log_artifact_write(Path("artifacts") / "10_outline.json", size_bytes)
+            logger.log_artifact_write(Path("artifacts") / artifact_filename, size_bytes)
         except OSError as e:
             if temp_file and temp_file.exists():
                 temp_file.unlink()
-            raise OutlineStepError(f"Error writing outline artifact: {e}") from e
+            raise SectionStepError(f"Error writing section artifact: {e}") from e
 
         # Record token usage
         token_usage_dict = record_token_usage(
             logger=logger,
-            step="outline",
+            step=f"section_{section_index:02d}",
             provider=result.provider,
             model=result.model,
             prompt_tokens=result.prompt_tokens or 0,
@@ -353,14 +410,14 @@ def execute_outline_step(
             total_tokens=result.total_tokens,
         )
 
-        # Update state
-        _update_state(run_dir, outline_data, token_usage_dict)
+        # Update state with section metadata
+        _update_state(run_dir, frontmatter, token_usage_dict)
 
-        logger.log_stage_end("outline", success=True)
+        logger.log_stage_end(f"section_{section_index:02d}", success=True)
 
-    except OutlineStepError:
-        logger.log_stage_end("outline", success=False)
+    except SectionStepError:
+        logger.log_stage_end(f"section_{section_index:02d}", success=False)
         raise
     except Exception as e:
-        logger.log_stage_end("outline", success=False)
-        raise OutlineStepError(f"Unexpected error in outline step: {e}") from e
+        logger.log_stage_end(f"section_{section_index:02d}", success=False)
+        raise SectionStepError(f"Unexpected error in section step: {e}") from e

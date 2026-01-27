@@ -36,6 +36,34 @@ The pipeline must support multiple apps from day one, even if only one exists.
 
 ---
 
+### [x] T0021 Draft loop + summarization (2026-01-27)
+
+**Goal**
+Generate sections iteratively with continuity control.
+
+**Deliverables**
+
+* Section generation loop
+* Per-section summarization
+* Rolling summary + continuity ledger
+* Artifacts written per section
+
+**Acceptance criteria**
+
+* Works for 1–20 sections
+* State updated only after successful steps
+
+**Allowed files**
+
+* `src/llm-storytell/steps/section.py`
+* `src/llm-storytell/steps/summarize.py`
+* `src/llm-storytell/continuity.py`
+* `tests/test_section_loop.py`
+
+*Result*: Created `continuity.py` with rolling summary building and continuity ledger management (configurable token/word estimation constants). Created `section.py` with `execute_section_step()` that generates sections from outline beats, parses markdown with YAML frontmatter, validates against schema, and writes artifacts. Created `summarize.py` with `execute_summarize_step()` that takes explicit section_index, reads section artifacts directly, generates summaries, and merges continuity updates. Both steps update state atomically and only after successful completion. Created comprehensive test suite `test_section_loop.py` with 14 tests covering continuity functions, section generation, summarization, integration loop, and error handling. All checks pass: `uv run ruff format .` (4 files reformatted), `uv run ruff check .` (all checks passed), `uv run pytest -q` (139 passed).
+
+---
+
 ### [x] T0002 Run initialization + state bootstrap (2026-01-27)
 
 **Goal**
