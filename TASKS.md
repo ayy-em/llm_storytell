@@ -74,30 +74,6 @@ Each task includes:
 
 ## v1.0 – Pipeline stages (grim-narrator app)
 
-### [ ] T0020 Outline stage
-
-**Goal**
-Generate outline beats (N = 1–20).
-
-**Deliverables**
-
-* Load app-specific outline prompt
-* LLM call
-* Schema validation
-* Persist outline
-
-**Acceptance criteria**
-
-* Outline length respects CLI/app config
-* Invalid output fails fast
-
-**Allowed files**
-
-* `src/llm-storytell/steps/outline.py`
-* `prompts/apps/grim-narrator/**`
-* `tests/test_outline_step.py`
-
-*Result*:
 
 ---
 

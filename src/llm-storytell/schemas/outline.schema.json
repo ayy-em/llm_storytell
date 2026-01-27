@@ -4,8 +4,8 @@
     "properties": {
       "beats": {
         "type": "array",
-        "minItems": 10,
-        "maxItems": 14,
+        "minItems": 1,
+        "maxItems": 20,
         "items": {
           "type": "object",
           "required": ["beat_id", "title", "summary"],

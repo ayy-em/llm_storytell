@@ -115,6 +115,7 @@ Generated content must never be committed.
 * pydantic for validation
 * tenacity for retries (optional)
 * polars, numpy and pandas
+* jsonschema for schema validation
 
 ## CLI Interface
 
