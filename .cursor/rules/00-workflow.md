@@ -10,6 +10,10 @@ These rules apply to any automated coding agent operating in this repository.
 - Read: `TASKS.md`, `SPEC.md`, `CONTRIBUTING.md`
 - Also read any task-specific files referenced by the chosen task (e.g. schemas, prompts, configs).
 
+## CLI and Filepaths
+
+**IMPORTANT**: When interacting with terminal, assume all the code during development is to be executed on a Windows machine, unless explicitly stated otherwise. When providing CLI commands for me to run manually, provide both MacOS and Windows versions of these. 
+
 ## Task selection
 - Select the **first unchecked** task in `TASKS.md` only.
 - Do not work on any other task.
