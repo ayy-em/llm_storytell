@@ -215,3 +215,30 @@ Render prompt templates deterministically.
 
 ---
 
+### [x] T0020 Outline stage (2026-01-27)
+
+**Goal**
+Generate outline beats (N = 1–20).
+
+**Deliverables**
+
+* Load app-specific outline prompt
+* LLM call
+* Schema validation
+* Persist outline
+
+**Acceptance criteria**
+
+* Outline length respects CLI/app config
+* Invalid output fails fast
+
+**Allowed files**
+
+* `src/llm-storytell/steps/outline.py`
+* `prompts/apps/grim-narrator/**`
+* `tests/test_outline_step.py`
+
+*Result*: Created `src/llm-storytell/steps/outline.py` with `execute_outline_step()` function that loads context files, renders the outline prompt template, calls LLM provider, validates JSON response against schema, validates beat count matches requested count (1-20), and persists outline to artifacts and state. Added `jsonschema` dependency (>=4.0.0) to `pyproject.toml` and documented in `docs/decisions/0001-tech-stack.md`. Created `src/llm-storytell/schemas/__init__.py` with `validate_json_schema()` utility function. Created `prompts/apps/grim-narrator/10_outline.md` prompt template with placeholders for seed, lore_bible, style_rules, location_context, character_context, and beats_count. Implemented atomic writes for artifacts and state updates. Created 16 comprehensive unit tests covering successful execution, context loading, error handling (missing files, invalid JSON, schema validation failures, wrong beat count), and logging. All checks pass: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (125 passed total).
+
+---
+
