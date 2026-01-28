@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest-cache/
 
 # IDE
 .vscode/
@@ -15,7 +16,7 @@ wheels/
 # Actual content and inputs for the pipeline, i.e. runs, lore and assets
 runs/
 context/
-lore/
+!src/llm-storytell/context
 prompts/apps/**/*.md
 assets/
 

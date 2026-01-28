@@ -1,10 +1,21 @@
 """Command-line interface for llm-storytell."""
 
 import argparse
+import hashlib
+import json
+import random
 import sys
 from pathlib import Path
+from typing import Any
 
 from .config import AppNotFoundError, AppPaths, resolve_app
+from .llm import LLMProvider, LLMProviderError, OpenAIProvider
+from .logging import RunLogger
+from .run_dir import RunInitializationError, get_run_logger, initialize_run
+from .steps.critic import CriticStepError, execute_critic_step
+from .steps.outline import OutlineStepError, execute_outline_step
+from .steps.section import SectionStepError, execute_section_step
+from .steps.summarize import SummarizeStepError, execute_summarize_step
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -77,6 +88,295 @@ def resolve_app_or_exit(app_name: str, base_dir: Path | None = None) -> AppPaths
         sys.exit(1)
 
 
+def _select_context_files(
+    context_dir: Path, run_id: str, logger: RunLogger
+) -> dict[str, Any]:
+    """Select context files randomly but deterministically based on run_id.
+
+    Args:
+        context_dir: Path to the app's context directory.
+        run_id: Run ID used as seed for deterministic selection.
+        logger: Logger instance for logging selections.
+
+    Returns:
+        Dictionary with 'location' and 'characters' keys for selected context.
+    """
+    # Use run_id as seed for deterministic randomness
+    seed_hash = int(hashlib.md5(run_id.encode()).hexdigest(), 16)
+    rng = random.Random(seed_hash)
+
+    selected: dict[str, Any] = {"location": None, "characters": []}
+
+    # Select one location (if locations directory exists and has files)
+    locations_dir = context_dir / "locations"
+    if locations_dir.exists():
+        location_files = list(locations_dir.glob("*.md"))
+        if location_files:
+            selected_location = rng.choice(location_files)
+            selected["location"] = selected_location.name
+            logger.info(f"Selected location: {selected_location.name}")
+
+    # Select 2-3 characters (if characters directory exists and has files)
+    characters_dir = context_dir / "characters"
+    if characters_dir.exists():
+        character_files = list(characters_dir.glob("*.md"))
+        if character_files:
+            num_to_select = min(rng.randint(2, 3), len(character_files))
+            selected_characters = rng.sample(character_files, num_to_select)
+            selected["characters"] = [f.name for f in selected_characters]
+            logger.info(
+                f"Selected {len(selected['characters'])} characters: "
+                f"{', '.join(selected['characters'])}"
+            )
+
+    return selected
+
+
+def _update_state_selected_context(
+    run_dir: Path, selected_context: dict[str, Any]
+) -> None:
+    """Update state.json with selected context files.
+
+    Args:
+        run_dir: Path to the run directory.
+        selected_context: Dictionary with 'location' and 'characters' keys.
+    """
+    state_path = run_dir / "state.json"
+    with state_path.open("r", encoding="utf-8") as f:
+        state = json.load(f)
+
+    state["selected_context"] = selected_context
+
+    with state_path.open("w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+
+
+def _create_llm_provider_from_config(
+    config_path: Path, default_model: str = "gpt-4"
+) -> LLMProvider:
+    """Create LLM provider from configuration.
+
+    Args:
+        config_path: Path to config directory.
+        default_model: Default model to use if config is missing.
+
+    Returns:
+        LLM provider instance.
+
+    Raises:
+        SystemExit: If provider cannot be created.
+    """
+    # For v1.0, we'll use OpenAIProvider with a simple client wrapper
+    # In a real implementation, this would load from config/model.yaml
+    try:
+        from openai import OpenAI
+    except ImportError:
+        print(
+            "Error: openai package not installed. Install with: pip install openai",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Try to load API key from config/creds.json
+    creds_path = config_path / "creds.json"
+    api_key = None
+    if creds_path.exists():
+        try:
+            with creds_path.open(encoding="utf-8") as f:
+                creds = json.load(f)
+                api_key = creds.get("openai_api_key")
+        except (OSError, json.JSONDecodeError, KeyError):
+            pass
+
+    if not api_key:
+        print(
+            "Error: No OpenAI API key found. "
+            "Create config/creds.json with 'openai_api_key' field.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        client = OpenAI(api_key=api_key)
+
+        def openai_client_wrapper(
+            prompt: str, model: str, **kwargs: Any
+        ) -> dict[str, Any]:
+            """Wrapper around OpenAI client for the provider interface."""
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                **kwargs,
+            )
+            return {
+                "choices": [
+                    {"message": {"content": response.choices[0].message.content or ""}}
+                ],
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                },
+            }
+
+        return OpenAIProvider(
+            client=openai_client_wrapper,
+            default_model=default_model,
+            temperature=0.7,
+        )
+    except Exception as e:
+        print(f"Error creating LLM provider: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _run_pipeline(
+    app_paths: AppPaths,
+    seed: str,
+    beats: int | None,
+    run_id: str | None,
+    config_path: Path,
+    llm_provider: LLMProvider | None = None,
+) -> int:
+    """Run the complete content generation pipeline.
+
+    Args:
+        app_paths: Resolved app paths.
+        seed: Story seed/description.
+        beats: Number of outline beats (None for app-defined default).
+        run_id: Optional run ID override.
+        config_path: Path to configuration directory.
+        llm_provider: Optional LLM provider (for testing). If None, creates from config.
+
+    Returns:
+        Exit code (0 for success, 1 for failure).
+    """
+    try:
+        # Initialize run directory
+        base_dir = Path.cwd()
+        run_dir = initialize_run(
+            app_name=app_paths.app_name,
+            seed=seed,
+            context_dir=app_paths.context_dir,
+            prompts_dir=app_paths.prompts_dir,
+            beats=beats,
+            run_id=run_id,
+            base_dir=base_dir,
+        )
+
+        logger = get_run_logger(run_dir)
+
+        # Select context files and update state
+        selected_context = _select_context_files(
+            context_dir=app_paths.context_dir,
+            run_id=run_dir.name,
+            logger=logger,
+        )
+        _update_state_selected_context(run_dir, selected_context)
+
+        # Create or use provided LLM provider
+        if llm_provider is None:
+            llm_provider = _create_llm_provider_from_config(config_path)
+
+        # Get schema base path
+        schema_base = base_dir / "src" / "llm-storytell" / "schemas"
+
+        # Stage 1: Outline generation
+        logger.log_stage_start("outline")
+        try:
+            execute_outline_step(
+                run_dir=run_dir,
+                context_dir=app_paths.context_dir,
+                prompts_dir=app_paths.prompts_dir,
+                llm_provider=llm_provider,
+                logger=logger,
+                schema_base=schema_base,
+            )
+            logger.log_stage_end("outline", success=True)
+        except (OutlineStepError, LLMProviderError) as e:
+            logger.error(f"Outline step failed: {e}")
+            logger.log_stage_end("outline", success=False)
+            return 1
+
+        # Load state to get outline beats
+        state_path = run_dir / "state.json"
+        with state_path.open(encoding="utf-8") as f:
+            state = json.load(f)
+
+        outline_beats = state.get("outline", [])
+        if not outline_beats:
+            logger.error("Outline generation produced no beats")
+            return 1
+
+        num_sections = len(outline_beats)
+
+        # Stage 2: Section generation loop
+        for section_index in range(num_sections):
+            stage_name = f"section_{section_index:02d}"
+
+            # Generate section
+            logger.log_stage_start(stage_name)
+            try:
+                execute_section_step(
+                    run_dir=run_dir,
+                    context_dir=app_paths.context_dir,
+                    prompts_dir=app_paths.prompts_dir,
+                    llm_provider=llm_provider,
+                    logger=logger,
+                    section_index=section_index,
+                    schema_base=schema_base,
+                )
+                logger.log_stage_end(stage_name, success=True)
+            except (SectionStepError, LLMProviderError) as e:
+                logger.error(f"Section {section_index} step failed: {e}")
+                logger.log_stage_end(stage_name, success=False)
+                return 1
+
+            # Summarize section
+            summarize_stage_name = f"summarize_{section_index:02d}"
+            logger.log_stage_start(summarize_stage_name)
+            try:
+                execute_summarize_step(
+                    run_dir=run_dir,
+                    prompts_dir=app_paths.prompts_dir,
+                    llm_provider=llm_provider,
+                    logger=logger,
+                    section_index=section_index,
+                    schema_base=schema_base,
+                )
+                logger.log_stage_end(summarize_stage_name, success=True)
+            except (SummarizeStepError, LLMProviderError) as e:
+                logger.error(f"Summarize {section_index} step failed: {e}")
+                logger.log_stage_end(summarize_stage_name, success=False)
+                return 1
+
+        # Stage 3: Critic/Editor pass
+        logger.log_stage_start("critic")
+        try:
+            execute_critic_step(
+                run_dir=run_dir,
+                context_dir=app_paths.context_dir,
+                prompts_dir=app_paths.prompts_dir,
+                llm_provider=llm_provider,
+                logger=logger,
+                schema_base=schema_base,
+            )
+            logger.log_stage_end("critic", success=True)
+        except (CriticStepError, LLMProviderError) as e:
+            logger.error(f"Critic step failed: {e}")
+            logger.log_stage_end("critic", success=False)
+            return 1
+
+        logger.info(f"Pipeline completed successfully. Run directory: {run_dir}")
+        return 0
+
+    except RunInitializationError as e:
+        print(f"Error: Failed to initialize run: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Error: Unexpected error: {e}", file=sys.stderr)
+        return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     """Main entry point for the CLI.
 
@@ -94,16 +394,47 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "run":
+        # Validate required arguments
+        if not args.seed:
+            print("Error: --seed is required for 'run' command", file=sys.stderr)
+            parser.print_help()
+            return 1
+
         # Resolve app paths
         app_paths = resolve_app_or_exit(args.app)
 
-        # For now, just print the resolved paths (pipeline execution comes later)
-        print(f"App: {app_paths.app_name}")
-        print(f"Context directory: {app_paths.context_dir}")
-        print(f"Prompts directory: {app_paths.prompts_dir}")
+        # Handle --beats vs --sections conflict (prefer --beats)
+        beats = args.beats
+        if args.sections is not None:
+            if beats is not None:
+                print(
+                    "Warning: Both --beats and --sections specified. Using --beats.",
+                    file=sys.stderr,
+                )
+            else:
+                beats = args.sections
 
-        # TODO: T0002+ will implement actual pipeline execution
-        return 0
+        # Validate beats range if provided
+        if beats is not None and (beats < 1 or beats > 20):
+            print(
+                "Error: --beats must be between 1 and 20 (inclusive)",
+                file=sys.stderr,
+            )
+            return 1
+
+        # Use default beats if not provided (app-defined default would go here in future)
+        # For v1.0, use 5 as a reasonable default
+        if beats is None:
+            beats = 5
+
+        # Run the pipeline
+        return _run_pipeline(
+            app_paths=app_paths,
+            seed=args.seed,
+            beats=beats,
+            run_id=args.run_id,
+            config_path=args.config_path,
+        )
 
     return 0
 

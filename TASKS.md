@@ -67,41 +67,6 @@ Each task includes:
 
 ---
 
-## v1.0 – CLI & verification
-
-### [ ] T0030 CLI integration + E2E smoke test
-
-**Goal**
-Prove the pipeline works end-to-end.
-
-**Deliverables**
-
-* CLI flags:
-
-  * `--app`
-  * `--seed`
-  * `--beats`
-  * `--run-id`
-* Fully mocked E2E test
-
-**Acceptance criteria**
-
-* One command produces:
-
-  * final script
-  * logs
-  * state
-* No network or API key required for test
-
-**Allowed files**
-
-* `src/llm-storytell/cli.py`
-* `tests/test_e2e.py`
-
-*Result*:
-
----
-
 ## Post-v1.0 backlog (**do not start** yet)
 
 ### [ ] T0100 CI pipeline

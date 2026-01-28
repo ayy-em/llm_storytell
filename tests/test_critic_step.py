@@ -522,10 +522,12 @@ class TestExecuteCriticStepErrors:
         (temp_run_dir_with_sections / "artifacts" / "20_section_02.md").unlink()
 
         # Use valid response in case we get past section loading (shouldn't happen)
-        valid_response = json.dumps({
-            "final_script": "test",
-            "editor_report": {"issues_found": [], "changes_applied": []},
-        })
+        valid_response = json.dumps(
+            {
+                "final_script": "test",
+                "editor_report": {"issues_found": [], "changes_applied": []},
+            }
+        )
         provider = _MockLLMProvider(response_content=valid_response)
         logger = RunLogger(temp_run_dir_with_sections / "run.log")
 

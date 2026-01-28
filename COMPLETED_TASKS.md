@@ -295,3 +295,38 @@ Generate outline beats (N = 1–20).
 
 ---
 
+### [ ] T0030 CLI integration + E2E smoke test
+
+**Goal**
+Prove the pipeline works end-to-end.
+
+**Deliverables**
+
+* CLI flags:
+
+  * `--app`
+  * `--seed`
+  * `--beats`
+  * `--run-id`
+* Fully mocked E2E test
+
+**Acceptance criteria**
+
+* One command produces:
+
+  * final script
+  * logs
+  * state
+* No network or API key required for test
+
+**Allowed files**
+
+* `src/llm-storytell/cli.py`
+* `tests/test_e2e.py`
+
+*Result*: 
+* All CLI flags implemented: --app, --seed, --beats, --run-id
+* Fully mocked E2E test (no network/API keys required)
+* Context selection is deterministic and logged
+* Error handling with clear messages
+* State updates only after successful steps
