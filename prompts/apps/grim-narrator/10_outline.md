@@ -47,27 +47,20 @@ Do NOT include commentary or explanations.
 {{
   "beats": [
     {{
-      "id": "beat_01",
+      "beat_id": 1,
       "title": "Short, descriptive title",
-      "summary": "1–2 sentence factual description of the narrative event",
-      "primary_characters": ["<character_id>"],
-      "location": "<location_id or null>",
-      "state_changes": [
-        "brief description of any world or character state change"
-      ]
+      "summary": "1–2 sentence factual description of the narrative event"
     }}
   ]
 }}
 
 ## Length targets
 - beats array length MUST equal beats_count
-- title: max 10 words
-- summary: max 40 words
-- state_changes: max 3 entries per beat
+- title: max 10 words, min 3 characters
+- summary: min 20 characters
 
 ## Validation rules
-- Beat IDs must be sequential and zero-padded.
-- Do not add or remove fields.
-- Use null instead of empty strings.
-- Arrays must be empty if no values apply.
-- Do not infer characters or locations not present in context.
+- beat_id must be an integer starting at 1, incrementing sequentially (1, 2, 3, ...)
+- Do not add or remove fields. Only include: beat_id, title, summary
+- title must be at least 3 characters
+- summary must be at least 20 characters

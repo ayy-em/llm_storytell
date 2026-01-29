@@ -81,7 +81,99 @@ Each task includes:
 
 ## v1.0 Release Preparation Tasks
 
-### [ ] R0001 Documentation cleanup for v1.0
+### [ ] R0001-BB Bug Bash: E2E Production test
+TASK: Fix-the-run loop (no-refactor, artifact-driven)
+
+Goal
+Given ONE exact CLI command, repeatedly execute it until it succeeds.
+On each failure:
+- Read console output.
+- Inspect the NEWLY CREATED run artifacts in runs/<latest>/ (run.log, inputs.json, state.json, any schema/validation outputs).
+- Diagnose root cause.
+- Apply the smallest targeted fix to make the next run pass.
+- Repeat.
+
+CRITICAL RULES (non-negotiable)
+1) Use the CLI command EXACTLY as provided. Do not change flags/args unless the command itself is invalid.
+2) DO NOT edit anything inside any existing runs/run-*/ directory. Runs are immutable evidence.
+3) DO NOT refactor unrelated code. No renames, no reorganizing modules, no “cleanup”.
+4) One iteration = one minimal fix + tests + rerun.
+5) If a fix touches more than ~3 files or >150 LOC, it’s probably scope creep. Stop and find a smaller fix.
+6) Only fix what is necessary to get THIS command to succeed. No speculative improvements.
+7) Preserve backward compatibility unless the failure explicitly requires breaking change (rare).
+8) After each failure, summarize:
+   - Failure stage
+   - Exact error message
+   - Evidence from run.log/state.json
+   - Proposed minimal fix
+   - Why this fix is minimal
+
+Inputs
+CLI command to run (copy/paste exactly):
+`python -m llm_storytell run --app grim-narrator --beats 10 --seed "Each day in the life of a low-class citizen is filled with fear, hunger and despair."`
+
+**Iteration protocol** (repeat until success)
+Step 0: Preconditions
+- Confirm .venv is active (or use uv run if repo uses uv).
+- Run formatting/lint/tests only when code changes.
+
+Step 1: Execute
+- Run the CLI command.
+- If it succeeds: STOP. Report success and the run dir path.
+
+Step 2: Gather evidence (failure only)
+- Capture console output (full error).
+- Identify the run directory created (most recent runs/run-*/ by timestamp).
+- Read:
+  - runs/<latest>/run.log
+  - runs/<latest>/state.json
+  - runs/<latest>/inputs.json
+  - any additional emitted validation artifacts (schemas, reports)
+- Do NOT modify anything in `runs/` folder.
+
+Step 3: Diagnose (failure only)
+- State the failing stage (e.g., schema validation / outline / section / critic).
+- Extract the minimal root cause (missing var, invalid schema, bad placeholder parsing, bad context selection, etc).
+- Identify the exact code location likely responsible (file + function) with reasoning tied to evidence.
+
+Step 4: Minimal fix plan (failure only)
+- Propose the smallest change that could plausibly fix the error.
+- Prefer: adjust a single validation rule / pass a missing variable / correct a schema / escape braces in a prompt.
+- Avoid: architecture changes, new modules, big rewrites.
+
+Step 5: Implement minimal fix
+- Edit only necessary files.
+- Add/adjust the smallest test that would have caught this failure (if practical).
+- Run:
+  - uv run ruff format .
+  - uv run ruff check .
+  - uv run pytest -q
+  (or repo’s equivalent)
+- If tests fail: fix tests/code, keep changes minimal.
+
+Step 6: Rerun
+- Re-run the exact CLI command.
+- Loop back to Step 2 on failure.
+
+Guardrails against infinite loops / repo wreckage
+- Maintain a running “Change Log” with:
+  - Iteration number
+  - Files touched
+  - Why touched
+  - How it relates to the observed failure
+- If the same failure repeats twice:
+  - Add one targeted debug log OR one targeted assertion (not both) to pinpoint the missing invariant.
+  - Rerun.
+- If a fix requires major refactor, STOP and propose a separate refactor task instead.
+
+Acceptance criteria:
+- The CLI run succeeds.
+- Provide the final successful run directory path.
+- Provide a brief list of fixes made (bullets) and the test(s) added.
+- Points where each error previously happened are now logged upon success/failure
+- Update TASKS.md for the active task only (mark complete when success achieved).
+- One commit for the task (if your workflow requires it).
+
 
 ### [ ] R0002 Documentation cleanup for v1.0
 
