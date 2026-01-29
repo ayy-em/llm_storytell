@@ -272,6 +272,14 @@ def _run_pipeline(
 
         logger = get_run_logger(run_dir)
 
+        # Basic CLI progress output so runs don't feel "silent"
+        print(
+            f"[llm_storytell] Initialized run '{run_dir.name}' "
+            f"for app '{app_paths.app_name}'.",
+            flush=True,
+        )
+        print(f"[llm_storytell] Run directory: {run_dir}", flush=True)
+
         # Select context files and update state
         selected_context = _select_context_files(
             context_dir=app_paths.context_dir,
@@ -288,6 +296,10 @@ def _run_pipeline(
         schema_base = base_dir / "src" / "llm_storytell" / "schemas"
 
         # Stage 1: Outline generation
+        print(
+            f"[llm_storytell] Generating outline ({beats} beats)...",
+            flush=True,
+        )
         logger.log_stage_start("outline")
         try:
             execute_outline_step(
@@ -302,6 +314,16 @@ def _run_pipeline(
         except (OutlineStepError, LLMProviderError) as e:
             logger.error(f"Outline step failed: {e}")
             logger.log_stage_end("outline", success=False)
+            print(
+                f"[llm_storytell] Error: outline stage failed: {e}",
+                file=sys.stderr,
+                flush=True,
+            )
+            print(
+                f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
+                file=sys.stderr,
+                flush=True,
+            )
             return 1
 
         # Load state to get outline beats
@@ -312,15 +334,29 @@ def _run_pipeline(
         outline_beats = state.get("outline", [])
         if not outline_beats:
             logger.error("Outline generation produced no beats")
+            print(
+                "[llm_storytell] Error: outline generation produced no beats. "
+                f"See log for details: {run_dir / 'run.log'}",
+                file=sys.stderr,
+                flush=True,
+            )
             return 1
 
         num_sections = len(outline_beats)
 
         # Stage 2: Section generation loop
+        print(
+            f"[llm_storytell] Generating {num_sections} section(s)...",
+            flush=True,
+        )
         for section_index in range(num_sections):
             stage_name = f"section_{section_index:02d}"
 
             # Generate section
+            print(
+                f"[llm_storytell]  - Section {section_index + 1}/{num_sections}",
+                flush=True,
+            )
             logger.log_stage_start(stage_name)
             try:
                 execute_section_step(
@@ -336,6 +372,16 @@ def _run_pipeline(
             except (SectionStepError, LLMProviderError) as e:
                 logger.error(f"Section {section_index} step failed: {e}")
                 logger.log_stage_end(stage_name, success=False)
+                print(
+                    f"[llm_storytell] Error: section {section_index} failed: {e}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                print(
+                    f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 return 1
 
             # Summarize section
@@ -354,9 +400,20 @@ def _run_pipeline(
             except (SummarizeStepError, LLMProviderError) as e:
                 logger.error(f"Summarize {section_index} step failed: {e}")
                 logger.log_stage_end(summarize_stage_name, success=False)
+                print(
+                    f"[llm_storytell] Error: summarize {section_index} failed: {e}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                print(
+                    f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 return 1
 
         # Stage 3: Critic/Editor pass
+        print("[llm_storytell] Running critic/finalization...", flush=True)
         logger.log_stage_start("critic")
         try:
             execute_critic_step(
@@ -371,9 +428,24 @@ def _run_pipeline(
         except (CriticStepError, LLMProviderError) as e:
             logger.error(f"Critic step failed: {e}")
             logger.log_stage_end("critic", success=False)
+            print(
+                f"[llm_storytell] Error: critic stage failed: {e}",
+                file=sys.stderr,
+                flush=True,
+            )
+            print(
+                f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
+                file=sys.stderr,
+                flush=True,
+            )
             return 1
 
         logger.info(f"Pipeline completed successfully. Run directory: {run_dir}")
+        print(
+            f"[llm_storytell] Pipeline completed successfully. "
+            f"Artifacts are in: {run_dir / 'artifacts'}",
+            flush=True,
+        )
         return 0
 
     except RunInitializationError as e:

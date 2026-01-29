@@ -67,7 +67,20 @@ def _extract_placeholders(template: str) -> set[str]:
     # Excludes {{ and }} which are literal braces
     pattern = r"(?<!\{)\{([^}:]+)(?::[^}]*)?\}(?!\})"
     matches = re.findall(pattern, template)
-    return set(matches)
+
+    # Filter out placeholders that are clearly not real variables, such as
+    # JSON example keys or code snippets that include quotes, newlines, or
+    # leading/trailing whitespace (e.g. {"beats": [...] }).
+    placeholders = {
+        name
+        for name in matches
+        if "\n" not in name
+        and '"' not in name
+        and "'" not in name
+        and name.strip() == name
+    }
+
+    return set(placeholders)
 
 
 def render_prompt(

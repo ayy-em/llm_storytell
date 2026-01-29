@@ -78,6 +78,71 @@ Each task includes:
 * ruff checks are passed
 * README.md and SPEC.md are up-to-date and reflect scope, tech stack and other info truthfully.
 
+
+## [ ] T0111 Task: Enforce MVP context contract across code + prompts + docs
+
+Goal
+Implement and enforce this contract for all apps (starting with grim-narrator):
+1) Required on every run step:
+   - context/<app>/lore_bible.md must exist and be loaded for every step.
+   - At least 1 character file in context/<app>/characters/*.md must exist and be included for every step.
+2) Optional:
+   - Location is NOT required. If context/<app>/locations/ exists and has .md files, include exactly 1 location (deterministic selection) on every step; otherwise location_context must be "".
+   - World is NOT required. If context/<app>/world/ exists and has .md files, include ALL world files (MVP) by folding them into lore_bible (or otherwise making them available) on every step; if absent, still generate output.
+
+Scope / Constraints
+- Keep backward compatibility: missing optional folders must not stop output.
+- Deterministic selection: do not use randomness. Pick location/characters in a stable way (e.g. alphabetical order, first N).
+- Centralize context loading: do NOT let each step load context differently. Ensure all steps use the same loader/logic.
+- Ensure prompt rendering does not treat JSON braces as placeholders: placeholders must be strictly {identifier} only.
+
+Implementation Plan (must follow)
+1) Identify current context loading paths (outline/section/summarize/critic). Refactor to a single ContextLoader (or equivalent) used by every step.
+2) Add validation with clear error messages for missing required lore_bible.md or missing/empty characters folder.
+3) Load optional locations/world if present:
+   - locations: include exactly 1 location
+   - world: include ALL world files (MVP) and fold into lore_bible passed to prompts
+4) Persist selected/loaded context into state for reproducibility:
+   - selected_context.characters (list)
+   - selected_context.location (string|null)
+   - selected_context.world_files (list)
+5) Update prompt templates to match variable reality:
+   - Required vars: seed, lore_bible, character_context, style_rules
+   - Optional var: location_context (may be empty)
+   - Do NOT introduce new world_context var for MVP if folding into lore_bible
+6) Update SPEC.md + README.md to document the contract and selection rules.
+
+Tests (required)
+- Add/adjust tests that fail if:
+  - lore_bible missing => run fails with explicit message
+  - characters folder missing/empty => run fails with explicit message
+  - optional folders missing => run still succeeds
+  - if locations present => location_context is non-empty and selection is deterministic
+  - if world present => lore_bible contains world content / world_files recorded
+- Add a test ensuring placeholder extraction only recognizes {identifier} (JSON examples must not create fake required vars).
+
+Deliverables
+- Code changes implementing centralized loader + step integration
+- Updated prompts (grim-narrator at minimum)
+- Updated SPEC.md + README.md
+- Tests green: ruff format/check + pytest
+
+Allowed files
+- src/llm_storytell/** (loader + steps + prompt rendering if needed)
+- prompts/apps/** (to align vars)
+- SPEC.md, README.md
+- tests/** (new/updated)
+
+Do NOT touch
+- config/pipeline.yaml (still unused)
+- unrelated apps unless needed for consistency
+
+Acceptance criteria
+- `python -m llm_storytell run --app grim-narrator --seed "..."` completes through critic and produces output when optional folders are absent.
+- Run fails early with clear message if lore_bible.md missing or no characters exist.
+- State records which character/location/world files were used.
+
+
 ## v1.0 Release Preparation Tasks
 
 ### [ ] R0001 Documentation cleanup for v1.0
