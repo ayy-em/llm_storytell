@@ -144,6 +144,7 @@ class RunLogger:
         always_loaded: list[str],
         selected_location: str | None,
         selected_characters: list[str],
+        world_files: list[str] | None = None,
     ) -> None:
         """Log context file selections for a run.
 
@@ -151,6 +152,7 @@ class RunLogger:
             always_loaded: List of relative paths to always-loaded files.
             selected_location: Relative path to selected location file, or None.
             selected_characters: List of relative paths to selected character files.
+            world_files: List of relative paths to world/*.md files folded into lore.
         """
         self.info("Context selection:")
         self.info(f"  Always loaded: {', '.join(sorted(always_loaded))}")
@@ -164,3 +166,9 @@ class RunLogger:
             )
         else:
             self.info("  Selected characters: (none)")
+        if world_files:
+            self.info(
+                f"  World files (folded into lore): {', '.join(sorted(world_files))}"
+            )
+        else:
+            self.info("  World files: (none)")

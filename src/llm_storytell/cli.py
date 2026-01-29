@@ -1,16 +1,14 @@
 """Command-line interface for llm_storytell."""
 
 import argparse
-import hashlib
 import json
-import random
 import sys
 from pathlib import Path
 from typing import Any
 
 from .config import AppNotFoundError, AppPaths, resolve_app
+from .context import ContextLoader, ContextLoaderError
 from .llm import LLMProvider, LLMProviderError, OpenAIProvider
-from .logging import RunLogger
 from .run_dir import RunInitializationError, get_run_logger, initialize_run
 from .steps.critic import CriticStepError, execute_critic_step
 from .steps.outline import OutlineStepError, execute_outline_step
@@ -88,50 +86,6 @@ def resolve_app_or_exit(app_name: str, base_dir: Path | None = None) -> AppPaths
         sys.exit(1)
 
 
-def _select_context_files(
-    context_dir: Path, run_id: str, logger: RunLogger
-) -> dict[str, Any]:
-    """Select context files randomly but deterministically based on run_id.
-
-    Args:
-        context_dir: Path to the app's context directory.
-        run_id: Run ID used as seed for deterministic selection.
-        logger: Logger instance for logging selections.
-
-    Returns:
-        Dictionary with 'location' and 'characters' keys for selected context.
-    """
-    # Use run_id as seed for deterministic randomness
-    seed_hash = int(hashlib.md5(run_id.encode()).hexdigest(), 16)
-    rng = random.Random(seed_hash)
-
-    selected: dict[str, Any] = {"location": None, "characters": []}
-
-    # Select one location (if locations directory exists and has files)
-    locations_dir = context_dir / "locations"
-    if locations_dir.exists():
-        location_files = list(locations_dir.glob("*.md"))
-        if location_files:
-            selected_location = rng.choice(location_files)
-            selected["location"] = selected_location.name
-            logger.info(f"Selected location: {selected_location.name}")
-
-    # Select 2-3 characters (if characters directory exists and has files)
-    characters_dir = context_dir / "characters"
-    if characters_dir.exists():
-        character_files = list(characters_dir.glob("*.md"))
-        if character_files:
-            num_to_select = min(rng.randint(2, 3), len(character_files))
-            selected_characters = rng.sample(character_files, num_to_select)
-            selected["characters"] = [f.name for f in selected_characters]
-            logger.info(
-                f"Selected {len(selected['characters'])} characters: "
-                f"{', '.join(selected['characters'])}"
-            )
-
-    return selected
-
-
 def _update_state_selected_context(
     run_dir: Path, selected_context: dict[str, Any]
 ) -> None:
@@ -139,7 +93,8 @@ def _update_state_selected_context(
 
     Args:
         run_dir: Path to the run directory.
-        selected_context: Dictionary with 'location' and 'characters' keys.
+        selected_context: Dictionary with 'location', 'characters', and
+            'world_files' keys (basenames for reproducibility).
     """
     state_path = run_dir / "state.json"
     with state_path.open("r", encoding="utf-8") as f:
@@ -280,12 +235,27 @@ def _run_pipeline(
         )
         print(f"[llm_storytell] Run directory: {run_dir}", flush=True)
 
-        # Select context files and update state
-        selected_context = _select_context_files(
-            context_dir=app_paths.context_dir,
-            run_id=run_dir.name,
-            logger=logger,
-        )
+        # Load and select context (required: lore_bible + at least one character)
+        try:
+            loader = ContextLoader(app_paths.context_dir, logger=logger)
+            selection = loader.load_context(run_dir.name)
+        except ContextLoaderError as e:
+            logger.error(str(e))
+            print(
+                f"[llm_storytell] Error: {e}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+
+        # Persist selected context (basenames for reproducibility)
+        selected_context: dict[str, Any] = {
+            "location": Path(selection.selected_location).name
+            if selection.selected_location
+            else None,
+            "characters": [Path(p).name for p in selection.selected_characters],
+            "world_files": [Path(p).name for p in selection.world_files],
+        }
         _update_state_selected_context(run_dir, selected_context)
 
         # Create or use provided LLM provider

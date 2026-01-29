@@ -4,6 +4,27 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T0111 Task: Enforce MVP context contract across code + prompts + docs (2026-01-29)
+
+**Goal**
+Implement and enforce this contract for all apps (starting with grim-narrator):
+1) Required on every run step:
+   - context/<app>/lore_bible.md must exist and be loaded for every step.
+   - At least 1 character file in context/<app>/characters/*.md must exist and be included for every step.
+2) Optional:
+   - Location is NOT required. If context/<app>/locations/ exists and has .md files, include exactly 1 location (deterministic selection) on every step; otherwise location_context must be "".
+   - World is NOT required. If context/<app>/world/ exists and has .md files, include ALL world files (MVP) by folding them into lore_bible (or otherwise making them available) on every step; if absent, still generate output.
+
+**Scope / Constraints**
+- Keep backward compatibility: missing optional folders must not stop output.
+- Deterministic selection: do not use randomness. Pick location/characters in a stable way (e.g. alphabetical order, first N).
+- Centralize context loading: do NOT let each step load context differently. Ensure all steps use the same loader/logic.
+- Ensure prompt rendering does not treat JSON braces as placeholders: placeholders must be strictly {identifier} only.
+
+**Result**: Centralized context in `ContextLoader` (required: lore_bible + ≥1 character; optional: 1 location, world/*.md folded into lore_bible with separator). CLI uses loader and fails fast on ContextLoaderError. Steps use shared `build_prompt_context_vars(context_dir, state)`. Deterministic selection: location = first alphabetically, characters = first 3 alphabetically, world = all alphabetically. State persists `selected_context.location`, `characters`, `world_files`. Prompt render restricts placeholders to `{identifier}` only. SPEC.md and README.md updated. Tests: context loader (required/optional, deterministic, world fold), placeholder (JSON no fake vars), e2e (fail when required missing, succeed when optional missing). Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (177 passed).
+
+---
+
 ### [x] T0001 Runtime config + app resolution (2026-01-27)
 
 **Goal**

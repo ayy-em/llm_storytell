@@ -477,3 +477,167 @@ def test_e2e_requires_seed(
 
     finally:
         monkeypatch.chdir(original_cwd)
+
+
+def test_e2e_fails_when_lore_bible_missing(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run fails early with explicit message if lore_bible.md is missing."""
+    original_cwd = Path.cwd()
+    try:
+        monkeypatch.chdir(temp_app_structure)
+        (temp_app_structure / "context" / "test-app" / "lore_bible.md").unlink()
+
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story.",
+                "--beats",
+                "2",
+            ]
+        )
+        assert exit_code == 1
+
+    finally:
+        monkeypatch.chdir(original_cwd)
+
+
+def test_e2e_fails_when_characters_missing(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run fails early with explicit message if characters directory is missing."""
+    original_cwd = Path.cwd()
+    try:
+        monkeypatch.chdir(temp_app_structure)
+        import shutil
+
+        shutil.rmtree(temp_app_structure / "context" / "test-app" / "characters")
+
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story.",
+                "--beats",
+                "2",
+            ]
+        )
+        assert exit_code == 1
+
+    finally:
+        monkeypatch.chdir(original_cwd)
+
+
+def test_e2e_fails_when_characters_empty(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run fails early with explicit message if characters directory has no .md files."""
+    original_cwd = Path.cwd()
+    try:
+        monkeypatch.chdir(temp_app_structure)
+        for f in (temp_app_structure / "context" / "test-app" / "characters").glob("*"):
+            f.unlink()
+
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story.",
+                "--beats",
+                "2",
+            ]
+        )
+        assert exit_code == 1
+
+    finally:
+        monkeypatch.chdir(original_cwd)
+
+
+def test_e2e_succeeds_when_optional_locations_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Run still succeeds when locations directory is missing (optional)."""
+    base_dir = tmp_path
+    context_dir = base_dir / "context" / "minimal-app"
+    context_dir.mkdir(parents=True)
+    (context_dir / "lore_bible.md").write_text("# Lore")
+    (context_dir / "characters").mkdir()
+    (context_dir / "characters" / "one.md").write_text("# One")
+    # No locations/ - optional
+
+    prompts_dir = base_dir / "prompts" / "apps" / "minimal-app"
+    prompts_dir.mkdir(parents=True)
+    for name, content in [
+        (
+            "10_outline.md",
+            "Seed: {seed}\nLore: {lore_bible}\nStyle: {style_rules}\n"
+            "Location: {location_context}\nChars: {character_context}\n"
+            "Generate {beats_count} beats.",
+        ),
+        (
+            "20_section.md",
+            "Section {section_id}\n{outline_beat}\n{rolling_summary}\n{continuity_context}\n"
+            "Lore: {lore_bible}\nStyle: {style_rules}\nLoc: {location_context}\n"
+            "Chars: {character_context}",
+        ),
+        ("21_summarize.md", "Summarize: {section_content}"),
+        (
+            "30_critic.md",
+            "Draft: {full_draft}\nLore: {lore_bible}\nStyle: {style_rules}\n"
+            "Outline: {outline}\nLoc: {location_context}\nChars: {character_context}",
+        ),
+    ]:
+        (prompts_dir / name).write_text(content)
+
+    project_root = Path(__file__).parent.parent
+    schema_src = project_root / "src" / "llm_storytell" / "schemas"
+    schema_dest = base_dir / "src" / "llm_storytell" / "schemas"
+    schema_dest.mkdir(parents=True)
+    if schema_src.exists():
+        import shutil
+
+        for f in schema_src.glob("*.json"):
+            shutil.copy2(f, schema_dest / f.name)
+
+    original_cwd = Path.cwd()
+    try:
+        monkeypatch.chdir(base_dir)
+        mock_provider = MockLLMProvider()
+
+        def mock_create_provider(
+            config_path: Path, default_model: str = "gpt-4"
+        ) -> Any:
+            return mock_provider
+
+        with patch(
+            "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+        ):
+            exit_code = main(
+                [
+                    "run",
+                    "--app",
+                    "minimal-app",
+                    "--seed",
+                    "A story.",
+                    "--beats",
+                    "1",
+                    "--run-id",
+                    "test-optional-loc",
+                ]
+            )
+        assert exit_code == 0
+        state_path = base_dir / "runs" / "test-optional-loc" / "state.json"
+        assert state_path.exists()
+        with state_path.open(encoding="utf-8") as f:
+            state = json.load(f)
+        assert state["selected_context"]["location"] is None
+        assert "world_files" in state["selected_context"]
+    finally:
+        monkeypatch.chdir(original_cwd)

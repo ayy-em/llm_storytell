@@ -448,7 +448,9 @@ class TestExecuteOutlineStepErrors:
                 logger=logger,
             )
 
-        assert "Lore bible not found" in str(exc_info.value)
+        assert "lore_bible" in str(exc_info.value) or "Required file not found" in str(
+            exc_info.value
+        )
 
     def test_fails_on_missing_prompt_template(
         self,

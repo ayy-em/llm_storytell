@@ -151,7 +151,11 @@ class TestInitializeRun:
 
         assert state["app"] == "test-app"
         assert state["seed"] == "A dark tale of mystery."
-        assert state["selected_context"] == {"location": None, "characters": []}
+        assert state["selected_context"] == {
+            "location": None,
+            "characters": [],
+            "world_files": [],
+        }
         assert state["outline"] == []
         assert state["sections"] == []
         assert state["summaries"] == []

@@ -1,7 +1,6 @@
 """Tests for context loading and selection."""
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -16,9 +15,10 @@ context_module = import_module("llm_storytell.context")
 logging_module = import_module("llm_storytell.logging")
 
 ContextLoader = context_module.ContextLoader
-ContextSelection = context_module.ContextSelection
 ContextLoaderError = context_module.ContextLoaderError
+ContextSelection = context_module.ContextSelection
 RunLogger = logging_module.RunLogger
+build_prompt_context_vars = context_module.build_prompt_context_vars
 
 
 @pytest.fixture
@@ -97,46 +97,48 @@ class TestContextLoader:
         context_dir = tmp_path / "context" / "test-app"
         context_dir.mkdir(parents=True)
         (context_dir / "lore_bible.md").write_text("# Lore Bible")
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("# One")
 
         loader = ContextLoader(context_dir)
         selection = loader.load_context("run-test-004")
 
-        # Should only have lore_bible, no style files
+        # Should have lore_bible, no style files
         assert "lore_bible.md" in selection.always_loaded
-        assert len(selection.always_loaded) == 1
+        assert len([k for k in selection.always_loaded if k != "lore_bible.md"]) == 0
 
-    def test_selects_one_location(self, temp_context_dir: Path) -> None:
-        """Randomly selects one location file."""
+    def test_selects_one_location_deterministic(self, temp_context_dir: Path) -> None:
+        """Selects exactly one location file (first alphabetically)."""
         loader = ContextLoader(temp_context_dir)
         selection = loader.load_context("run-test-005")
 
-        assert selection.selected_location is not None
-        assert selection.selected_location in [
-            "locations/forest.md",
-            "locations/city.md",
-            "locations/desert.md",
-        ]
+        assert selection.selected_location == "locations/city.md"
         assert selection.location_content is not None
-        assert len(selection.location_content) > 0
+        assert "City" in selection.location_content
 
     def test_handles_missing_locations_directory(self, tmp_path: Path) -> None:
-        """Handles missing locations directory gracefully."""
+        """Handles missing locations directory gracefully (optional)."""
         context_dir = tmp_path / "context" / "test-app"
         context_dir.mkdir(parents=True)
         (context_dir / "lore_bible.md").write_text("# Lore Bible")
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("# One")
 
         loader = ContextLoader(context_dir)
         selection = loader.load_context("run-test-006")
 
         assert selection.selected_location is None
         assert selection.location_content is None
+        assert selection.world_files == []
 
     def test_handles_empty_locations_directory(self, tmp_path: Path) -> None:
-        """Handles empty locations directory gracefully."""
+        """Handles empty locations directory gracefully (optional)."""
         context_dir = tmp_path / "context" / "test-app"
         context_dir.mkdir(parents=True)
         (context_dir / "lore_bible.md").write_text("# Lore Bible")
         (context_dir / "locations").mkdir()
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("# One")
 
         loader = ContextLoader(context_dir)
         selection = loader.load_context("run-test-007")
@@ -144,52 +146,48 @@ class TestContextLoader:
         assert selection.selected_location is None
         assert selection.location_content is None
 
-    def test_selects_2_to_3_characters(self, temp_context_dir: Path) -> None:
-        """Randomly selects 2-3 character files."""
+    def test_selects_characters_deterministic_bounded(
+        self, temp_context_dir: Path
+    ) -> None:
+        """Selects up to 3 character files (first alphabetically)."""
         loader = ContextLoader(temp_context_dir)
         selection = loader.load_context("run-test-008")
 
-        assert len(selection.selected_characters) >= 2
-        assert len(selection.selected_characters) <= 3
-        assert all(
-            char
-            in [
-                "characters/hero.md",
-                "characters/villain.md",
-                "characters/mentor.md",
-                "characters/sidekick.md",
-            ]
-            for char in selection.selected_characters
-        )
-        assert len(selection.character_contents) == len(selection.selected_characters)
+        # Alphabetical: hero, mentor, sidekick, villain -> first 3
+        assert selection.selected_characters == [
+            "characters/hero.md",
+            "characters/mentor.md",
+            "characters/sidekick.md",
+        ]
+        assert len(selection.character_contents) == 3
 
-    def test_handles_missing_characters_directory(self, tmp_path: Path) -> None:
-        """Handles missing characters directory gracefully."""
+    def test_fails_without_characters_directory(self, tmp_path: Path) -> None:
+        """Run fails with explicit message if characters directory is missing."""
         context_dir = tmp_path / "context" / "test-app"
         context_dir.mkdir(parents=True)
         (context_dir / "lore_bible.md").write_text("# Lore Bible")
 
         loader = ContextLoader(context_dir)
-        selection = loader.load_context("run-test-009")
+        with pytest.raises(ContextLoaderError) as exc_info:
+            loader.load_context("run-test-009")
 
-        assert selection.selected_characters == []
-        assert selection.character_contents == {}
+        assert "characters" in str(exc_info.value).lower()
 
-    def test_handles_empty_characters_directory(self, tmp_path: Path) -> None:
-        """Handles empty characters directory gracefully."""
+    def test_fails_with_empty_characters_directory(self, tmp_path: Path) -> None:
+        """Run fails with explicit message if characters directory has no .md files."""
         context_dir = tmp_path / "context" / "test-app"
         context_dir.mkdir(parents=True)
         (context_dir / "lore_bible.md").write_text("# Lore Bible")
         (context_dir / "characters").mkdir()
 
         loader = ContextLoader(context_dir)
-        selection = loader.load_context("run-test-010")
+        with pytest.raises(ContextLoaderError) as exc_info:
+            loader.load_context("run-test-010")
 
-        assert selection.selected_characters == []
-        assert selection.character_contents == {}
+        assert "character" in str(exc_info.value).lower()
 
-    def test_selects_all_characters_if_fewer_than_2(self, tmp_path: Path) -> None:
-        """Selects all available characters if fewer than 2."""
+    def test_selects_one_character_when_only_one_exists(self, tmp_path: Path) -> None:
+        """Selects the single character when only one exists (at least 1 required)."""
         context_dir = tmp_path / "context" / "test-app"
         context_dir.mkdir(parents=True)
         (context_dir / "lore_bible.md").write_text("# Lore Bible")
@@ -198,50 +196,23 @@ class TestContextLoader:
         (characters_dir / "only_one.md").write_text("# Only One\n\nSingle character.")
 
         loader = ContextLoader(context_dir)
-        logger = MagicMock(spec=RunLogger)
-        loader.logger = logger
         selection = loader.load_context("run-test-011")
 
-        assert len(selection.selected_characters) == 1
-        assert "characters/only_one.md" in selection.selected_characters
-        # Should log a warning
-        assert any(
-            "Warning" in str(call) and "character" in str(call).lower()
-            for call in logger.info.call_args_list
-        )
+        assert selection.selected_characters == ["characters/only_one.md"]
+        assert len(selection.character_contents) == 1
 
-    def test_reproducible_selection(self, temp_context_dir: Path) -> None:
-        """Same run_id produces same selections."""
-        loader1 = ContextLoader(temp_context_dir)
-        loader2 = ContextLoader(temp_context_dir)
+    def test_deterministic_selection_same_regardless_of_run_id(
+        self, temp_context_dir: Path
+    ) -> None:
+        """Selection is deterministic: same run_id or different run_id gives same result."""
+        loader = ContextLoader(temp_context_dir)
 
-        selection1 = loader1.load_context("run-reproducible-001")
-        selection2 = loader2.load_context("run-reproducible-001")
+        selection1 = loader.load_context("run-reproducible-001")
+        selection2 = loader.load_context("run-reproducible-002")
 
         assert selection1.selected_location == selection2.selected_location
         assert selection1.selected_characters == selection2.selected_characters
-        assert selection1.location_content == selection2.location_content
-        assert selection1.character_contents == selection2.character_contents
-
-    def test_different_run_ids_produce_different_selections(
-        self, temp_context_dir: Path
-    ) -> None:
-        """Different run_ids can produce different selections."""
-        loader = ContextLoader(temp_context_dir)
-
-        # Run multiple times with different run_ids
-        selections = [loader.load_context(f"run-variation-{i}") for i in range(10)]
-
-        # Collect unique location and character selections
-        unique_locations = set(s.selected_location for s in selections)
-        unique_character_sets = set(
-            tuple(sorted(s.selected_characters)) for s in selections
-        )
-
-        # With 3 locations and 4 characters, we should see some variation
-        # (though not guaranteed, so we just check that it's possible)
-        assert len(unique_locations) >= 1  # At least one location selected
-        assert len(unique_character_sets) >= 1  # At least one character set
+        assert selection1.world_files == selection2.world_files
 
     def test_logs_selections(self, temp_context_dir: Path, tmp_path: Path) -> None:
         """Logs context selections when logger is provided."""
@@ -259,6 +230,7 @@ class TestContextLoader:
             assert selection.selected_location in log_content
         if selection.selected_characters:
             assert all(char in log_content for char in selection.selected_characters)
+        assert hasattr(selection, "world_files")
 
     def test_reads_file_contents(self, temp_context_dir: Path) -> None:
         """Reads and returns file contents correctly."""
@@ -284,6 +256,8 @@ class TestContextLoader:
         (context_dir / "lore_bible.md").write_text(
             "# Lore Bible\n\nTest with émojis: 🎭📚", encoding="utf-8"
         )
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("# One")
 
         loader = ContextLoader(context_dir)
         selection = loader.load_context("run-unicode-001")
@@ -291,33 +265,45 @@ class TestContextLoader:
         assert "émojis" in selection.always_loaded["lore_bible.md"]
         assert "🎭" in selection.always_loaded["lore_bible.md"]
 
-    def test_handles_minimal_app(self, tmp_path: Path) -> None:
-        """Handles app with only lore_bible.md."""
+    def test_minimal_app_requires_at_least_one_character(self, tmp_path: Path) -> None:
+        """Run fails if only lore_bible exists (at least one character required)."""
         context_dir = tmp_path / "context" / "minimal-app"
         context_dir.mkdir(parents=True)
         (context_dir / "lore_bible.md").write_text("# Minimal Lore")
 
         loader = ContextLoader(context_dir)
-        selection = loader.load_context("run-minimal-001")
+        with pytest.raises(ContextLoaderError):
+            loader.load_context("run-minimal-001")
+
+    def test_minimal_app_with_one_character_succeeds(self, tmp_path: Path) -> None:
+        """App with lore_bible + one character succeeds."""
+        context_dir = tmp_path / "context" / "minimal-app"
+        context_dir.mkdir(parents=True)
+        (context_dir / "lore_bible.md").write_text("# Minimal Lore")
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "protagonist.md").write_text("# Protagonist")
+
+        loader = ContextLoader(context_dir)
+        selection = loader.load_context("run-minimal-002")
 
         assert "lore_bible.md" in selection.always_loaded
-        assert len(selection.always_loaded) == 1
+        assert selection.selected_characters == ["characters/protagonist.md"]
         assert selection.selected_location is None
-        assert selection.selected_characters == []
+        assert selection.world_files == []
 
-    def test_handles_large_context_library(self, tmp_path: Path) -> None:
-        """Handles app with many context files."""
+    def test_handles_large_context_library_deterministic_bounded(
+        self, tmp_path: Path
+    ) -> None:
+        """Selects first location and first 3 characters alphabetically."""
         context_dir = tmp_path / "context" / "large-app"
         context_dir.mkdir(parents=True)
         (context_dir / "lore_bible.md").write_text("# Large Lore")
 
-        # Create many locations
         locations_dir = context_dir / "locations"
         locations_dir.mkdir()
         for i in range(20):
             (locations_dir / f"location_{i:02d}.md").write_text(f"# Location {i}")
 
-        # Create many characters
         characters_dir = context_dir / "characters"
         characters_dir.mkdir()
         for i in range(15):
@@ -326,24 +312,81 @@ class TestContextLoader:
         loader = ContextLoader(context_dir)
         selection = loader.load_context("run-large-001")
 
-        # Should select exactly one location
-        assert selection.selected_location is not None
-        assert selection.selected_location.startswith("locations/")
-
-        # Should select 2-3 characters
-        assert len(selection.selected_characters) >= 2
-        assert len(selection.selected_characters) <= 3
-        assert all(
-            char.startswith("characters/") for char in selection.selected_characters
-        )
+        assert selection.selected_location == "locations/location_00.md"
+        assert selection.selected_characters == [
+            "characters/character_00.md",
+            "characters/character_01.md",
+            "characters/character_02.md",
+        ]
 
     def test_no_duplicate_character_selection(self, temp_context_dir: Path) -> None:
         """Selected characters are unique (no duplicates)."""
         loader = ContextLoader(temp_context_dir)
         selection = loader.load_context("run-unique-001")
 
-        # Check for duplicates
         assert len(selection.selected_characters) == len(
             set(selection.selected_characters)
         )
         assert len(selection.character_contents) == len(selection.selected_characters)
+
+    def test_world_folded_into_lore_bible_alphabetical(self, tmp_path: Path) -> None:
+        """If world/ exists with .md files, they are loaded in alphabetical order and folded into lore_bible."""
+        context_dir = tmp_path / "context" / "test-app"
+        context_dir.mkdir(parents=True)
+        (context_dir / "lore_bible.md").write_text("# Lore\n\nCore lore.")
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("# One")
+        world_dir = context_dir / "world"
+        world_dir.mkdir()
+        (world_dir / "beta.md").write_text("# Beta world")
+        (world_dir / "alpha.md").write_text("# Alpha world")
+
+        loader = ContextLoader(context_dir)
+        selection = loader.load_context("run-world-001")
+
+        assert selection.world_files == ["world/alpha.md", "world/beta.md"]
+        lore = selection.always_loaded["lore_bible.md"]
+        assert "Core lore." in lore
+        assert "World context" in lore or "world/*.md" in lore
+        assert "Alpha world" in lore
+        assert "Beta world" in lore
+        # Alphabetical order: alpha before beta
+        assert lore.index("Alpha world") < lore.index("Beta world")
+
+    def test_world_optional_missing_dir_succeeds(self, tmp_path: Path) -> None:
+        """Optional world directory missing => run still succeeds."""
+        context_dir = tmp_path / "context" / "test-app"
+        context_dir.mkdir(parents=True)
+        (context_dir / "lore_bible.md").write_text("# Lore")
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("# One")
+
+        loader = ContextLoader(context_dir)
+        selection = loader.load_context("run-noworld-001")
+
+        assert selection.world_files == []
+        assert "lore_bible.md" in selection.always_loaded
+
+    def test_build_prompt_context_vars_from_state(self, temp_context_dir: Path) -> None:
+        """build_prompt_context_vars builds same vars from state (location, characters, world_files)."""
+        loader = ContextLoader(temp_context_dir)
+        selection = loader.load_context("run-buildvars-001")
+
+        state = {
+            "selected_context": {
+                "location": Path(selection.selected_location).name
+                if selection.selected_location
+                else None,
+                "characters": [Path(p).name for p in selection.selected_characters],
+                "world_files": [Path(p).name for p in selection.world_files],
+            }
+        }
+        vars_out = build_prompt_context_vars(temp_context_dir, state)
+
+        assert "lore_bible" in vars_out
+        assert "style_rules" in vars_out
+        assert "location_context" in vars_out
+        assert "character_context" in vars_out
+        if selection.selected_location:
+            assert len(vars_out["location_context"]) > 0
+        assert len(vars_out["character_context"]) > 0

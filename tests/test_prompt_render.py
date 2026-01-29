@@ -265,3 +265,23 @@ class TestPlaceholderExtraction:
         assert "var2" in missing
         assert "var3" in missing
         assert len(missing) == 3
+
+    def test_json_example_does_not_create_required_variable(
+        self, tmp_path: Path
+    ) -> None:
+        """Only {identifier} is recognised; JSON examples must not create fake required vars."""
+        template_file = tmp_path / "template.md"
+        # Template with a JSON example: {"beats": [...]} - "beats" inside JSON must not be a placeholder
+        template_file.write_text(
+            "Output format:\n"
+            '{"beats": [{"title": "Beat 1", "summary": "..."}]}\n'
+            "Use variable: {name}"
+        )
+
+        with pytest.raises(MissingVariableError) as exc_info:
+            render_prompt(template_file, {})
+
+        missing = exc_info.value.missing_variables
+        assert "name" in missing
+        assert "beats" not in missing
+        assert len(missing) == 1

@@ -107,17 +107,11 @@ Example apps:
 
 ## Context handling (MVP behavior)
 
-For the active app (e.g. `grim-narrator`), the pipeline may:
+For the active app (e.g. `grim-narrator`):
 
-* Always loads the app’s **lore bible**
-* Randomly selects per each run:
-  * 1 location file from `context/<app_name>/locations/`
-  * 2–3 character files from `context/<app_name>/characters/`
-* Injects these as contextual inputs into generation
-
-This selection is both app-defined, and varies **every run**, even with the same seed.
-
-Later versions will allow explicit user control via CLI flags.
+* **Required:** The app’s **lore bible** (`context/<app>/lore_bible.md`) must exist, and at least one character file in `context/<app>/characters/*.md` must exist. If either is missing, the run fails early with a clear error.
+* **Optional:** If `context/<app>/locations/` has `.md` files, exactly one location is included (first alphabetically). If `context/<app>/world/` has `.md` files, all are loaded in alphabetical order and folded into the lore bible with a visible separator; the list is stored in `selected_context.world_files`.
+* Selection is **deterministic** (no randomness): location = first alphabetically, characters = first N (up to 3) alphabetically. Selections are logged and persisted in `state.json` for reproducibility.
 
 ---
 
@@ -178,7 +172,7 @@ LLM-Storytell/
 
   config/
     creds.json
-    
+
   prompts/
     README.md
     shared/

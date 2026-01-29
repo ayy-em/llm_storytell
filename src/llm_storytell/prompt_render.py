@@ -51,11 +51,16 @@ class TemplateNotFoundError(PromptRenderError):
         super().__init__(f"Template file not found: {template_path}")
 
 
-def _extract_placeholders(template: str) -> set[str]:
-    """Extract all placeholder names from a template string.
+# Strict identifier: only [a-zA-Z_][a-zA-Z0-9_]* so JSON examples don't create vars
+_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
-    Extracts placeholders in the format {name} or {name:format_spec}.
-    Handles escaped braces {{ and }} correctly.
+
+def _extract_placeholders(template: str) -> set[str]:
+    """Extract placeholder names from a template string.
+
+    Only recognises {identifier} placeholders: identifier must match
+    [a-zA-Z_][a-zA-Z0-9_]*. Escaped braces {{ and }} are ignored.
+    JSON examples (e.g. {"beats": [...]}) do not create required variables.
 
     Args:
         template: The template string to parse.
@@ -63,23 +68,13 @@ def _extract_placeholders(template: str) -> set[str]:
     Returns:
         Set of placeholder names (without format specifiers).
     """
-    # Pattern matches {name} or {name:format_spec}
-    # Excludes {{ and }} which are literal braces
+    # Pattern matches {name} or {name:format_spec}; excludes {{ and }}
     pattern = r"(?<!\{)\{([^}:]+)(?::[^}]*)?\}(?!\})"
     matches = re.findall(pattern, template)
 
-    # Filter out placeholders that are clearly not real variables, such as
-    # JSON example keys or code snippets that include quotes, newlines, or
-    # leading/trailing whitespace (e.g. {"beats": [...] }).
     placeholders = {
-        name
-        for name in matches
-        if "\n" not in name
-        and '"' not in name
-        and "'" not in name
-        and name.strip() == name
+        name.strip() for name in matches if _IDENTIFIER_RE.match(name.strip())
     }
-
     return set(placeholders)
 
 

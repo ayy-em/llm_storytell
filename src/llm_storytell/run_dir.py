@@ -78,6 +78,7 @@ def _create_initial_state(app_name: str, seed: str) -> dict[str, Any]:
         "selected_context": {
             "location": None,
             "characters": [],
+            "world_files": [],
         },
         "outline": [],
         "sections": [],

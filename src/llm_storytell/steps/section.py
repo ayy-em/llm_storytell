@@ -13,6 +13,7 @@ from typing import Any
 import yaml
 
 from ..continuity import build_rolling_summary, get_continuity_context
+from ..context import ContextLoaderError, build_prompt_context_vars
 from ..llm import LLMProvider, LLMProviderError
 from ..llm.token_tracking import record_token_usage
 from ..logging import RunLogger
@@ -49,80 +50,6 @@ def _load_state(run_dir: Path) -> dict[str, Any]:
         raise SectionStepError(f"Invalid JSON in state.json: {e}") from e
     except OSError as e:
         raise SectionStepError(f"Error reading state.json: {e}") from e
-
-
-def _load_context_files(context_dir: Path, state: dict[str, Any]) -> dict[str, str]:
-    """Load context file contents for prompt rendering.
-
-    Args:
-        context_dir: Path to the app's context directory.
-        state: State dictionary containing selected_context.
-
-    Returns:
-        Dictionary mapping context file names to their contents.
-
-    Raises:
-        SectionStepError: If required context files cannot be loaded.
-    """
-    context_vars: dict[str, str] = {}
-
-    # Load lore bible (always required)
-    lore_bible_path = context_dir / "lore_bible.md"
-    if not lore_bible_path.exists():
-        raise SectionStepError(f"Lore bible not found: {lore_bible_path}")
-    try:
-        context_vars["lore_bible"] = lore_bible_path.read_text(encoding="utf-8")
-    except OSError as e:
-        raise SectionStepError(f"Error reading lore bible: {e}") from e
-
-    # Load style files (always required)
-    style_dir = context_dir / "style"
-    style_parts: list[str] = []
-    if style_dir.exists():
-        for style_file in sorted(style_dir.glob("*.md")):
-            try:
-                content = style_file.read_text(encoding="utf-8")
-                style_parts.append(f"## {style_file.stem}\n\n{content}")
-            except OSError as e:
-                raise SectionStepError(
-                    f"Error reading style file {style_file}: {e}"
-                ) from e
-    context_vars["style_rules"] = "\n\n".join(style_parts) if style_parts else ""
-
-    # Load selected location (if any)
-    selected_context = state.get("selected_context", {})
-    location_name = selected_context.get("location")
-    context_vars["location_context"] = ""
-    if location_name:
-        location_path = context_dir / "locations" / location_name
-        if location_path.exists():
-            try:
-                context_vars["location_context"] = location_path.read_text(
-                    encoding="utf-8"
-                )
-            except OSError as e:
-                raise SectionStepError(
-                    f"Error reading location file {location_path}: {e}"
-                ) from e
-
-    # Load selected characters (if any)
-    character_names = selected_context.get("characters", [])
-    character_parts: list[str] = []
-    for char_name in character_names:
-        char_path = context_dir / "characters" / char_name
-        if char_path.exists():
-            try:
-                content = char_path.read_text(encoding="utf-8")
-                character_parts.append(f"## {char_name}\n\n{content}")
-            except OSError as e:
-                raise SectionStepError(
-                    f"Error reading character file {char_path}: {e}"
-                ) from e
-    context_vars["character_context"] = (
-        "\n\n".join(character_parts) if character_parts else ""
-    )
-
-    return context_vars
 
 
 def _parse_markdown_with_frontmatter(content: str) -> tuple[dict[str, Any], str]:
@@ -279,8 +206,11 @@ def execute_section_step(
         if not seed:
             raise SectionStepError("Seed not found in state.json")
 
-        # Load context files
-        context_vars = _load_context_files(context_dir, state)
+        # Load context files (shared contract: lore_bible, style, location, characters)
+        try:
+            context_vars = build_prompt_context_vars(context_dir, state)
+        except ContextLoaderError as e:
+            raise SectionStepError(f"Context loading failed: {e}") from e
 
         # Load and render prompt template
         prompt_path = prompts_dir / "20_section.md"

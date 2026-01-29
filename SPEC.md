@@ -163,39 +163,25 @@ Apps define *recommended* values. The pipeline enforces *absolute* limits.
 
 ## Context Loading (v1.0)
 
-Context loading is **app-defined but platform-executed**. The orchestrator supports minimal to extensive context sets, depending on app configuration.
+Context loading is **app-defined but platform-executed**. A single `ContextLoader` validates and selects context at run start; all steps use shared `build_prompt_context_vars(context_dir, state)` for prompt variables.
 
-For the selected app:
+### Required (run fails early with clear message if missing)
 
-### Always loaded
+* `context/<app>/lore_bible.md` must exist.
+* At least one `.md` file in `context/<app>/characters/` must exist (directory must exist and be non-empty).
 
-* `context/<app>/lore_bible.md`
-* `context/<app>/style/*.md`
+### Optional (missing folders must not stop output)
 
-### Randomized per run
+* **Locations:** If `context/<app>/locations/` exists and contains `.md` files, exactly **one** location is included (deterministic: first alphabetically). Otherwise `location_context` is `""`.
+* **World:** If `context/<app>/world/` exists and contains `.md` files, **all** world files are loaded in alphabetical order, appended to lore_bible with a clear separator header (`---\n## World context (from world/*.md)\n\n`), and the list of world file paths is recorded in `state.json` under `selected_context.world_files`. If absent, generation still proceeds.
 
-* 1 file randomly selected from:
+### Selection rules
 
-  * `context/<app>/locations/`
-* 2–3 files randomly selected from:
+* **Deterministic:** No randomness. Location: first file alphabetically. Characters: first N alphabetically (N = up to 3, or all if fewer). World: all files in alphabetical order.
+* **Logged:** Selections are written to `run.log`.
+* **Persisted:** `state.json.selected_context` records `characters` (list of basenames), `location` (basename or null), and `world_files` (list of basenames) for reproducibility.
 
-  * `context/<app>/characters/`
-
-Random selection is:
-
-* Logged
-* Persisted in `state.json`
-* Reproducible if the same run artifacts are reused
-
-Future versions will allow explicit selection via CLI flags.
-
-**Constraint**
-The pipeline must support:
-* Apps with only a single context file
-* Apps with large context libraries
-* Apps that rotate context per run
-
-No pipeline logic may assume a fixed number of context files.
+No pipeline logic may assume a fixed number of context files. Missing optional folders must not stop output.
 
 ---
 
@@ -213,7 +199,7 @@ No pipeline logic may assume a fixed number of context files.
 * Write `inputs.json`
 * Initialize `state.json`
 * Initialize `run.log`
-* Log selected app, seed, and randomly chosen context files
+* Load and validate context (required: lore_bible + at least one character); select context deterministically; log and persist `selected_context`
 
 ---
 
@@ -330,7 +316,7 @@ Variables come from three sources:
 **Required variables:**
 - `seed` (string): Raw seed from CLI
 - `beats_count` (integer): Number of outline beats to generate (1-20)
-- `lore_bible` (string): Combined lore bible content
+- `lore_bible` (string): Combined lore bible content (includes world/*.md if present, with separator)
 - `style_rules` (string): Combined style/*.md files
 - `location_context` (string): Selected location file content (may be empty)
 - `character_context` (string): Combined selected character files (may be empty)
@@ -346,7 +332,7 @@ Variables come from three sources:
 - `section_index` (integer): 0-based section index
 - `seed` (string): Raw seed from state
 - `outline_beat` (string): JSON-serialized outline beat object
-- `lore_bible` (string): Combined lore bible content
+- `lore_bible` (string): Combined lore bible content (includes world/*.md if present, with separator)
 - `style_rules` (string): Combined style/*.md files
 
 **Optional variables:**
@@ -372,7 +358,7 @@ Variables come from three sources:
 
 **Required variables:**
 - `seed` (string): Raw seed from state
-- `lore_bible` (string): Combined lore bible content
+- `lore_bible` (string): Combined lore bible content (includes world/*.md if present, with separator)
 - `style_rules` (string): Combined style/*.md files
 - `full_draft` (string): Combined markdown from all sections
 - `outline` (string): JSON-serialized outline array
@@ -396,6 +382,7 @@ Variables come from three sources:
 ### Validation and Fail-Fast Behavior
 
 The `prompt_render.py` module enforces strict variable validation:
+- Only `{identifier}` placeholders are recognised (identifier = `[a-zA-Z_][a-zA-Z0-9_]*`). JSON examples (e.g. `{"beats": [...]}`) in templates do not create required variables.
 - All placeholders in prompt templates must be provided in the variables dictionary
 - Missing required variables raise `MissingVariableError` immediately
 - No silent fallbacks or default values
@@ -463,8 +450,9 @@ These metrics must be:
   "app": "grim-narrator",
   "seed": "...",
   "selected_context": {
-    "location": "...",
-    "characters": [...]
+    "location": "<basename or null>",
+    "characters": ["<basename>", ...],
+    "world_files": ["<basename>", ...]
   },
   "outline": [...],
   "sections": [...],

@@ -72,7 +72,7 @@ def _get_prompt_path(prompt_name: str) -> Path:
 
 def _extract_variables_from_prompt(prompt_path: Path) -> set[str]:
     """Extract all variable placeholders from a prompt template.
-    
+
     Filters out matches that are clearly from JSON examples or code blocks
     (variables containing newlines, quotes, or other non-variable characters).
     """
@@ -80,14 +80,15 @@ def _extract_variables_from_prompt(prompt_path: Path) -> set[str]:
         pytest.skip(f"Prompt template not found: {prompt_path}")
     content = prompt_path.read_text(encoding="utf-8")
     all_placeholders = _extract_placeholders(content)
-    
+
     # Filter out placeholders that are clearly from JSON examples or code blocks
     # These typically contain newlines, quotes, or other non-variable characters
     valid_placeholders = {
-        p for p in all_placeholders
+        p
+        for p in all_placeholders
         if "\n" not in p and '"' not in p and "'" not in p and p.strip() == p
     }
-    
+
     return valid_placeholders
 
 
