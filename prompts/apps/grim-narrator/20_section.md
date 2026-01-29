@@ -57,11 +57,22 @@ Output MUST be valid Markdown.
 Output MUST begin with a YAML frontmatter block.
 
 ## YAML frontmatter schema
+The frontmatter MUST include these exact fields (all required):
+
 ---
-section_id: "section_{{section_index:02d}}"
-index: {section_index}
-outline_id: "<outline_beat.id or null>"
+section_id: {section_id}
+local_summary: "<A summary of this section's content, at least 100 characters long. Describe the key events, character actions, and narrative developments in this section.>"
+new_entities: ["<entity1>", "<entity2>", ...]
+new_locations: ["<location1>", "<location2>", ...]
+unresolved_threads: ["<thread1>", "<thread2>", ...]
 ---
+
+**Required fields:**
+- `section_id`: Integer (use {section_id})
+- `local_summary`: String, minimum 100 characters. Summarize this section's key events and developments.
+- `new_entities`: Array of strings. List any new characters, objects, or concepts introduced in this section. Use empty array [] if none.
+- `new_locations`: Array of strings. List any new locations introduced in this section. Use empty array [] if none.
+- `unresolved_threads`: Array of strings. List any plot threads, questions, or conflicts introduced or left unresolved in this section. Use empty array [] if none.
 
 ## Prose requirements
 - Write only the prose for this section.

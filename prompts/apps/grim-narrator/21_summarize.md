@@ -29,20 +29,29 @@ Do NOT include commentary.
 
 ## Output schema
 {{
-  "section_id": "<string>",
-  "summary": "<2–4 sentence factual summary>",
+  "section_id": <integer>,
+  "summary": "<2–4 sentence factual summary, minimum 200 characters>",
   "continuity_updates": {{
-    "characters": [],
-    "locations": [],
-    "world": []
+    "<key1>": "<value1>",
+    "<key2>": "<value2>",
+    ...
   }}
 }}
 
+**continuity_updates format:**
+- Must be a dictionary (object) with string keys and string values.
+- Keys represent continuity elements (e.g., "protagonist_state", "current_location", "mood", "plot_thread_1").
+- Values are string descriptions of the current state.
+- Use empty object {{}} if no continuity updates apply.
+- Do NOT use arrays. All values must be strings.
+
 ## Length targets
-- summary: max 80 words
-- continuity_updates arrays: max 5 total entries combined
+- summary: minimum 200 characters, max 80 words
+- continuity_updates: include only relevant updates (typically 0-5 key-value pairs)
 
 ## Validation rules
-- All keys must be present.
-- Arrays must be empty if no updates apply.
-- No additional keys are allowed.
+- All required keys must be present: section_id, summary, continuity_updates
+- section_id must be an integer
+- summary must be a string with at least 200 characters
+- continuity_updates must be an object (dictionary) with string keys and string values
+- No additional keys are allowed

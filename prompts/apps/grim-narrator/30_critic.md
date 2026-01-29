@@ -72,27 +72,44 @@ Full draft:
 {full_draft}
 
 ## Output format
-Output MUST be valid JSON.
-Do NOT wrap in markdown.
-Do NOT include commentary.
+Output MUST be valid JSON that can be parsed by `json.loads()`.
+Do NOT wrap in markdown code blocks (no ```json markers).
+Do NOT include commentary or explanatory text.
+Do NOT add any text before or after the JSON.
+Start your response with a single opening brace and end with a single closing brace.
+
+**CRITICAL: JSON escaping for final_script**
+The `final_script` field contains markdown text that MUST be a properly escaped JSON string.
+- Every double quote `"` inside the markdown must be escaped as `\"`
+- Every backslash `\` must be escaped as `\\`
+- Newlines must be escaped as `\n` (do NOT use actual line breaks in the JSON string value)
+- Tabs must be escaped as `\t`
+- The entire markdown document must be a single continuous JSON string value
+- Example: `"final_script": "# Title\\n\\nParagraph with \\\"quotes\\\"."`
+
+**Test your JSON**: Before responding, verify your JSON is valid. If `final_script` contains markdown with quotes or special characters, they MUST be escaped.
 
 ## Output schema (STRICT)
 {{
-  "final_script": "<full corrected markdown text>",
+  "final_script": "<full corrected markdown text, properly escaped as JSON string>",
   "editor_report": {{
     "issues_found": [
-      {{
-        "type": "consistency | structure | hygiene | style",
-        "description": "Short description of the issue (include what/where, no essays)"
-      }}
+      "<string description 1>",
+      "<string description 2>",
+      ...
     ],
     "changes_applied": [
-      {{
-        "description": "Short description of the change applied (include intent)"
-      }}
+      "<string description 1>",
+      "<string description 2>",
+      ...
     ]
   }}
 }}
+
+**Important notes:**
+- `final_script` is a single string containing the entire corrected markdown document.
+- `editor_report.issues_found` is an array of strings (not objects).
+- `editor_report.changes_applied` is an array of strings (not objects).
 
 ## Length targets
 - issues_found: 5–25 items (empty only if genuinely perfect)
