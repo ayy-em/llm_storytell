@@ -203,10 +203,65 @@ def execute_outline_step(
             raise OutlineStepError(f"LLM provider error: {e}") from e
 
         # Parse JSON response
+        # Try direct JSON parse first
+        content_to_parse = result.content.strip()
+        
+        # If wrapped in markdown code block, extract JSON
+        if content_to_parse.startswith("```"):
+            # Try to extract JSON from markdown code block
+            lines = content_to_parse.split("\n")
+            # Find first line with ```json or ``` and last ```
+            start_idx = None
+            end_idx = None
+            for i, line in enumerate(lines):
+                if line.strip().startswith("```"):
+                    if start_idx is None:
+                        start_idx = i + 1
+                    else:
+                        end_idx = i
+                        break
+            if start_idx is not None and end_idx is not None:
+                content_to_parse = "\n".join(lines[start_idx:end_idx]).strip()
+                logger.info("Extracted JSON from markdown code block")
+        
         try:
-            outline_data = json.loads(result.content)
+            outline_data = json.loads(content_to_parse)
         except json.JSONDecodeError as e:
+            # Log the raw content for debugging
+            logger.error(
+                f"Failed to parse JSON from LLM response. "
+                f"Response length: {len(result.content)} chars. "
+                f"First 500 chars: {result.content[:500]}"
+            )
             raise OutlineStepError(f"Invalid JSON in LLM response: {e}") from e
+
+        # Pre-validate: check all beats have required fields before schema validation
+        beats = outline_data.get("beats", [])
+        if not isinstance(beats, list):
+            raise OutlineStepError(
+                f"Outline 'beats' must be an array, got {type(beats).__name__}"
+            )
+
+        for idx, beat in enumerate(beats):
+            if not isinstance(beat, dict):
+                raise OutlineStepError(
+                    f"Beat at index {idx} must be an object, got {type(beat).__name__}"
+                )
+            missing_fields = []
+            if "beat_id" not in beat:
+                missing_fields.append("beat_id")
+            if "title" not in beat:
+                missing_fields.append("title")
+            if "summary" not in beat:
+                missing_fields.append("summary")
+            if missing_fields:
+                logger.error(
+                    f"Beat at index {idx} missing required fields: {missing_fields}. "
+                    f"Beat content: {json.dumps(beat, indent=2)}"
+                )
+                raise OutlineStepError(
+                    f"Beat at index {idx} missing required fields: {missing_fields}"
+                )
 
         # Validate against schema
         if schema_base is None:
