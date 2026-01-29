@@ -77,22 +77,22 @@ Do NOT wrap in markdown.
 Do NOT include commentary.
 
 ## Output schema (STRICT)
-{
+{{
   "final_script": "<full corrected markdown text>",
-  "editor_report": {
+  "editor_report": {{
     "issues_found": [
-      {
+      {{
         "type": "consistency | structure | hygiene | style",
         "description": "Short description of the issue (include what/where, no essays)"
-      }
+      }}
     ],
     "changes_applied": [
-      {
+      {{
         "description": "Short description of the change applied (include intent)"
-      }
+      }}
     ]
-  }
-}
+  }}
+}}
 
 ## Length targets
 - issues_found: 5–25 items (empty only if genuinely perfect)

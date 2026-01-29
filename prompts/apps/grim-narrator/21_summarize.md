@@ -28,15 +28,15 @@ Do NOT wrap in markdown.
 Do NOT include commentary.
 
 ## Output schema
-{
+{{
   "section_id": "<string>",
   "summary": "<2–4 sentence factual summary>",
-  "continuity_updates": {
+  "continuity_updates": {{
     "characters": [],
     "locations": [],
     "world": []
-  }
-}
+  }}
+}}
 
 ## Length targets
 - summary: max 80 words

@@ -44,9 +44,9 @@ Do NOT wrap in markdown.
 Do NOT include commentary or explanations.
 
 ## Output schema
-{
+{{
   "beats": [
-    {
+    {{
       "id": "beat_01",
       "title": "Short, descriptive title",
       "summary": "1–2 sentence factual description of the narrative event",
@@ -55,9 +55,9 @@ Do NOT include commentary or explanations.
       "state_changes": [
         "brief description of any world or character state change"
       ]
-    }
+    }}
   ]
-}
+}}
 
 ## Length targets
 - beats array length MUST equal beats_count

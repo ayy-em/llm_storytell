@@ -1,37 +1,35 @@
 """Prompt template rendering with strict variable validation.
 
-This module provides deterministic prompt template rendering with no silent
-fallbacks. All template variables must be explicitly provided.
+Uses Python's built-in format-string parser (string.Formatter) instead of regex,
+so escaped braces {{ }} work correctly and JSON examples don't accidentally
+create "required variables".
+
+Contract:
+- Only plain identifier placeholders are allowed: {seed}, {beats_count}, etc.
+- Identifiers must match: [A-Za-z_][A-Za-z0-9_]*
+- Any other placeholder form (attribute/index access, whitespace, quotes, etc.)
+  is rejected with a clear error.
+- Missing variables are reported as a sorted list (deterministic).
 """
+
+from __future__ import annotations
 
 import re
 from pathlib import Path
+from string import Formatter
 
 
 class PromptRenderError(Exception):
     """Base exception for prompt rendering errors."""
 
-    pass
-
 
 class MissingVariableError(PromptRenderError):
-    """Raised when required template variables are missing.
-
-    Attributes:
-        template_path: Path to the template file.
-        missing_variables: List of variable names that were not provided.
-    """
+    """Raised when required template variables are missing."""
 
     def __init__(self, template_path: Path, missing_variables: list[str]) -> None:
-        """Initialize MissingVariableError.
-
-        Args:
-            template_path: Path to the template file.
-            missing_variables: List of missing variable names.
-        """
         self.template_path = template_path
         self.missing_variables = missing_variables
-        missing_str = ", ".join(sorted(missing_variables))
+        missing_str = ", ".join(missing_variables)
         super().__init__(
             f"Template '{template_path}' requires variables that were not provided: "
             f"{missing_str}"
@@ -42,72 +40,74 @@ class TemplateNotFoundError(PromptRenderError):
     """Raised when a template file cannot be found."""
 
     def __init__(self, template_path: Path) -> None:
-        """Initialize TemplateNotFoundError.
-
-        Args:
-            template_path: Path to the template file that was not found.
-        """
         self.template_path = template_path
         super().__init__(f"Template file not found: {template_path}")
 
 
-# Strict identifier: only [a-zA-Z_][a-zA-Z0-9_]* so JSON examples don't create vars
-_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+class UnsupportedPlaceholderError(PromptRenderError):
+    """Raised when a template contains a placeholder that violates the contract."""
+
+    def __init__(self, template_path: Path, placeholder: str) -> None:
+        self.template_path = template_path
+        self.placeholder = placeholder
+        super().__init__(
+            f"Template '{template_path}' contains unsupported placeholder: "
+            f"{{{placeholder}}}. Only simple identifiers like {{seed}} are allowed. "
+            f"If you meant literal braces, escape them as '{{{{' and '}}}}'."
+        )
 
 
-def _extract_placeholders(template: str) -> set[str]:
-    """Extract placeholder names from a template string.
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
-    Only recognises {identifier} placeholders: identifier must match
-    [a-zA-Z_][a-zA-Z0-9_]*. Escaped braces {{ and }} are ignored.
-    JSON examples (e.g. {"beats": [...]}) do not create required variables.
 
-    Args:
-        template: The template string to parse.
+def _extract_required_identifiers(template_path: Path, template: str) -> set[str]:
+    """Extract required placeholder names from a format template.
 
-    Returns:
-        Set of placeholder names (without format specifiers).
+    Uses Python's format parser. Escaped braces {{ }} are handled correctly.
+
+    Raises:
+        UnsupportedPlaceholderError: if a placeholder is not a plain identifier.
+        PromptRenderError: on invalid format strings.
     """
-    # Pattern matches {name} or {name:format_spec}; excludes {{ and }}
-    pattern = r"(?<!\{)\{([^}:]+)(?::[^}]*)?\}(?!\})"
-    matches = re.findall(pattern, template)
+    required: set[str] = set()
+    fmt = Formatter()
 
-    placeholders = {
-        name.strip() for name in matches if _IDENTIFIER_RE.match(name.strip())
-    }
-    return set(placeholders)
+    try:
+        for _, field_name, _, _ in fmt.parse(template):
+            if field_name is None or field_name == "":
+                continue
+
+            # Disallow any "fancy" field like foo.bar, foo[0], !r, etc.
+            # (Formatter.parse() returns the raw field_name; conversion/format_spec
+            # are separate, but we also disallow nested fields by contract.)
+            if not _IDENTIFIER_RE.fullmatch(field_name):
+                raise UnsupportedPlaceholderError(template_path, field_name)
+
+            required.add(field_name)
+    except ValueError as e:
+        # Raised by Formatter.parse for malformed format strings.
+        raise PromptRenderError(
+            f"Invalid format string in template '{template_path}': {e}. "
+            "If you intended literal braces, escape them as '{{' and '}}'."
+        ) from e
+
+    return required
 
 
 def render_prompt(
-    template_path: Path, variables: dict[str, str | int | float | bool]
+    template_path: Path,
+    variables: dict[str, str | int | float | bool],
 ) -> str:
-    """Render a prompt template with provided variables.
+    """Render a prompt template with strict validation.
 
-    This function reads a template file and substitutes variables using Python's
-    str.format() method. All placeholders in the template must be provided in
-    the variables dictionary. No silent fallbacks or default values are used.
-
-    Args:
-        template_path: Path to the template file (must exist and be readable).
-        variables: Dictionary mapping variable names to their values. Values can
-            be strings, numbers, or booleans.
-
-    Returns:
-        Rendered prompt string with all variables substituted.
-
-    Raises:
-        TemplateNotFoundError: If the template file does not exist or cannot
-            be read.
-        MissingVariableError: If the template contains placeholders that are
-            not provided in the variables dictionary.
-        PromptRenderError: For other rendering errors (e.g., encoding issues,
-            format errors).
+    - Validates template exists and is UTF-8.
+    - Validates placeholders are only simple identifiers.
+    - Validates all required identifiers are provided.
+    - Renders via str.format(**variables).
     """
-    # Check if template file exists
     if not template_path.exists():
         raise TemplateNotFoundError(template_path)
 
-    # Read template file
     try:
         template_content = template_path.read_text(encoding="utf-8")
     except OSError as e:
@@ -119,26 +119,22 @@ def render_prompt(
             f"Template file '{template_path}' is not valid UTF-8: {e}"
         ) from e
 
-    # Extract required placeholders from template
-    required_vars = _extract_placeholders(template_content)
-
-    # Check for missing variables
+    required_vars = _extract_required_identifiers(template_path, template_content)
     provided_vars = set(variables.keys())
-    missing_vars = required_vars - provided_vars
+    missing = sorted(required_vars - provided_vars)
 
-    if missing_vars:
-        raise MissingVariableError(template_path, list(missing_vars))
+    if missing:
+        raise MissingVariableError(template_path, missing)
 
-    # Render template
     try:
-        rendered = template_content.format(**variables)
+        return template_content.format(**variables)
     except KeyError as e:
-        # This should not happen if our validation is correct, but handle it
-        # gracefully just in case
-        raise MissingVariableError(template_path, [str(e).strip("'\"")]) from e
-    except ValueError as e:
+        # Shouldn't happen due to pre-check, but keep it clean.
+        key = e.args[0] if e.args else str(e).strip("'\"")
+        raise MissingVariableError(template_path, [str(key)]) from e
+    except (ValueError, IndexError) as e:
+        # ValueError: bad format spec; IndexError: positional fields (disallowed)
         raise PromptRenderError(
-            f"Error formatting template '{template_path}': {e}"
+            f"Error formatting template '{template_path}': {e}. "
+            "If you intended literal braces, escape them as '{{' and '}}'."
         ) from e
-
-    return rendered

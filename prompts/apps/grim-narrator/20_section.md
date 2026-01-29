@@ -58,7 +58,7 @@ Output MUST begin with a YAML frontmatter block.
 
 ## YAML frontmatter schema
 ---
-section_id: "section_{section_index:02d}"
+section_id: "section_{{section_index:02d}}"
 index: {section_index}
 outline_id: "<outline_beat.id or null>"
 ---

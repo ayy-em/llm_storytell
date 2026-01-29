@@ -34,16 +34,16 @@ Do NOT wrap in markdown.
 Do NOT include commentary.
 
 ## Output schema
-{
+{{
   "app": "<app_name>",
   "seed_raw": "<original seed, verbatim>",
   "intent_summary": "<1–2 sentence neutral description of the intended outcome>",
-  "explicit_constraints": {
+  "explicit_constraints": {{
     "tone": "<string or null>",
     "genre": "<string or null>",
     "format": "<string or null>",
     "length_hint": "<string or null>"
-  },
+  }},
   "implicit_constraints": [
     "<short factual constraint inferred directly from seed>",
     "<omit if none>"
@@ -52,7 +52,7 @@ Do NOT include commentary.
     "<elements explicitly disallowed by the seed>",
     "<omit if none>"
   ]
-}
+}}
 
 ## Length targets
 - intent_summary: max 40 words

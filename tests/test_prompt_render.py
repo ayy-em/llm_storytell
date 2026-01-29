@@ -269,12 +269,13 @@ class TestPlaceholderExtraction:
     def test_json_example_does_not_create_required_variable(
         self, tmp_path: Path
     ) -> None:
-        """Only {identifier} is recognised; JSON examples must not create fake required vars."""
+        """Only {identifier} is recognised; JSON examples must use escaped braces {{ }}."""
         template_file = tmp_path / "template.md"
-        # Template with a JSON example: {"beats": [...]} - "beats" inside JSON must not be a placeholder
+        # Template with a JSON example: escaped braces {{ }} render as literal braces
+        # Unescaped JSON braces would raise UnsupportedPlaceholderError
         template_file.write_text(
             "Output format:\n"
-            '{"beats": [{"title": "Beat 1", "summary": "..."}]}\n'
+            '{{"beats": [{{"title": "Beat 1", "summary": "..."}}]}}\n'
             "Use variable: {name}"
         )
 
