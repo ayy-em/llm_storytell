@@ -173,6 +173,164 @@ def _load_all_sections(run_dir: Path, expected_section_count: int) -> str:
     return "\n\n".join(draft_parts)
 
 
+def _repair_json_quotes(json_str: str) -> str:
+    """Attempt to repair JSON with unescaped quotes in string values.
+
+    Uses a state machine to track when we're inside a string value and
+    escapes unescaped quotes that appear within string content.
+
+    Args:
+        json_str: JSON string that may have unescaped quotes.
+
+    Returns:
+        Repaired JSON string.
+    """
+    result = []
+    i = 0
+    in_string = False
+
+    while i < len(json_str):
+        char = json_str[i]
+
+        # Handle escape sequences
+        if char == "\\" and in_string:
+            # Check if this is a valid escape sequence
+            if i + 1 < len(json_str):
+                next_char = json_str[i + 1]
+                # Valid escape sequences in JSON: \" \\ \/ \b \f \n \r \t \uXXXX
+                if next_char in ('"', "\\", "/", "b", "f", "n", "r", "t", "u"):
+                    result.append(char)
+                    result.append(next_char)
+                    i += 2
+                    continue
+                # If not a valid escape, treat backslash as literal (shouldn't happen in valid JSON)
+                result.append("\\")
+                result.append(next_char)
+                i += 2
+                continue
+            else:
+                # Backslash at end - treat as literal
+                result.append(char)
+                i += 1
+                continue
+
+        # Handle quote characters
+        if char == '"':
+            if in_string:
+                # We're in a string - check if this is a closing quote
+                # by looking for JSON structure after it
+                j = i + 1
+                # Skip whitespace
+                while j < len(json_str) and json_str[j] in " \t\n\r":
+                    j += 1
+                if j < len(json_str):
+                    next_non_ws = json_str[j]
+                    # If followed by structure chars, it's a closing quote
+                    if next_non_ws in (":", ",", "}", "]"):
+                        in_string = False
+                        result.append(char)
+                        i += 1
+                        continue
+                # Otherwise, it's likely an unescaped quote in content
+                result.append("\\")
+                result.append(char)
+            else:
+                # Opening quote
+                in_string = True
+                result.append(char)
+            i += 1
+            continue
+
+        result.append(char)
+        i += 1
+
+    return "".join(result)
+
+
+def _extract_json_from_response(content: str) -> dict[str, Any]:
+    """Extract JSON from LLM response, handling markdown code blocks and common JSON errors.
+
+    Args:
+        content: Raw LLM response content.
+
+    Returns:
+        Parsed JSON dictionary.
+
+    Raises:
+        CriticStepError: If JSON cannot be extracted or parsed.
+    """
+    import re
+
+    # Try direct JSON parse first
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+
+    # Try extracting from markdown code blocks
+    # Match JSON in ```json ... ``` or ``` ... ``` blocks
+    code_block_pattern = r"```(?:json)?\s*\n(.*?)```"
+    match = re.search(code_block_pattern, content, re.DOTALL)
+    if match:
+        extracted = match.group(1)
+        try:
+            return json.loads(extracted)
+        except json.JSONDecodeError:
+            # Try repairing quotes in extracted JSON
+            try:
+                repaired = _repair_json_quotes(extracted)
+                return json.loads(repaired)
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    # Try finding JSON object boundaries
+    # Find first { and last }
+    first_brace = content.find("{")
+    last_brace = content.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        json_candidate = content[first_brace : last_brace + 1]
+        try:
+            return json.loads(json_candidate)
+        except json.JSONDecodeError:
+            # Try repairing quotes
+            try:
+                repaired = _repair_json_quotes(json_candidate)
+                return json.loads(repaired)
+            except (json.JSONDecodeError, Exception):
+                pass
+
+    # Final attempt: try repairing the entire content
+    try:
+        repaired = _repair_json_quotes(content)
+        return json.loads(repaired)
+    except (json.JSONDecodeError, Exception):
+        pass
+
+    # If all else fails, try to get more diagnostic info
+    # Attempt one more parse to capture the exact error location
+    try:
+        json.loads(content)
+    except json.JSONDecodeError as e:
+        error_pos = getattr(e, "pos", None)
+        if error_pos is not None and error_pos < len(content):
+            # Show context around the error
+            start = max(0, error_pos - 100)
+            end = min(len(content), error_pos + 100)
+            context = content[start:end]
+            raise CriticStepError(
+                f"Could not extract valid JSON from LLM response. "
+                f"JSON error at position {error_pos}: {e.msg}. "
+                f"Context around error: {context!r}"
+            ) from e
+
+    # Fallback error message
+    snippet = content[:500] if len(content) > 500 else content
+    raise CriticStepError(
+        f"Could not extract valid JSON from LLM response. "
+        f"Response (first 500 chars): {snippet!r}"
+    )
+
+
 def _validate_llm_response(response_data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """Validate LLM response structure strictly.
 
@@ -359,20 +517,23 @@ def execute_critic_step(
         except MissingVariableError as e:
             raise CriticStepError(f"Missing variables in prompt template: {e}") from e
 
-        # Call LLM provider
+        # Call LLM provider with extended timeout for critic step (300 seconds)
         try:
             result = llm_provider.generate(
                 rendered_prompt,
                 step="critic",
                 temperature=0.7,
+                timeout=300,
             )
         except LLMProviderError as e:
             raise CriticStepError(f"LLM provider error: {e}") from e
 
-        # Parse JSON response
+        # Parse JSON response (with fallback extraction)
         try:
-            response_data = json.loads(result.content)
-        except json.JSONDecodeError as e:
+            response_data = _extract_json_from_response(result.content)
+        except CriticStepError:
+            raise
+        except Exception as e:
             raise CriticStepError(
                 f"Invalid JSON in LLM response: {e}. "
                 "Response must be valid JSON with 'final_script' and 'editor_report' keys."
