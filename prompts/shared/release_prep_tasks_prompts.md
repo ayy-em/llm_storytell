@@ -1,91 +1,151 @@
-## v1.0 release prep
 
-**v1.0 Release Prep Goal:** Prepare the repository for v1.0.0 release by ensuring parity between code, tests, and documentation.
+**THIS IS A TEMPLATE TO REUSE, DO NOT LOOK IN THIS FILE**
+## v1.0 Release Preparation Tasks
 
+## v1.0 Release Preparation Tasks
 
-### Task R0001 — Release verification & parity audit
+### [ ] R0002 Documentation cleanup for v1.0
 
-**Goal:** confirm code, tests, docs match reality.
+**Goal**
+Make documentation boring, accurate, and aligned with actual v1.0 behavior.
 
-**Agent instructions (essence):**
+**Context**
+The MVP implementation is complete. Documentation must reflect what the system actually does today, not intentions, not future plans, and not outdated assumptions from earlier design phases.
 
-* Run lint + tests.
-* Identify mismatches between:
+**Deliverables**
 
-  * README ↔ actual CLI behavior
-  * SPEC ↔ implemented pipeline
-  * CONTRIBUTING ↔ real workflow
-* Do **not invent features**.
-* Fix docs only where they lie.
-* Output:
+* Updated `README.md` covering:
 
-  * list of fixes made
-  * remaining known limitations (explicit)
+  * Quickstart:
 
-* Acceptance criteria: 
-- ruff checks complete
-- All tests pass
-- All dependencies used are reflected in pyproject.toml and requirements.txt
-- .gitignore is checked for sensitive data and for crucial non-content non-secret files ignored by accident 
+    * minimal project setup
+    * required env vars
+    * `.gitignored` inputs (apps, lore, prompts, context)
+  * How to add a new app
+  * Supported CLI arguments
+  * Expected outputs and run lifecycle
+  * High-level E2E pipeline flow
+* Updated `SPEC.md` aligned with implemented behavior:
 
----
+  * pipeline stages
+  * state structure
+  * artifact layout
+  * validation and failure semantics
+* Updated `CONTRIBUTING.md`:
 
-### Task R0002 — Documentation cleanup for v1.0
+  * current workflow rules
+  * required commands
+  * test and formatting expectations
 
-**Goal:** make docs boring and accurate.
+**Acceptance criteria**
 
-**Scope:**
+* All documented commands run successfully when copy-pasted
+* No documentation claims features not present in v1.0
+* Pipeline description matches actual execution order and artifacts
+* Failure modes described match real error behavior
+* MVP scope and constraints are explicit
 
-* README.md, including sections containing:
-    * Quickstart - project set up & minimal set of .gitignored files (lore, prompts, etc.) and env vars required for the thing to run
-    * "How to add a new app" section
-    * CLI args supported
-    * Expected outputs + how the run's lifecycle is logged
-    * what the moving parts of the pipeline are E2E
-* SPEC.md
-* CONTRIBUTING.md
+**Allowed files**
 
-**Rules:**
+* `README.md`
+* `SPEC.md`
+* `CONTRIBUTING.md`
+
+**Commands to run**
+
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Notes**
 
 * No new features
 * No roadmap speculation
-* Clarify:
-
-  * how to run
-  * what artifacts are produced
-  * failure modes
-  * MVP constraints
+* Prefer deleting misleading text over inventing explanations
 
 ---
 
-### Task R0003 — Test coverage confidence pass
+### [ ] R0003 Test coverage confidence pass
 
-**Goal:** ensure critical path is tested.
+**Goal**
+Ensure the critical v1.0 execution path is sufficiently tested.
 
-**Scope:**
+**Context**
+The pipeline now supports outline → section → summarize → critic stages. Tests exist, but coverage must be verified for all state mutations and failure paths.
 
-* Identify untested critical flows (outline → section → summarize → final)
-* Add tests only where gaps exist
-* No refactors unless strictly necessary
+**Deliverables**
+
+* Identification of untested or weakly tested critical flows
+* Additional unit tests where gaps exist
+* No refactors unless strictly required to enable testing
+
+**Acceptance criteria**
+
+* Critical path stages are covered:
+
+  * outline
+  * section loop
+  * summarization
+  * critic / finalization
+* State mutation is tested to occur only on success
+* Failure cases are explicitly tested
+* All tests pass without network or API keys
+
+**Allowed files**
+
+* `tests/**`
+* Existing step files **only if strictly required for testability**
+
+**Commands to run**
+
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Notes**
+
+* Coverage percentage is secondary to correctness
+* Mock LLM provider must be used
+* Do not introduce new dependencies
 
 ---
 
-### Task R0004 — Milestone planning (v1.1 + v1.2)
+## [ ] R0004 Milestone planning (v1.1 + v1.2)
 
-**Goal:** turn roadmap into actionable tasks.
+**Goal**
+Refine the post-v1.0 roadmap and translate it into executable tasks.
 
-**Input:**
+**Context**
+v1.0 scope is frozen. Future milestones must be planned using the same task structure and workflow rules as MVP.
 
-* Current SPEC.md
-* Current TASKS.md
-* v1.0 scope (now frozen)
+**Input**
 
-**Output:**
+* Current `SPEC.md`
+* Current `TASKS.md`
+* Finalized v1.0 scope
 
-* Refined roadmap section
-* New tasks in TASKS.md:
+**Deliverables**
 
-  * same format as MVP
-  * acceptance criteria
-  * allowed files
+* Refined roadmap section for: v1.1 (including scope of v1.0.1)
+* New tasks added to `TASKS.md`:
+
+  * consistent format
+  * clear acceptance criteria
+  * explicit allowed files
   * ordered for execution
+
+**Acceptance criteria**
+
+* Series of tasks is created. Tasks are small, scoped, and executable by an agent, and cover everything from current point in time to complete release of v1.1
+* No v1.0 behavior is modified
+
+**Allowed files**
+
+* `TASKS.md`
+* `SPEC.md` (roadmap section only)
+
+**Notes**
+
+* Do not implement anything
+* This task is planning only
+* Keep milestone scope tight and explicit

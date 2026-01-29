@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 # Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "llm-storytell"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "llm_storytell"))
 
 from config.app_resolver import AppNotFoundError, AppPaths, resolve_app
 

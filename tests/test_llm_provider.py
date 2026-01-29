@@ -10,7 +10,7 @@ import sys
 # Import from the package using the hyphenated name
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-llm_module = import_module("llm-storytell.llm")
+llm_module = import_module("llm_storytell.llm")
 
 LLMResult = llm_module.LLMResult
 LLMProvider = llm_module.LLMProvider

@@ -379,7 +379,7 @@ def execute_critic_step(
         llm_provider: LLM provider instance.
         logger: Run logger instance.
         schema_base: Base path for schema resolution. If None, uses
-            src/llm-storytell/schemas relative to run_dir.
+            src/llm_storytell/schemas relative to run_dir.
 
     Raises:
         CriticStepError: If any step fails.
@@ -454,7 +454,7 @@ def execute_critic_step(
 
         # Validate editor_report against schema
         if schema_base is None:
-            # Default to src/llm-storytell/schemas relative to project root
+            # Default to src/llm_storytell/schemas relative to project root
             current = Path.cwd()
             project_root = None
             for parent in [current] + list(current.parents):
@@ -465,7 +465,7 @@ def execute_critic_step(
                     break
             if project_root is None:
                 project_root = Path(__file__).parent.parent.parent.parent
-            schema_base_path = project_root / "src" / "llm-storytell" / "schemas"
+            schema_base_path = project_root / "src" / "llm_storytell" / "schemas"
         else:
             schema_base_path = Path(schema_base)
 

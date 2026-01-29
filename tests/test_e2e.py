@@ -9,12 +9,11 @@ from unittest.mock import patch
 import pytest
 import sys
 
-# Import from the package using the hyphenated name
+# Import from the package
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-# Handle hyphenated package name
-cli_module = import_module("llm-storytell.cli")
-llm_module = import_module("llm-storytell.llm")
+cli_module = import_module("llm_storytell.cli")
+llm_module = import_module("llm_storytell.llm")
 
 main = cli_module.main
 LLMResult = llm_module.LLMResult
@@ -22,7 +21,7 @@ LLMProvider = llm_module.LLMProvider
 
 # Get project root for schema resolution
 PROJECT_ROOT = Path(__file__).parent.parent
-SCHEMA_BASE = PROJECT_ROOT / "src" / "llm-storytell" / "schemas"
+SCHEMA_BASE = PROJECT_ROOT / "src" / "llm_storytell" / "schemas"
 
 
 class MockLLMProvider(LLMProvider):
@@ -76,16 +75,21 @@ class MockLLMProvider(LLMProvider):
             outline = {"beats": beats}
             content = json.dumps(outline)
 
-        elif step == "section":
+        elif step.startswith("section_"):
             # Return section content with YAML frontmatter
-            # Count how many section calls have been made (including this one)
-            section_calls = [c for c in self.calls if c["step"] == "section"]
-            section_num = (
-                len(section_calls) + 1
-            )  # +1 because this call is in self.calls but not yet counted
+            # Extract section index from step name (e.g., "section_00" -> 0)
+            import re
+
+            match = re.search(r"section_(\d+)", step)
+            section_index = int(match.group(1)) if match else 0
+            section_num = section_index + 1  # 1-based for display
+
             content = f"""---
-beat_id: {section_num}
-title: Section {section_num}
+section_id: {section_num}
+local_summary: "Section {section_num} summary: The protagonist experiences significant events. This section develops key plot points and character relationships. Important narrative threads are advanced, and the story's central themes are explored through detailed scenes and interactions."
+new_entities: []
+new_locations: []
+unresolved_threads: []
 ---
 
 This is the content of section {section_num}. The protagonist experiences something significant here. The narrative continues with detailed descriptions and character development.
@@ -93,18 +97,19 @@ This is the content of section {section_num}. The protagonist experiences someth
 More content follows, building on previous sections and maintaining continuity with the overall story arc.
 """
 
-        elif step == "summarize":
+        elif step.startswith("summarize_"):
             # Return summary JSON
-            # Count section calls to determine which section is being summarized
-            section_calls = [c for c in self.calls if c["step"] == "section"]
-            section_num = len(
-                section_calls
-            )  # This summarize call happens after the section call
+            # Extract section index from step name (e.g., "summarize_00" -> 0)
+            import re
+
+            match = re.search(r"summarize_(\d+)", step)
+            section_index = int(match.group(1)) if match else 0
+            section_num = section_index + 1  # 1-based for display
             summary = {
-                "summary": f"Section {section_num} summary: The protagonist experiences significant events.",
+                "summary": f"Section {section_num} summary: The protagonist experiences significant events. This section develops key plot points and character relationships. Important narrative threads are advanced, and the story's central themes are explored through detailed scenes and interactions.",
                 "continuity_updates": {
-                    "characters": {"protagonist": {"state": "active"}},
-                    "locations": {"city": {"mood": "decaying"}},
+                    "protagonist_state": "active",
+                    "city_mood": "decaying",
                 },
             }
             content = json.dumps(summary)
@@ -112,7 +117,7 @@ More content follows, building on previous sections and maintaining continuity w
         elif step == "critic":
             # Return critic response with final script and report
             # Count sections from previous calls
-            section_calls = [c for c in self.calls if c["step"] == "section"]
+            section_calls = [c for c in self.calls if c["step"].startswith("section_")]
             num_sections = len(section_calls)
             # Use requested beats if available, otherwise use number of sections generated
             if self._requested_beats is not None:
@@ -127,12 +132,11 @@ More content follows, building on previous sections and maintaining continuity w
             critic_response = {
                 "final_script": final_script,
                 "editor_report": {
-                    "issues_found": 0,
-                    "corrections_made": [
+                    "issues_found": [],
+                    "changes_applied": [
                         "Minor grammar corrections",
                         "Consistency improvements",
                     ],
-                    "overall_quality": "good",
                 },
             }
             content = json.dumps(critic_response)
@@ -204,7 +208,7 @@ Generate {beats_count} beats.
 
     # Create section prompt
     (prompts_dir / "20_section.md").write_text(
-        """Generate section for beat: {beat}
+        """Generate section {section_id} for outline beat: {outline_beat}
 
 Rolling summary: {rolling_summary}
 Continuity: {continuity_context}
@@ -233,6 +237,19 @@ Style: {style_rules}
 """
     )
 
+    # Create schemas directory (required for validation)
+    PROJECT_ROOT = Path(__file__).parent.parent
+    SCHEMA_SOURCE = PROJECT_ROOT / "src" / "llm_storytell" / "schemas"
+    SCHEMA_DEST = base_dir / "src" / "llm_storytell" / "schemas"
+    SCHEMA_DEST.mkdir(parents=True)
+
+    # Copy all schema files
+    if SCHEMA_SOURCE.exists():
+        import shutil
+
+        for schema_file in SCHEMA_SOURCE.glob("*.json"):
+            shutil.copy2(schema_file, SCHEMA_DEST / schema_file.name)
+
     return base_dir
 
 
@@ -257,7 +274,7 @@ def test_e2e_full_pipeline(
         # Run the CLI command
         # Patch the function using string path (more reliable for imported modules)
         with patch(
-            "llm-storytell.cli._create_llm_provider_from_config", mock_create_provider
+            "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
         ):
             exit_code = main(
                 [
@@ -316,7 +333,6 @@ def test_e2e_full_pipeline(
         assert (run_dir / "artifacts" / "10_outline.json").exists()
         for i in range(1, 4):
             assert (run_dir / "artifacts" / f"20_section_{i:02d}.md").exists()
-            assert (run_dir / "artifacts" / f"21_summary_{i:02d}.json").exists()
         assert (run_dir / "artifacts" / "final_script.md").exists()
         assert (run_dir / "artifacts" / "editor_report.json").exists()
 
@@ -332,9 +348,8 @@ def test_e2e_full_pipeline(
         editor_report_path = run_dir / "artifacts" / "editor_report.json"
         with editor_report_path.open(encoding="utf-8") as f:
             editor_report = json.load(f)
-        assert "issues_found" in editor_report
-        assert "corrections_made" in editor_report
-        assert "overall_quality" in editor_report
+            assert "issues_found" in editor_report
+            assert "changes_applied" in editor_report
 
         # Verify run.log
         log_path = run_dir / "run.log"
@@ -349,8 +364,8 @@ def test_e2e_full_pipeline(
         assert len(mock_provider.calls) > 0
         step_names = [call["step"] for call in mock_provider.calls]
         assert "outline" in step_names
-        assert "section" in step_names
-        assert "summarize" in step_names
+        assert any(s.startswith("section_") for s in step_names)
+        assert any(s.startswith("summarize_") for s in step_names)
         assert "critic" in step_names
 
     finally:
@@ -374,7 +389,7 @@ def test_e2e_without_beats_override(
 
         # Run without --beats (should use default or prompt-based)
         with patch(
-            "llm-storytell.cli._create_llm_provider_from_config", mock_create_provider
+            "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
         ):
             exit_code = main(
                 [

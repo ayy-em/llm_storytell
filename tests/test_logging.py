@@ -7,8 +7,8 @@ import sys
 # Import from the package using the hyphenated name
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-logging_module = import_module("llm-storytell.logging")
-token_tracking_module = import_module("llm-storytell.llm.token_tracking")
+logging_module = import_module("llm_storytell.logging")
+token_tracking_module = import_module("llm_storytell.llm.token_tracking")
 
 RunLogger = logging_module.RunLogger
 TokenUsage = token_tracking_module.TokenUsage

@@ -12,9 +12,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from importlib import import_module
 
-# Handle hyphenated package name
-context_module = import_module("llm-storytell.context")
-logging_module = import_module("llm-storytell.logging")
+context_module = import_module("llm_storytell.context")
+logging_module = import_module("llm_storytell.logging")
 
 ContextLoader = context_module.ContextLoader
 ContextSelection = context_module.ContextSelection

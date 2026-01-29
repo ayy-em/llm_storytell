@@ -9,8 +9,7 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-# Handle hyphenated package name
-prompt_render_module = import_module("llm-storytell.prompt_render")
+prompt_render_module = import_module("llm_storytell.prompt_render")
 
 MissingVariableError = prompt_render_module.MissingVariableError
 PromptRenderError = prompt_render_module.PromptRenderError

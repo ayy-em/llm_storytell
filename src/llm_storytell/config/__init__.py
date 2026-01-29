@@ -1,4 +1,4 @@
-"""Configuration module for llm-storytell."""
+"""Configuration module for llm_storytell."""
 
 from .app_resolver import AppNotFoundError, AppPaths, resolve_app
 

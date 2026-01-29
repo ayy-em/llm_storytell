@@ -13,9 +13,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from importlib import import_module
 
-# Handle hyphenated package name
-run_dir_module = import_module("llm-storytell.run_dir")
-logging_module = import_module("llm-storytell.logging")
+run_dir_module = import_module("llm_storytell.run_dir")
+logging_module = import_module("llm_storytell.logging")
 
 initialize_run = run_dir_module.initialize_run
 generate_run_id = run_dir_module.generate_run_id

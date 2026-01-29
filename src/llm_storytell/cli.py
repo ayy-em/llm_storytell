@@ -1,4 +1,4 @@
-"""Command-line interface for llm-storytell."""
+"""Command-line interface for llm_storytell."""
 
 import argparse
 import hashlib
@@ -21,7 +21,7 @@ from .steps.summarize import SummarizeStepError, execute_summarize_step
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser for the CLI."""
     parser = argparse.ArgumentParser(
-        prog="llm-storytell",
+        prog="llm_storytell",
         description="A deterministic content generation pipeline for narrative text.",
     )
 
@@ -278,7 +278,7 @@ def _run_pipeline(
             llm_provider = _create_llm_provider_from_config(config_path)
 
         # Get schema base path
-        schema_base = base_dir / "src" / "llm-storytell" / "schemas"
+        schema_base = base_dir / "src" / "llm_storytell" / "schemas"
 
         # Stage 1: Outline generation
         logger.log_stage_start("outline")

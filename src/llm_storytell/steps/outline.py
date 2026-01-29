@@ -216,7 +216,7 @@ def execute_outline_step(
         llm_provider: LLM provider instance.
         logger: Run logger instance.
         schema_base: Base path for schema resolution. If None, uses
-            src/llm-storytell/schemas relative to run_dir.
+            src/llm_storytell/schemas relative to run_dir.
 
     Raises:
         OutlineStepError: If any step fails.
@@ -280,7 +280,7 @@ def execute_outline_step(
 
         # Validate against schema
         if schema_base is None:
-            # Default to src/llm-storytell/schemas relative to project root
+            # Default to src/llm_storytell/schemas relative to project root
             # Find project root by looking for SPEC.md or pyproject.toml
             current = Path.cwd()
             project_root = None
@@ -291,10 +291,10 @@ def execute_outline_step(
                     project_root = parent
                     break
             if project_root is None:
-                # Fallback: assume we're in src/llm-storytell/steps
+                # Fallback: assume we're in src/llm_storytell/steps
                 # and go up to project root
                 project_root = Path(__file__).parent.parent.parent.parent
-            schema_base_path = project_root / "src" / "llm-storytell" / "schemas"
+            schema_base_path = project_root / "src" / "llm_storytell" / "schemas"
         else:
             schema_base_path = Path(schema_base)
 

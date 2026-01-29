@@ -64,7 +64,7 @@ If a dependency is not approved, remove it.
 
 ## Schemas and contracts
 
-- Structured outputs must validate against schemas in `src/llm-storytell/schemas/`.
+- Structured outputs must validate against schemas in `src/llm_storytell/schemas/`.
 - Prompts are contracts: do not change output formats unless:
   - `SPEC.md` changes, and
   - downstream consumers and tests are updated.

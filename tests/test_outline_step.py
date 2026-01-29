@@ -13,13 +13,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 # Get project root for schema resolution
 PROJECT_ROOT = Path(__file__).parent.parent
-SCHEMA_BASE = PROJECT_ROOT / "src" / "llm-storytell" / "schemas"
+SCHEMA_BASE = PROJECT_ROOT / "src" / "llm_storytell" / "schemas"
 
-# Handle hyphenated package name
-outline_module = import_module("llm-storytell.steps.outline")
-llm_module = import_module("llm-storytell.llm")
-logging_module = import_module("llm-storytell.logging")
-prompt_render_module = import_module("llm-storytell.prompt_render")
+outline_module = import_module("llm_storytell.steps.outline")
+llm_module = import_module("llm_storytell.llm")
+logging_module = import_module("llm_storytell.logging")
+prompt_render_module = import_module("llm_storytell.prompt_render")
 
 execute_outline_step = outline_module.execute_outline_step
 OutlineStepError = outline_module.OutlineStepError

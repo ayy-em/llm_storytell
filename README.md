@@ -198,8 +198,8 @@ App-specific structure may evolve and change from app to app. Generated content 
 ### Setup
 
 ```bash
-git clone <repo-url>
-cd LLM-Storytell
+git clone https://github.com/ayy-em/llm_storytell.git
+cd llm_storytell
 uv sync
 ```
 
@@ -208,7 +208,7 @@ Create credentials file:
 ```json
 // config/creds.json
 {
-  "OPENAI_KEY": "your_api_key_here"
+  "openai_api_key": "your_api_key_here"
 }
 ```
 

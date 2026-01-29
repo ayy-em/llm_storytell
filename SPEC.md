@@ -143,7 +143,7 @@ python -m llm_storytell run \
 * `--beats`
 
   * Optional override for number of outline beats
-  * Default: app-defined
+  * Default: 5 (v1.0 hardcoded default; app-defined defaults planned for future versions)
   * Allowed range: **1–20**
 * `--sections`
 
@@ -456,7 +456,8 @@ runs/<run_id>/
 Runs are immutable once complete.
 
 ---
-
+python -m llm_storytell run --app grim-narrator --seed "Police brutality, no matter how severe, is just a mundane part of existence in the lower 
+levels of Skrepa Union's MotherCity"
 ## Roadmap (Directional)
 
 * **v1.0** – Local, text-only pipeline (multi-app capable)

@@ -13,12 +13,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 # Get project root for schema resolution
 PROJECT_ROOT = Path(__file__).parent.parent
-SCHEMA_BASE = PROJECT_ROOT / "src" / "llm-storytell" / "schemas"
+SCHEMA_BASE = PROJECT_ROOT / "src" / "llm_storytell" / "schemas"
 
-# Handle hyphenated package name
-critic_module = import_module("llm-storytell.steps.critic")
-llm_module = import_module("llm-storytell.llm")
-logging_module = import_module("llm-storytell.logging")
+critic_module = import_module("llm_storytell.steps.critic")
+llm_module = import_module("llm_storytell.llm")
+logging_module = import_module("llm_storytell.logging")
 
 execute_critic_step = critic_module.execute_critic_step
 CriticStepError = critic_module.CriticStepError

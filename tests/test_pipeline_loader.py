@@ -10,8 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from importlib import import_module
 
-# Handle hyphenated package name
-pipeline_module = import_module("llm-storytell.pipeline.loader")
+pipeline_module = import_module("llm_storytell.pipeline.loader")
 
 load_pipeline_config = pipeline_module.load_pipeline_config
 PipelineConfigError = pipeline_module.PipelineConfigError

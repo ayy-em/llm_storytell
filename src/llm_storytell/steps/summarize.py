@@ -156,7 +156,7 @@ def execute_summarize_step(
         section_index: Zero-based index of the section to summarize
             (0 for first section, 1 for second, etc.).
         schema_base: Base path for schema resolution. If None, uses
-            src/llm-storytell/schemas relative to run_dir.
+            src/llm_storytell/schemas relative to run_dir.
 
     Raises:
         SummarizeStepError: If any step fails.
@@ -213,7 +213,7 @@ def execute_summarize_step(
 
         # Validate against schema
         if schema_base is None:
-            # Default to src/llm-storytell/schemas relative to project root
+            # Default to src/llm_storytell/schemas relative to project root
             current = Path.cwd()
             project_root = None
             for parent in [current] + list(current.parents):
@@ -224,7 +224,7 @@ def execute_summarize_step(
                     break
             if project_root is None:
                 project_root = Path(__file__).parent.parent.parent.parent
-            schema_base_path = project_root / "src" / "llm-storytell" / "schemas"
+            schema_base_path = project_root / "src" / "llm_storytell" / "schemas"
         else:
             schema_base_path = Path(schema_base)
 
