@@ -17,7 +17,6 @@ wheels/
 runs/
 context/
 !src/llm_storytell/context
-prompts/apps/**/*.md
 assets/
 
 # Ruff & uv stuff
