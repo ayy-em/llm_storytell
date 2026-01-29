@@ -18,6 +18,7 @@ from ..llm.token_tracking import record_token_usage
 from ..logging import RunLogger
 from ..prompt_render import MissingVariableError, TemplateNotFoundError, render_prompt
 from ..schemas import SchemaValidationError, validate_json_schema
+from .llm_io import save_llm_io
 
 
 class CriticStepError(Exception):
@@ -173,217 +174,118 @@ def _load_all_sections(run_dir: Path, expected_section_count: int) -> str:
     return "\n\n".join(draft_parts)
 
 
-def _repair_json_quotes(json_str: str) -> str:
-    """Attempt to repair JSON with unescaped quotes in string values.
+def _parse_two_block_response(content: str) -> tuple[str, dict[str, Any]]:
+    """Parse LLM response with two-block format.
 
-    Uses a state machine to track when we're inside a string value and
-    escapes unescaped quotes that appear within string content.
-
-    Args:
-        json_str: JSON string that may have unescaped quotes.
-
-    Returns:
-        Repaired JSON string.
-    """
-    result = []
-    i = 0
-    in_string = False
-
-    while i < len(json_str):
-        char = json_str[i]
-
-        # Handle escape sequences
-        if char == "\\" and in_string:
-            # Check if this is a valid escape sequence
-            if i + 1 < len(json_str):
-                next_char = json_str[i + 1]
-                # Valid escape sequences in JSON: \" \\ \/ \b \f \n \r \t \uXXXX
-                if next_char in ('"', "\\", "/", "b", "f", "n", "r", "t", "u"):
-                    result.append(char)
-                    result.append(next_char)
-                    i += 2
-                    continue
-                # If not a valid escape, treat backslash as literal (shouldn't happen in valid JSON)
-                result.append("\\")
-                result.append(next_char)
-                i += 2
-                continue
-            else:
-                # Backslash at end - treat as literal
-                result.append(char)
-                i += 1
-                continue
-
-        # Handle quote characters
-        if char == '"':
-            if in_string:
-                # We're in a string - check if this is a closing quote
-                # by looking for JSON structure after it
-                j = i + 1
-                # Skip whitespace
-                while j < len(json_str) and json_str[j] in " \t\n\r":
-                    j += 1
-                if j < len(json_str):
-                    next_non_ws = json_str[j]
-                    # If followed by structure chars, it's a closing quote
-                    if next_non_ws in (":", ",", "}", "]"):
-                        in_string = False
-                        result.append(char)
-                        i += 1
-                        continue
-                # Otherwise, it's likely an unescaped quote in content
-                result.append("\\")
-                result.append(char)
-            else:
-                # Opening quote
-                in_string = True
-                result.append(char)
-            i += 1
-            continue
-
-        result.append(char)
-        i += 1
-
-    return "".join(result)
-
-
-def _extract_json_from_response(content: str) -> dict[str, Any]:
-    """Extract JSON from LLM response, handling markdown code blocks and common JSON errors.
+    Expected format:
+    ===FINAL_SCRIPT===
+    [markdown content]
+    ===EDITOR_REPORT_JSON===
+    [JSON object]
 
     Args:
         content: Raw LLM response content.
 
     Returns:
-        Parsed JSON dictionary.
+        Tuple of (final_script_markdown, editor_report_dict).
 
     Raises:
-        CriticStepError: If JSON cannot be extracted or parsed.
+        CriticStepError: If blocks cannot be found or JSON cannot be parsed.
     """
-    import re
+    # Find the block markers
+    final_script_marker = "===FINAL_SCRIPT==="
+    editor_report_marker = "===EDITOR_REPORT_JSON==="
 
-    # Try direct JSON parse first
+    # Find positions of markers
+    script_start = content.find(final_script_marker)
+    report_start = content.find(editor_report_marker)
+
+    if script_start == -1:
+        raise CriticStepError(
+            f"Response missing required block marker: {final_script_marker}. "
+            f"Response length: {len(content)} chars. "
+            f"First 500 chars: {content[:500]!r}"
+        )
+
+    if report_start == -1:
+        raise CriticStepError(
+            f"Response missing required block marker: {editor_report_marker}. "
+            f"Response length: {len(content)} chars. "
+            f"First 500 chars: {content[:500]!r}"
+        )
+
+    if report_start <= script_start:
+        raise CriticStepError(
+            f"Block markers in wrong order. {editor_report_marker} must come after {final_script_marker}"
+        )
+
+    # Extract final_script (markdown block)
+    script_content_start = script_start + len(final_script_marker)
+    # Skip leading whitespace/newlines after marker
+    while script_content_start < len(content) and content[script_content_start] in " \t\n\r":
+        script_content_start += 1
+
+    # Extract up to (but not including) the editor report marker
+    script_content = content[script_content_start:report_start]
+    # Remove trailing whitespace
+    final_script = script_content.rstrip()
+
+    # Extract editor_report (JSON block)
+    report_content_start = report_start + len(editor_report_marker)
+    # Skip leading whitespace/newlines after marker
+    while report_content_start < len(content) and content[report_content_start] in " \t\n\r":
+        report_content_start += 1
+
+    # Extract JSON from rest of content
+    json_content = content[report_content_start:].strip()
+
+    # Try to parse JSON
     try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        pass
-
-    # Try extracting from markdown code blocks
-    # Match JSON in ```json ... ``` or ``` ... ``` blocks
-    code_block_pattern = r"```(?:json)?\s*\n(.*?)```"
-    match = re.search(code_block_pattern, content, re.DOTALL)
-    if match:
-        extracted = match.group(1)
-        try:
-            return json.loads(extracted)
-        except json.JSONDecodeError:
-            # Try repairing quotes in extracted JSON
-            try:
-                repaired = _repair_json_quotes(extracted)
-                return json.loads(repaired)
-            except (json.JSONDecodeError, Exception):
-                pass
-
-    # Try finding JSON object boundaries
-    # Find first { and last }
-    first_brace = content.find("{")
-    last_brace = content.rfind("}")
-    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-        json_candidate = content[first_brace : last_brace + 1]
-        try:
-            return json.loads(json_candidate)
-        except json.JSONDecodeError:
-            # Try repairing quotes
-            try:
-                repaired = _repair_json_quotes(json_candidate)
-                return json.loads(repaired)
-            except (json.JSONDecodeError, Exception):
-                pass
-
-    # Final attempt: try repairing the entire content
-    try:
-        repaired = _repair_json_quotes(content)
-        return json.loads(repaired)
-    except (json.JSONDecodeError, Exception):
-        pass
-
-    # If all else fails, try to get more diagnostic info
-    # Attempt one more parse to capture the exact error location
-    try:
-        json.loads(content)
+        editor_report = json.loads(json_content)
     except json.JSONDecodeError as e:
         error_pos = getattr(e, "pos", None)
-        if error_pos is not None and error_pos < len(content):
+        if error_pos is not None and error_pos < len(json_content):
             # Show context around the error
             start = max(0, error_pos - 100)
-            end = min(len(content), error_pos + 100)
-            context = content[start:end]
+            end = min(len(json_content), error_pos + 100)
+            context = json_content[start:end]
             raise CriticStepError(
-                f"Could not extract valid JSON from LLM response. "
+                f"Invalid JSON in editor_report block. "
                 f"JSON error at position {error_pos}: {e.msg}. "
-                f"Context around error: {context!r}"
+                f"Context around error: {context!r}. "
+                f"Full JSON content length: {len(json_content)} chars"
             ) from e
-
-    # Fallback error message
-    snippet = content[:500] if len(content) > 500 else content
-    raise CriticStepError(
-        f"Could not extract valid JSON from LLM response. "
-        f"Response (first 500 chars): {snippet!r}"
-    )
-
-
-def _validate_llm_response(response_data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    """Validate LLM response structure strictly.
-
-    Enforces:
-    - Top-level object
-    - Required keys: final_script, editor_report
-    - No extra keys unless explicitly allowed
-    - editor_report must be a dict
-
-    Args:
-        response_data: Parsed JSON response from LLM.
-
-    Returns:
-        Tuple of (final_script, editor_report).
-
-    Raises:
-        CriticStepError: If response structure is invalid.
-    """
-    if not isinstance(response_data, dict):
         raise CriticStepError(
-            "LLM response must be a top-level JSON object, "
-            f"got {type(response_data).__name__}"
+            f"Invalid JSON in editor_report block: {e}. "
+            f"JSON content (first 500 chars): {json_content[:500]!r}"
+        ) from e
+
+    # Validate editor_report structure
+    if not isinstance(editor_report, dict):
+        raise CriticStepError(
+            f"editor_report must be a JSON object, got {type(editor_report).__name__}"
         )
 
     # Check required keys
-    required_keys = {"final_script", "editor_report"}
-    missing_keys = required_keys - set(response_data.keys())
+    required_keys = {"issues_found", "changes_applied"}
+    missing_keys = required_keys - set(editor_report.keys())
     if missing_keys:
         raise CriticStepError(
-            f"LLM response missing required keys: {sorted(missing_keys)}. "
-            f"Found keys: {sorted(response_data.keys())}"
-        )
-
-    # Check for extra keys (strict enforcement)
-    allowed_keys = {"final_script", "editor_report"}
-    extra_keys = set(response_data.keys()) - allowed_keys
-    if extra_keys:
-        raise CriticStepError(
-            f"LLM response contains extra keys (not allowed): {sorted(extra_keys)}. "
-            f"Allowed keys: {sorted(allowed_keys)}"
+            f"editor_report missing required keys: {sorted(missing_keys)}. "
+            f"Found keys: {sorted(editor_report.keys())}"
         )
 
     # Validate types
-    final_script = response_data.get("final_script")
-    if not isinstance(final_script, str):
+    issues_found = editor_report.get("issues_found")
+    if not isinstance(issues_found, list):
         raise CriticStepError(
-            f"final_script must be a string, got {type(final_script).__name__}"
+            f"editor_report.issues_found must be an array, got {type(issues_found).__name__}"
         )
 
-    editor_report = response_data.get("editor_report")
-    if not isinstance(editor_report, dict):
+    changes_applied = editor_report.get("changes_applied")
+    if not isinstance(changes_applied, list):
         raise CriticStepError(
-            f"editor_report must be a dictionary, got {type(editor_report).__name__}"
+            f"editor_report.changes_applied must be an array, got {type(changes_applied).__name__}"
         )
 
     return final_script, editor_report
@@ -515,36 +417,59 @@ def execute_critic_step(
         except MissingVariableError as e:
             raise CriticStepError(f"Missing variables in prompt template: {e}") from e
 
-        # Call LLM provider with extended timeout for critic step (300 seconds)
+        # Save LLM I/O for debugging
+        stage_name = "critic"
+        try:
+            save_llm_io(run_dir, stage_name, rendered_prompt, "")
+        except OSError as e:
+            logger.warning(f"Failed to save prompt for {stage_name}: {e}")
+
+        # Call LLM provider with extended timeout for critic step (600 seconds)
         try:
             result = llm_provider.generate(
                 rendered_prompt,
                 step="critic",
                 temperature=0.7,
-                timeout=300,
+                timeout=600,
             )
         except LLMProviderError as e:
+            # Save raw response even on error for debugging
+            try:
+                save_llm_io(run_dir, stage_name, rendered_prompt, str(e))
+            except OSError:
+                pass
             raise CriticStepError(f"LLM provider error: {e}") from e
 
-        # Parse JSON response (with fallback extraction)
+        # Save LLM response
         try:
-            response_data = _extract_json_from_response(result.content)
-        except CriticStepError:
-            raise
-        except Exception as e:
-            raise CriticStepError(
-                f"Invalid JSON in LLM response: {e}. "
-                "Response must be valid JSON with 'final_script' and 'editor_report' keys."
-            ) from e
+            save_llm_io(run_dir, stage_name, rendered_prompt, result.content)
+        except OSError as e:
+            logger.warning(f"Failed to save response for {stage_name}: {e}")
 
-        # Validate response structure strictly
+        # Log response diagnostics
+        logger.info(
+            f"Critic step LLM response: length={len(result.content)} chars, "
+            f"first 200 chars: {result.content[:200]!r}, "
+            f"last 200 chars: {result.content[-200:]!r}"
+        )
+
+        # Always write raw response artifact for debugging
+        artifacts_dir = run_dir / "artifacts"
+        artifacts_dir.mkdir(exist_ok=True)
+        raw_response_path = artifacts_dir / "30_critic_raw_response.txt"
         try:
-            final_script, editor_report = _validate_llm_response(response_data)
+            raw_response_path.write_text(result.content, encoding="utf-8")
+        except OSError as e:
+            logger.warning(f"Failed to write raw response artifact: {e}")
+
+        # Parse two-block response (strict)
+        try:
+            final_script, editor_report = _parse_two_block_response(result.content)
         except CriticStepError:
             raise
         except Exception as e:
             raise CriticStepError(
-                f"Error validating LLM response structure: {e}"
+                f"Error parsing two-block response: {e}"
             ) from e
 
         # Validate editor_report against schema

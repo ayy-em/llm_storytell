@@ -9,12 +9,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ..context import ContextLoaderError, build_prompt_context_vars
-from ..llm import LLMProvider, LLMProviderError
-from ..llm.token_tracking import record_token_usage
-from ..logging import RunLogger
-from ..prompt_render import MissingVariableError, TemplateNotFoundError, render_prompt
-from ..schemas import SchemaValidationError, validate_json_schema
+from src.llm_storytell.context import ContextLoaderError, build_prompt_context_vars
+from src.llm_storytell.llm import LLMProvider, LLMProviderError
+from src.llm_storytell.llm.token_tracking import record_token_usage
+from src.llm_storytell.logging import RunLogger
+from src.llm_storytell.prompt_render import MissingVariableError, TemplateNotFoundError, render_prompt
+from src.llm_storytell.schemas import SchemaValidationError, validate_json_schema
+from src.llm_storytell.steps.llm_io import save_llm_io
 
 
 class OutlineStepError(Exception):
@@ -190,6 +191,13 @@ def execute_outline_step(
         except MissingVariableError as e:
             raise OutlineStepError(f"Missing variables in prompt template: {e}") from e
 
+        # Save LLM I/O for debugging
+        stage_name = "outline"
+        try:
+            save_llm_io(run_dir, stage_name, rendered_prompt, "")
+        except OSError as e:
+            logger.warning(f"Failed to save prompt for {stage_name}: {e}")
+
         # Call LLM provider
         try:
             result = llm_provider.generate(
@@ -198,7 +206,24 @@ def execute_outline_step(
                 temperature=0.7,
             )
         except LLMProviderError as e:
+            # Save raw response even on error for debugging
+            try:
+                save_llm_io(run_dir, stage_name, rendered_prompt, str(e))
+            except OSError:
+                pass
             raise OutlineStepError(f"LLM provider error: {e}") from e
+
+        # Save LLM response
+        try:
+            save_llm_io(run_dir, stage_name, rendered_prompt, result.content)
+        except OSError as e:
+            logger.warning(f"Failed to save response for {stage_name}: {e}")
+
+        # Log response diagnostics
+        logger.info(
+            f"Outline step LLM response: length={len(result.content)} chars, "
+            f"first 200 chars: {result.content[:200]!r}"
+        )
 
         # Parse JSON response
         # Try direct JSON parse first

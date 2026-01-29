@@ -9,12 +9,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ..continuity import merge_continuity_updates
-from ..llm import LLMProvider, LLMProviderError
-from ..llm.token_tracking import record_token_usage
-from ..logging import RunLogger
-from ..prompt_render import MissingVariableError, TemplateNotFoundError, render_prompt
-from ..schemas import SchemaValidationError, validate_json_schema
+from src.llm_storytell.continuity import merge_continuity_updates
+from src.llm_storytell.llm import LLMProvider, LLMProviderError
+from src.llm_storytell.llm.token_tracking import record_token_usage
+from src.llm_storytell.logging import RunLogger
+from src.llm_storytell.prompt_render import MissingVariableError, TemplateNotFoundError, render_prompt
+from src.llm_storytell.schemas import SchemaValidationError, validate_json_schema
+from src.llm_storytell.steps.llm_io import save_llm_io
 
 
 class SummarizeStepError(Exception):
@@ -190,6 +191,13 @@ def execute_summarize_step(
                 f"Missing variables in prompt template: {e}"
             ) from e
 
+        # Save LLM I/O for debugging
+        stage_name = f"summarize_{section_index:02d}"
+        try:
+            save_llm_io(run_dir, stage_name, rendered_prompt, "")
+        except OSError as e:
+            logger.warning(f"Failed to save prompt for {stage_name}: {e}")
+
         # Call LLM provider
         try:
             result = llm_provider.generate(
@@ -198,7 +206,24 @@ def execute_summarize_step(
                 temperature=0.5,  # Lower temperature for summarization
             )
         except LLMProviderError as e:
+            # Save raw response even on error for debugging
+            try:
+                save_llm_io(run_dir, stage_name, rendered_prompt, str(e))
+            except OSError:
+                pass
             raise SummarizeStepError(f"LLM provider error: {e}") from e
+
+        # Save LLM response
+        try:
+            save_llm_io(run_dir, stage_name, rendered_prompt, result.content)
+        except OSError as e:
+            logger.warning(f"Failed to save response for {stage_name}: {e}")
+
+        # Log response diagnostics
+        logger.info(
+            f"Summarize {section_index} step LLM response: length={len(result.content)} chars, "
+            f"first 200 chars: {result.content[:200]!r}"
+        )
 
         # Parse JSON response
         try:
