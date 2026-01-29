@@ -469,8 +469,6 @@ def execute_critic_step(
     Raises:
         CriticStepError: If any step fails.
     """
-    logger.log_stage_start("critic")
-
     try:
         # Load state
         state = _load_state(run_dir)
@@ -647,11 +645,7 @@ def execute_critic_step(
             token_usage_dict,
         )
 
-        logger.log_stage_end("critic", success=True)
-
     except CriticStepError:
-        logger.log_stage_end("critic", success=False)
         raise
     except Exception as e:
-        logger.log_stage_end("critic", success=False)
         raise CriticStepError(f"Unexpected error in critic step: {e}") from e

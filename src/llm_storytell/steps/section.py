@@ -170,8 +170,6 @@ def execute_section_step(
     Raises:
         SectionStepError: If any step fails.
     """
-    logger.log_stage_start(f"section_{section_index:02d}")
-
     try:
         # Load state
         state = _load_state(run_dir)
@@ -349,11 +347,7 @@ def execute_section_step(
         # Update state with section metadata
         _update_state(run_dir, frontmatter, token_usage_dict)
 
-        logger.log_stage_end(f"section_{section_index:02d}", success=True)
-
     except SectionStepError:
-        logger.log_stage_end(f"section_{section_index:02d}", success=False)
         raise
     except Exception as e:
-        logger.log_stage_end(f"section_{section_index:02d}", success=False)
         raise SectionStepError(f"Unexpected error in section step: {e}") from e

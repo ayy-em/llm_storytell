@@ -148,8 +148,6 @@ def execute_outline_step(
     Raises:
         OutlineStepError: If any step fails.
     """
-    logger.log_stage_start("outline")
-
     try:
         # Load state and inputs
         state = _load_state(run_dir)
@@ -341,11 +339,7 @@ def execute_outline_step(
         # Update state
         _update_state(run_dir, outline_data, token_usage_dict)
 
-        logger.log_stage_end("outline", success=True)
-
     except OutlineStepError:
-        logger.log_stage_end("outline", success=False)
         raise
     except Exception as e:
-        logger.log_stage_end("outline", success=False)
         raise OutlineStepError(f"Unexpected error in outline step: {e}") from e

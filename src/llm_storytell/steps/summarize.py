@@ -161,8 +161,6 @@ def execute_summarize_step(
     Raises:
         SummarizeStepError: If any step fails.
     """
-    logger.log_stage_start(f"summarize_{section_index:02d}")
-
     try:
         # Load state
         state = _load_state(run_dir)
@@ -257,11 +255,7 @@ def execute_summarize_step(
         # Update state
         _update_state(run_dir, summary_data, updated_ledger, token_usage_dict)
 
-        logger.log_stage_end(f"summarize_{section_index:02d}", success=True)
-
     except SummarizeStepError:
-        logger.log_stage_end(f"summarize_{section_index:02d}", success=False)
         raise
     except Exception as e:
-        logger.log_stage_end(f"summarize_{section_index:02d}", success=False)
         raise SummarizeStepError(f"Unexpected error in summarize step: {e}") from e
