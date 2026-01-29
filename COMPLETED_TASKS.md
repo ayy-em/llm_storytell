@@ -4,6 +4,18 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] R0001-BB-01a (Follow-up) Unify llm_io persistence across stages (2026-01-30)
+
+**Goal**: Extend `steps/llm_io.py` so all stages use the same mechanism for prompt.txt, response.txt (only when non-empty), meta.json, and raw_response.json; then refactor critic to use it and remove critic-only _write_critic_llm_io.
+
+**Allowed files**: `src/llm_storytell/steps/llm_io.py`, `src/llm_storytell/steps/critic.py`, and any other step/orchestration files that call save_llm_io; `tests/test_critic_step.py`, `tests/test_outline_step.py`, `tests/test_section_loop.py`, and any tests that assert on llm_io layout.
+
+**Acceptance**: Same behavior as R0001-BB-01 (no placeholder response.txt, meta/raw in llm_io); single save_llm_io API used by all stages; `uv run pytest -q` green.
+
+**Result**: Extended `save_llm_io(run_dir, stage_name, prompt, response=None, *, meta=None, raw_response=None)` in `llm_io.py`: writes prompt.txt always; response.txt only when response is non-empty (backwards compatible); meta.json when meta provided (minimal shape: status, provider, model; error only when status "error"); raw_response.json when raw_response provided (sensitive keys redacted). Removed `_write_critic_llm_io` and `_CRITIC_REDACT_KEYS` from critic; critic uses only `save_llm_io`. Outline, section, summarize: pre-call and error paths write meta (pending/error), no response.txt; success path writes prompt, response, meta, raw_response. On error, meta with error info is written and not swallowed. Tests: success path (prompt.txt + response.txt) for outline/section/summarize; error path (no response.txt, meta status=error); backwards compat (non-empty response writes response.txt; None/empty do not). Test imports fixed to use `src.llm_storytell.llm` so mock’s LLMProviderError is caught by steps. Commands run: `uv run ruff format .`, `uv run ruff check .`, `PYTHONPATH=<project_root> uv run pytest -q` (187 passed).
+
+---
+
 ### [x] R0001-BB-01 Bug Bash: Empty critic response.txt (2026-01-29)
 
 Task: Fix critic response.txt empty-placeholder + treat empty LLM content as hard provider error + persist raw IO consistently

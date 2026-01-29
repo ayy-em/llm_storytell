@@ -7,6 +7,7 @@ summary and continuity ledger to maintain narrative consistency.
 import json
 import re
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -243,10 +244,22 @@ def execute_section_step(
         except MissingVariableError as e:
             raise SectionStepError(f"Missing variables in prompt template: {e}") from e
 
-        # Save LLM I/O for debugging
+        # Save LLM I/O for debugging (pre-call: prompt + meta, no response.txt)
         stage_name = f"section_{section_index:02d}"
+        effective_model = getattr(llm_provider, "_default_model", "unknown")
         try:
-            save_llm_io(run_dir, stage_name, rendered_prompt, "")
+            save_llm_io(
+                run_dir,
+                stage_name,
+                rendered_prompt,
+                None,
+                meta={
+                    "status": "pending",
+                    "provider": llm_provider.provider_name,
+                    "model": effective_model,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
         except OSError as e:
             logger.warning(f"Failed to save prompt for {stage_name}: {e}")
 
@@ -258,16 +271,40 @@ def execute_section_step(
                 temperature=0.7,
             )
         except LLMProviderError as e:
-            # Save raw response even on error for debugging
-            try:
-                save_llm_io(run_dir, stage_name, rendered_prompt, str(e))
-            except OSError:
-                pass
+            # On error: meta with error info, no response.txt (do not swallow write failures)
+            save_llm_io(
+                run_dir,
+                stage_name,
+                rendered_prompt,
+                None,
+                meta={
+                    "status": "error",
+                    "provider": llm_provider.provider_name,
+                    "model": effective_model,
+                    "error": str(e),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
             raise SectionStepError(f"LLM provider error: {e}") from e
 
-        # Save LLM response
+        # Save LLM response (success: prompt, response, meta, raw_response)
         try:
-            save_llm_io(run_dir, stage_name, rendered_prompt, result.content)
+            save_llm_io(
+                run_dir,
+                stage_name,
+                rendered_prompt,
+                result.content,
+                meta={
+                    "status": "success",
+                    "provider": result.provider,
+                    "model": result.model,
+                    "prompt_tokens": result.prompt_tokens,
+                    "completion_tokens": result.completion_tokens,
+                    "total_tokens": result.total_tokens,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+                raw_response=result.raw_response,
+            )
         except OSError as e:
             logger.warning(f"Failed to save response for {stage_name}: {e}")
 

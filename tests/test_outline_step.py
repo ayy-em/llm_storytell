@@ -8,15 +8,16 @@ from typing import Any
 import pytest
 import sys
 
-# Import from the package using the hyphenated name
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-# Get project root for schema resolution
+# Import from the package using the hyphenated name; ensure project root for src.llm_storytell
 PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+sys.path.insert(0, str(PROJECT_ROOT))
+
 SCHEMA_BASE = PROJECT_ROOT / "src" / "llm_storytell" / "schemas"
 
 outline_module = import_module("llm_storytell.steps.outline")
-llm_module = import_module("llm_storytell.llm")
+# Use same llm module as outline step (src.llm_storytell.llm) so LLMProviderError is caught
+llm_module = import_module("src.llm_storytell.llm")
 logging_module = import_module("llm_storytell.logging")
 prompt_render_module = import_module("llm_storytell.prompt_render")
 
@@ -26,6 +27,9 @@ LLMResult = llm_module.LLMResult
 LLMProvider = llm_module.LLMProvider
 LLMProviderError = llm_module.LLMProviderError
 RunLogger = logging_module.RunLogger
+
+llm_io_module = import_module("llm_storytell.steps.llm_io")
+save_llm_io = llm_io_module.save_llm_io
 
 
 class _MockLLMProvider(LLMProvider):
@@ -237,6 +241,11 @@ class TestExecuteOutlineStepSuccess:
         assert len(provider.calls) == 1
         assert provider.calls[0]["step"] == "outline"
 
+        # llm_io: success path has prompt.txt and response.txt
+        llm_io_outline = temp_run_dir / "llm_io" / "outline"
+        assert (llm_io_outline / "prompt.txt").exists()
+        assert (llm_io_outline / "response.txt").exists()
+
     def test_loads_all_context_files(
         self,
         temp_run_dir: Path,
@@ -400,6 +409,37 @@ class TestExecuteOutlineStepErrors:
 
         assert "Seed not found" in str(exc_info.value)
 
+    def test_on_provider_error_no_response_txt_meta_has_error(
+        self,
+        temp_run_dir: Path,
+        temp_context_dir: Path,
+        temp_prompts_dir: Path,
+    ) -> None:
+        """On provider error: response.txt is not created; meta.json has status=error."""
+        provider = _MockLLMProvider()
+        provider.set_failure(should_fail=True)
+        logger = RunLogger(temp_run_dir / "run.log")
+
+        with pytest.raises(OutlineStepError):
+            execute_outline_step(
+                run_dir=temp_run_dir,
+                context_dir=temp_context_dir,
+                prompts_dir=temp_prompts_dir,
+                llm_provider=provider,
+                logger=logger,
+                schema_base=SCHEMA_BASE,
+            )
+
+        llm_io_outline = temp_run_dir / "llm_io" / "outline"
+        assert (llm_io_outline / "prompt.txt").exists()
+        assert not (llm_io_outline / "response.txt").exists()
+        meta_path = llm_io_outline / "meta.json"
+        assert meta_path.exists()
+        with meta_path.open(encoding="utf-8") as f:
+            meta = json.load(f)
+        assert meta.get("status") == "error"
+        assert "error" in meta
+
     def test_fails_on_invalid_beats_count(
         self,
         temp_run_dir: Path,
@@ -497,9 +537,10 @@ class TestExecuteOutlineStepErrors:
             )
 
         # Step may wrap as "LLM provider error" or "Unexpected error" depending on import
-        assert "Mock provider failure" in str(exc_info.value) or "provider" in str(
-            exc_info.value
-        ).lower()
+        assert (
+            "Mock provider failure" in str(exc_info.value)
+            or "provider" in str(exc_info.value).lower()
+        )
 
     def test_fails_on_invalid_json_response(
         self,
@@ -548,9 +589,9 @@ class TestExecuteOutlineStepErrors:
             )
 
         # Outline pre-validates beats before schema; either message is acceptable
-        assert "missing required fields" in str(exc_info.value) or "Schema validation failed" in str(
+        assert "missing required fields" in str(
             exc_info.value
-        )
+        ) or "Schema validation failed" in str(exc_info.value)
 
     def test_fails_on_wrong_beat_count(
         self,
@@ -629,3 +670,50 @@ class TestExecuteOutlineStepErrors:
 
         # Step raises; run.log may be empty when only step runs (CLI logs stage start/end)
         assert not (temp_run_dir / "artifacts" / "10_outline.json").exists()
+
+
+class TestSaveLlmIoBackwardsCompatibility:
+    """Backwards compatibility: save_llm_io(run_dir, stage, prompt, response) still works."""
+
+    def test_non_empty_response_writes_response_txt(self, temp_run_dir: Path) -> None:
+        """Existing call save_llm_io(..., response) with non-empty response writes response.txt."""
+        save_llm_io(
+            temp_run_dir,
+            "test_stage",
+            "prompt text",
+            "some response",
+        )
+        llm_io_dir = temp_run_dir / "llm_io" / "test_stage"
+        assert (llm_io_dir / "prompt.txt").exists()
+        assert (llm_io_dir / "response.txt").exists()
+        assert (llm_io_dir / "response.txt").read_text(
+            encoding="utf-8"
+        ) == "some response"
+
+    def test_none_response_does_not_write_response_txt(
+        self, temp_run_dir: Path
+    ) -> None:
+        """save_llm_io(..., None) does not write response.txt (no placeholder)."""
+        save_llm_io(
+            temp_run_dir,
+            "test_stage",
+            "prompt text",
+            None,
+        )
+        llm_io_dir = temp_run_dir / "llm_io" / "test_stage"
+        assert (llm_io_dir / "prompt.txt").exists()
+        assert not (llm_io_dir / "response.txt").exists()
+
+    def test_empty_response_does_not_write_response_txt(
+        self, temp_run_dir: Path
+    ) -> None:
+        """save_llm_io(..., '') does not write response.txt (no placeholder)."""
+        save_llm_io(
+            temp_run_dir,
+            "test_stage",
+            "prompt text",
+            "",
+        )
+        llm_io_dir = temp_run_dir / "llm_io" / "test_stage"
+        assert (llm_io_dir / "prompt.txt").exists()
+        assert not (llm_io_dir / "response.txt").exists()

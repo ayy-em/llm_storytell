@@ -27,55 +27,6 @@ from ..prompt_render import MissingVariableError, TemplateNotFoundError, render_
 from ..schemas import SchemaValidationError, validate_json_schema
 from .llm_io import save_llm_io
 
-# Keys whose values are redacted when writing raw_response.json (critic only)
-_CRITIC_REDACT_KEYS = frozenset(
-    k.lower()
-    for k in ("api_key", "apikey", "token", "secret", "password", "credential", "auth")
-)
-
-
-def _write_critic_llm_io(
-    run_dir: Path,
-    prompt: str,
-    meta: dict[str, Any],
-    raw_response: Any | None = None,
-    response_text: str | None = None,
-) -> None:
-    """Write llm_io/critic/ files from critic step only (no changes to llm_io.py).
-
-    Writes prompt.txt, meta.json, optionally response.txt (only when non-empty),
-    and optionally raw_response.json (redacted). Used for pre-call (pending),
-    success (meta + raw only; prompt+response via save_llm_io), and error (meta + raw).
-    """
-    llm_io_dir = run_dir / "llm_io" / "critic"
-    llm_io_dir.mkdir(parents=True, exist_ok=True)
-    (llm_io_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
-    (llm_io_dir / "meta.json").write_text(
-        json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    if response_text is not None and response_text.strip() != "":
-        (llm_io_dir / "response.txt").write_text(response_text, encoding="utf-8")
-    if raw_response is not None:
-        try:
-            if isinstance(raw_response, dict):
-                payload = {
-                    k: "[REDACTED]" if k.lower() in _CRITIC_REDACT_KEYS else v
-                    for k, v in raw_response.items()
-                }
-            elif isinstance(raw_response, list):
-                payload = raw_response
-            else:
-                payload = {"raw": str(raw_response)}
-            (llm_io_dir / "raw_response.json").write_text(
-                json.dumps(payload, indent=2, default=str, ensure_ascii=False),
-                encoding="utf-8",
-            )
-        except (TypeError, ValueError):
-            (llm_io_dir / "raw_response.json").write_text(
-                json.dumps({"error": "Could not serialize raw response"}, indent=2),
-                encoding="utf-8",
-            )
-
 
 class CriticStepError(Exception):
     """Raised when critic step execution fails."""
@@ -483,14 +434,15 @@ def execute_critic_step(
         stage_name = "critic"
         effective_model = getattr(llm_provider, "_default_model", "unknown")
         try:
-            _write_critic_llm_io(
+            save_llm_io(
                 run_dir,
+                stage_name,
                 rendered_prompt,
+                None,
                 meta={
-                    "stage": stage_name,
+                    "status": "pending",
                     "provider": llm_provider.provider_name,
                     "model": effective_model,
-                    "status": "pending",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
@@ -507,14 +459,15 @@ def execute_critic_step(
             )
         except LLMProviderError as e:
             try:
-                _write_critic_llm_io(
+                save_llm_io(
                     run_dir,
+                    stage_name,
                     rendered_prompt,
+                    None,
                     meta={
-                        "stage": stage_name,
+                        "status": "error",
                         "provider": llm_provider.provider_name,
                         "model": effective_model,
-                        "status": "error",
                         "error": str(e),
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     },
@@ -524,17 +477,17 @@ def execute_critic_step(
                 pass
             raise CriticStepError(f"LLM provider error: {e}") from e
 
-        # Persist response via save_llm_io (same mechanism as other stages), then meta + raw
+        # Persist response via save_llm_io (same mechanism as other stages)
         try:
-            save_llm_io(run_dir, stage_name, rendered_prompt, result.content)
-            _write_critic_llm_io(
+            save_llm_io(
                 run_dir,
+                stage_name,
                 rendered_prompt,
+                result.content,
                 meta={
-                    "stage": stage_name,
+                    "status": "success",
                     "provider": result.provider,
                     "model": result.model,
-                    "status": "success",
                     "prompt_tokens": result.prompt_tokens,
                     "completion_tokens": result.completion_tokens,
                     "total_tokens": result.total_tokens,

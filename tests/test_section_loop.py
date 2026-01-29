@@ -8,17 +8,18 @@ from typing import Any
 import pytest
 import sys
 
-# Import from the package using the hyphenated name
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-# Get project root for schema resolution
+# Import from the package using the hyphenated name; ensure project root for src.llm_storytell
 PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+sys.path.insert(0, str(PROJECT_ROOT))
+
 SCHEMA_BASE = PROJECT_ROOT / "src" / "llm_storytell" / "schemas"
 
 section_module = import_module("llm_storytell.steps.section")
 summarize_module = import_module("llm_storytell.steps.summarize")
 continuity_module = import_module("llm_storytell.continuity")
-llm_module = import_module("llm_storytell.llm")
+# Use same llm module as steps (src.llm_storytell.llm) so LLMProviderError is caught
+llm_module = import_module("src.llm_storytell.llm")
 logging_module = import_module("llm_storytell.logging")
 
 execute_section_step = section_module.execute_section_step
@@ -315,6 +316,11 @@ class TestExecuteSectionStepSuccess:
         assert len(provider.calls) == 1
         assert provider.calls[0]["step"] == "section_00"
 
+        # llm_io: success path has prompt.txt and response.txt
+        llm_io_section = temp_run_dir_with_outline / "llm_io" / "section_00"
+        assert (llm_io_section / "prompt.txt").exists()
+        assert (llm_io_section / "response.txt").exists()
+
     def test_section_loop_multiple_sections(
         self,
         temp_run_dir_with_outline: Path,
@@ -436,6 +442,11 @@ class TestExecuteSummarizeStepSuccess:
         # Check LLM was called
         assert len(provider.calls) == 1
         assert provider.calls[0]["step"] == "summarize_00"
+
+        # llm_io: success path has prompt.txt and response.txt
+        llm_io_summarize = temp_run_dir_with_outline / "llm_io" / "summarize_00"
+        assert (llm_io_summarize / "prompt.txt").exists()
+        assert (llm_io_summarize / "response.txt").exists()
 
     def test_merges_continuity_updates(
         self,
@@ -600,6 +611,38 @@ class TestSectionStepErrors:
                 schema_base=SCHEMA_BASE,
             )
 
+    def test_on_provider_error_no_response_txt(
+        self,
+        temp_run_dir_with_outline: Path,
+        temp_context_dir: Path,
+        temp_prompts_dir: Path,
+    ) -> None:
+        """On section provider error: response.txt is not created; meta.json has status=error."""
+        provider = _MockLLMProvider()
+        provider.set_failure(should_fail=True)
+        logger = RunLogger(temp_run_dir_with_outline / "run.log")
+
+        with pytest.raises(SectionStepError):
+            execute_section_step(
+                run_dir=temp_run_dir_with_outline,
+                context_dir=temp_context_dir,
+                prompts_dir=temp_prompts_dir,
+                llm_provider=provider,
+                logger=logger,
+                section_index=0,
+                schema_base=SCHEMA_BASE,
+            )
+
+        llm_io_section = temp_run_dir_with_outline / "llm_io" / "section_00"
+        assert (llm_io_section / "prompt.txt").exists()
+        assert not (llm_io_section / "response.txt").exists()
+        meta_path = llm_io_section / "meta.json"
+        assert meta_path.exists()
+        with meta_path.open(encoding="utf-8") as f:
+            meta = json.load(f)
+        assert meta.get("status") == "error"
+        assert "error" in meta
+
 
 class TestSummarizeStepErrors:
     """Tests for summarize step error handling."""
@@ -623,3 +666,37 @@ class TestSummarizeStepErrors:
                 section_index=0,
                 schema_base=SCHEMA_BASE,
             )
+
+    def test_on_provider_error_no_response_txt(
+        self,
+        temp_run_dir_with_outline: Path,
+        temp_prompts_dir: Path,
+        valid_section_content: str,
+    ) -> None:
+        """On summarize provider error: response.txt is not created; meta.json has status=error."""
+        artifact_path = temp_run_dir_with_outline / "artifacts" / "20_section_01.md"
+        artifact_path.write_text(valid_section_content)
+
+        provider = _MockLLMProvider()
+        provider.set_failure(should_fail=True)
+        logger = RunLogger(temp_run_dir_with_outline / "run.log")
+
+        with pytest.raises(SummarizeStepError):
+            execute_summarize_step(
+                run_dir=temp_run_dir_with_outline,
+                prompts_dir=temp_prompts_dir,
+                llm_provider=provider,
+                logger=logger,
+                section_index=0,
+                schema_base=SCHEMA_BASE,
+            )
+
+        llm_io_summarize = temp_run_dir_with_outline / "llm_io" / "summarize_00"
+        assert (llm_io_summarize / "prompt.txt").exists()
+        assert not (llm_io_summarize / "response.txt").exists()
+        meta_path = llm_io_summarize / "meta.json"
+        assert meta_path.exists()
+        with meta_path.open(encoding="utf-8") as f:
+            meta = json.load(f)
+        assert meta.get("status") == "error"
+        assert "error" in meta

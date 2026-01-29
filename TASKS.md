@@ -84,16 +84,6 @@ Each task includes:
 
 ## v1.0 Release Preparation Tasks
 
-### [ ] R0001-BB-01a (Follow-up) Unify llm_io persistence across stages
-
-**Goal**: Extend `steps/llm_io.py` so all stages use the same mechanism for prompt.txt, response.txt (only when non-empty), meta.json, and raw_response.json; then refactor critic to use it and remove critic-only _write_critic_llm_io.
-
-**Allowed files**: `src/llm_storytell/steps/llm_io.py`, `src/llm_storytell/steps/critic.py`, and any other step/orchestration files that call save_llm_io; `tests/test_critic_step.py`, `tests/test_outline_step.py`, `tests/test_section_loop.py`, and any tests that assert on llm_io layout.
-
-**Acceptance**: Same behavior as R0001-BB-01 (no placeholder response.txt, meta/raw in llm_io); single save_llm_io API used by all stages; `uv run pytest -q` green.
-
----
-
 ### [ ] R0001-BB-02 QA Assist: Start at critic with external prompt.txt
 
 Task: Implement optional CLI flag --start-at-critic <path/to/prompt.txt> to run only the critic stage using a provided prompt, skipping all prior stages to save cost and speed up iteration.
