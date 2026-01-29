@@ -12,7 +12,7 @@ import pytest
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from llm_storytell.prompt_render import _extract_placeholders
+from llm_storytell.prompt_render import _extract_required_identifiers
 
 
 # Define allowed variables per step (from SPEC.md prompt variable contracts)
@@ -71,25 +71,14 @@ def _get_prompt_path(prompt_name: str) -> Path:
 
 
 def _extract_variables_from_prompt(prompt_path: Path) -> set[str]:
-    """Extract all variable placeholders from a prompt template.
+    """Extract required identifier placeholders from a prompt template.
 
-    Filters out matches that are clearly from JSON examples or code blocks
-    (variables containing newlines, quotes, or other non-variable characters).
+    Uses prompt_render's _extract_required_identifiers (identifier-only contract).
     """
     if not prompt_path.exists():
         pytest.skip(f"Prompt template not found: {prompt_path}")
     content = prompt_path.read_text(encoding="utf-8")
-    all_placeholders = _extract_placeholders(content)
-
-    # Filter out placeholders that are clearly from JSON examples or code blocks
-    # These typically contain newlines, quotes, or other non-variable characters
-    valid_placeholders = {
-        p
-        for p in all_placeholders
-        if "\n" not in p and '"' not in p and "'" not in p and p.strip() == p
-    }
-
-    return valid_placeholders
+    return _extract_required_identifiers(prompt_path, content)
 
 
 class TestPromptVariableContracts:

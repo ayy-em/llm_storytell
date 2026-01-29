@@ -172,7 +172,7 @@ def _create_llm_provider_from_config(
             )
             return {
                 "choices": [
-                    {"message": {"content": response.choices[0].message.content or ""}}
+                    {"message": {"content": response.choices[0].message.content}}
                 ],
                 "usage": {
                     "prompt_tokens": response.usage.prompt_tokens,

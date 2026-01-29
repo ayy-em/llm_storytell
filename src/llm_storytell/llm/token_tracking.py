@@ -86,7 +86,12 @@ def _calculate_cumulative_tokens(
     return cumulative_prompt, cumulative_completion, cumulative_total
 
 
-def _append_cumulative_log(log_path: Path, cumulative_prompt: int, cumulative_completion: int, cumulative_total: int) -> None:
+def _append_cumulative_log(
+    log_path: Path,
+    cumulative_prompt: int,
+    cumulative_completion: int,
+    cumulative_total: int,
+) -> None:
     """Append cumulative token totals to the log file.
 
     Args:
@@ -148,12 +153,16 @@ def record_token_usage(
 
     # Calculate cumulative totals from state.json
     state_path = logger.log_path.parent / "state.json"
-    cumulative_prompt, cumulative_completion, cumulative_total = _calculate_cumulative_tokens(
-        state_path, prompt_tokens, completion_tokens, total_tokens
+    cumulative_prompt, cumulative_completion, cumulative_total = (
+        _calculate_cumulative_tokens(
+            state_path, prompt_tokens, completion_tokens, total_tokens
+        )
     )
 
     # Append cumulative line immediately after
-    _append_cumulative_log(logger.log_path, cumulative_prompt, cumulative_completion, cumulative_total)
+    _append_cumulative_log(
+        logger.log_path, cumulative_prompt, cumulative_completion, cumulative_total
+    )
 
     # Return dict for state.json
     usage = TokenUsage(

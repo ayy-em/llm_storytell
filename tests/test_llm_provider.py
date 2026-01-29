@@ -1,10 +1,11 @@
 """Tests for LLM provider abstraction and OpenAI implementation."""
 
+import sys
 from importlib import import_module
+from pathlib import Path
 from typing import Any, Mapping
 
-from pathlib import Path
-import sys
+import pytest
 
 
 # Import from the package using the hyphenated name
@@ -296,3 +297,73 @@ class TestOpenAIProviderUsageExtraction:
         assert result.prompt_tokens is None
         assert result.completion_tokens is None
         assert result.total_tokens is None
+
+
+class TestOpenAIProviderEmptyContent:
+    """Provider boundary raises on None, empty, or whitespace-only content."""
+
+    def test_content_none_raises_missing_assistant_content(self) -> None:
+        """Provider returns content=None → raises LLMProviderError."""
+        response: Mapping[str, Any] = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": None,
+                    },
+                }
+            ],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 0, "total_tokens": 1},
+        }
+
+        client = _FakeOpenAIClient(responses=[response])
+        provider = OpenAIProvider(client, default_model="gpt-4")
+
+        with pytest.raises(LLMProviderError) as exc_info:
+            provider.generate("Hi", step="outline")
+
+        assert "Missing assistant content" in str(exc_info.value)
+
+    def test_content_empty_string_raises_empty_assistant_content(self) -> None:
+        """Provider returns content=\"\" → raises LLMProviderError."""
+        response: Mapping[str, Any] = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                    },
+                }
+            ],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 0, "total_tokens": 1},
+        }
+
+        client = _FakeOpenAIClient(responses=[response])
+        provider = OpenAIProvider(client, default_model="gpt-4")
+
+        with pytest.raises(LLMProviderError) as exc_info:
+            provider.generate("Hi", step="outline")
+
+        assert "Empty assistant content" in str(exc_info.value)
+
+    def test_content_whitespace_only_raises_empty_assistant_content(self) -> None:
+        """Provider returns content=\"   \" → raises LLMProviderError."""
+        response: Mapping[str, Any] = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "   ",
+                    },
+                }
+            ],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 0, "total_tokens": 1},
+        }
+
+        client = _FakeOpenAIClient(responses=[response])
+        provider = OpenAIProvider(client, default_model="gpt-4")
+
+        with pytest.raises(LLMProviderError) as exc_info:
+            provider.generate("Hi", step="outline")
+
+        assert "Empty assistant content" in str(exc_info.value)

@@ -9,7 +9,7 @@ You are operating in the repository using the agent workflow rules in `.cursor/r
    - Wait for approval before implementation.
 
 After approval:
-4) Implement only what is missing to satisfy the task.
+4) Implement exactly what was approved.
 5) Add/adjust unit tests as required.
 6) Run:
    - `uv run ruff format .`

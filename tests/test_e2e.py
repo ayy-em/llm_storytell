@@ -115,7 +115,7 @@ More content follows, building on previous sections and maintaining continuity w
             content = json.dumps(summary)
 
         elif step == "critic":
-            # Return critic response with final script and report
+            # Return critic response in two-block format (required by critic step)
             # Count sections from previous calls
             section_calls = [c for c in self.calls if c["step"].startswith("section_")]
             num_sections = len(section_calls)
@@ -128,18 +128,19 @@ More content follows, building on previous sections and maintaining continuity w
                     for i in range(num_sections)
                 ]
             )
-
-            critic_response = {
-                "final_script": final_script,
-                "editor_report": {
-                    "issues_found": [],
-                    "changes_applied": [
-                        "Minor grammar corrections",
-                        "Consistency improvements",
-                    ],
-                },
+            editor_report = {
+                "issues_found": [],
+                "changes_applied": [
+                    "Minor grammar corrections",
+                    "Consistency improvements",
+                ],
             }
-            content = json.dumps(critic_response)
+            content = (
+                "===FINAL_SCRIPT===\n\n"
+                + final_script
+                + "\n===EDITOR_REPORT_JSON===\n\n"
+                + json.dumps(editor_report, indent=2)
+            )
 
         else:
             content = '{"result": "unknown step"}'

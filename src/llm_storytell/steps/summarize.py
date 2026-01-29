@@ -13,7 +13,11 @@ from src.llm_storytell.continuity import merge_continuity_updates
 from src.llm_storytell.llm import LLMProvider, LLMProviderError
 from src.llm_storytell.llm.token_tracking import record_token_usage
 from src.llm_storytell.logging import RunLogger
-from src.llm_storytell.prompt_render import MissingVariableError, TemplateNotFoundError, render_prompt
+from src.llm_storytell.prompt_render import (
+    MissingVariableError,
+    TemplateNotFoundError,
+    render_prompt,
+)
 from src.llm_storytell.schemas import SchemaValidationError, validate_json_schema
 from src.llm_storytell.steps.llm_io import save_llm_io
 

@@ -140,12 +140,13 @@ def initialize_run(
     temp_dir = None
     try:
         # Create temp directory in the same filesystem for atomic rename
-        temp_dir = Path(tempfile.mkdtemp(dir=runs_dir, prefix=f"_build_{actual_run_id}_"))
+        temp_dir = Path(
+            tempfile.mkdtemp(dir=runs_dir, prefix=f"_build_{actual_run_id}_")
+        )
 
         # Create artifacts subdirectory
         artifacts_dir = temp_dir / "artifacts"
         _retry_fs(lambda: artifacts_dir.mkdir())
-
 
         # Write inputs.json
         inputs_data = _create_inputs_json(
@@ -157,12 +158,12 @@ def initialize_run(
             prompts_dir=prompts_dir,
         )
         inputs_path = temp_dir / "inputs.json"
+
         def _write_inputs() -> None:
             with inputs_path.open("w", encoding="utf-8") as f:
                 json.dump(inputs_data, f, indent=2)
 
         _retry_fs(_write_inputs)
-
 
         # Write initial state.json
         state_data = _create_initial_state(app_name=app_name, seed=seed)
@@ -235,5 +236,6 @@ def _retry_fs(op, *, attempts: int = 8, delay: float = 0.05):
             last = e
             time.sleep(delay * (2**i))
     # If we exhausted retries, re-raise the last PermissionError
-    raise last if last is not None else PermissionError("Operation failed after retries")
-
+    raise (
+        last if last is not None else PermissionError("Operation failed after retries")
+    )

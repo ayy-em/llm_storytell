@@ -178,7 +178,7 @@ def temp_prompts_dir(tmp_path: Path) -> Path:
     prompts_dir = tmp_path / "prompts" / "apps" / "grim-narrator"
     prompts_dir.mkdir(parents=True)
 
-    # Create critic prompt template
+    # Create critic prompt template (critic expects two-block format)
     template_content = """Review and correct the full draft:
 
 {full_draft}
@@ -189,7 +189,7 @@ Outline: {outline}
 Location: {location_context}
 Characters: {character_context}
 
-Return JSON with final_script and editor_report.
+Return exactly two blocks: ===FINAL_SCRIPT=== then ===EDITOR_REPORT_JSON===.
 """
     (prompts_dir / "30_critic.md").write_text(template_content)
 
@@ -198,21 +198,31 @@ Return JSON with final_script and editor_report.
 
 @pytest.fixture
 def valid_critic_response() -> str:
-    """Return valid critic response JSON."""
-    response = {
-        "final_script": "# Final Script\n\nThis is the corrected final script.\n",
-        "editor_report": {
-            "issues_found": [
-                "Minor tense inconsistency in section 1",
-                "Overused phrase 'the worker' in section 2",
-            ],
-            "changes_applied": [
-                "Fixed tense consistency throughout",
-                "Replaced repetitive phrasing",
-            ],
-        },
+    """Return valid critic response in two-block format (required by critic step).
+
+    Critic expects strict format:
+    ===FINAL_SCRIPT===
+    <markdown>
+    ===EDITOR_REPORT_JSON===
+    <JSON with issues_found and changes_applied>
+    """
+    final_script = "# Final Script\n\nThis is the corrected final script.\n"
+    editor_report = {
+        "issues_found": [
+            "Minor tense inconsistency in section 1",
+            "Overused phrase 'the worker' in section 2",
+        ],
+        "changes_applied": [
+            "Fixed tense consistency throughout",
+            "Replaced repetitive phrasing",
+        ],
     }
-    return json.dumps(response)
+    return (
+        "===FINAL_SCRIPT===\n\n"
+        + final_script
+        + "\n===EDITOR_REPORT_JSON===\n\n"
+        + json.dumps(editor_report, indent=2)
+    )
 
 
 class TestExecuteCriticStepSuccess:
@@ -520,12 +530,10 @@ class TestExecuteCriticStepErrors:
         # Delete one section file
         (temp_run_dir_with_sections / "artifacts" / "20_section_02.md").unlink()
 
-        # Use valid response in case we get past section loading (shouldn't happen)
-        valid_response = json.dumps(
-            {
-                "final_script": "test",
-                "editor_report": {"issues_found": [], "changes_applied": []},
-            }
+        # Use valid two-block response in case we get past section loading (shouldn't)
+        valid_response = (
+            "===FINAL_SCRIPT===\n\ntest\n\n===EDITOR_REPORT_JSON===\n\n"
+            + json.dumps({"issues_found": [], "changes_applied": []}, indent=2)
         )
         provider = _MockLLMProvider(response_content=valid_response)
         logger = RunLogger(temp_run_dir_with_sections / "run.log")
@@ -761,14 +769,48 @@ Content without frontmatter.
 
         assert "LLM provider error" in str(exc_info.value)
 
+    def test_on_provider_error_no_response_txt_and_meta_status_error(
+        self,
+        temp_run_dir_with_sections: Path,
+        temp_context_dir: Path,
+        temp_prompts_dir: Path,
+    ) -> None:
+        """On provider error: response.txt is not created; meta.json has status=error."""
+        provider = _MockLLMProvider()
+        provider.set_failure(should_fail=True)
+
+        logger = RunLogger(temp_run_dir_with_sections / "run.log")
+
+        with pytest.raises(CriticStepError):
+            execute_critic_step(
+                run_dir=temp_run_dir_with_sections,
+                context_dir=temp_context_dir,
+                prompts_dir=temp_prompts_dir,
+                llm_provider=provider,
+                logger=logger,
+            )
+
+        llm_io_critic = temp_run_dir_with_sections / "llm_io" / "critic"
+        assert (llm_io_critic / "prompt.txt").exists()
+        assert not (llm_io_critic / "response.txt").exists()
+        meta_path = llm_io_critic / "meta.json"
+        assert meta_path.exists()
+        with meta_path.open(encoding="utf-8") as f:
+            meta = json.load(f)
+        assert meta.get("status") == "error"
+
     def test_fails_on_invalid_json_response(
         self,
         temp_run_dir_with_sections: Path,
         temp_context_dir: Path,
         temp_prompts_dir: Path,
     ) -> None:
-        """Fails if LLM response is not valid JSON."""
-        provider = _MockLLMProvider(response_content="This is not JSON")
+        """Fails if editor_report block is not valid JSON (two-block format)."""
+        invalid_response = (
+            "===FINAL_SCRIPT===\n\ntest\n\n===EDITOR_REPORT_JSON===\n\n"
+            "This is not valid JSON"
+        )
+        provider = _MockLLMProvider(response_content=invalid_response)
 
         logger = RunLogger(temp_run_dir_with_sections / "run.log")
 
@@ -781,7 +823,7 @@ Content without frontmatter.
                 logger=logger,
             )
 
-        assert "Invalid JSON in LLM response" in str(exc_info.value)
+        assert "Invalid JSON in editor_report block" in str(exc_info.value)
 
     def test_fails_on_missing_required_keys(
         self,
@@ -789,8 +831,11 @@ Content without frontmatter.
         temp_context_dir: Path,
         temp_prompts_dir: Path,
     ) -> None:
-        """Fails if LLM response is missing required keys."""
-        invalid_response = json.dumps({"final_script": "test"})  # Missing editor_report
+        """Fails if editor_report block is missing required keys (two-block format)."""
+        invalid_response = (
+            "===FINAL_SCRIPT===\n\ntest\n\n===EDITOR_REPORT_JSON===\n\n"
+            + json.dumps({"issues_found": []})  # missing changes_applied
+        )
         provider = _MockLLMProvider(response_content=invalid_response)
 
         logger = RunLogger(temp_run_dir_with_sections / "run.log")
@@ -805,7 +850,7 @@ Content without frontmatter.
             )
 
         assert "missing required keys" in str(exc_info.value)
-        assert "editor_report" in str(exc_info.value)
+        assert "changes_applied" in str(exc_info.value)
 
     def test_fails_on_extra_keys(
         self,
@@ -813,13 +858,17 @@ Content without frontmatter.
         temp_context_dir: Path,
         temp_prompts_dir: Path,
     ) -> None:
-        """Fails if LLM response contains extra keys."""
-        invalid_response = json.dumps(
-            {
-                "final_script": "test",
-                "editor_report": {},
-                "extra_key": "not allowed",
-            }
+        """Fails if editor_report contains extra keys (schema validation, two-block)."""
+        invalid_response = (
+            "===FINAL_SCRIPT===\n\ntest\n\n===EDITOR_REPORT_JSON===\n\n"
+            + json.dumps(
+                {
+                    "issues_found": [],
+                    "changes_applied": [],
+                    "extra_key": "not allowed",
+                },
+                indent=2,
+            )
         )
         provider = _MockLLMProvider(response_content=invalid_response)
 
@@ -832,23 +881,23 @@ Content without frontmatter.
                 prompts_dir=temp_prompts_dir,
                 llm_provider=provider,
                 logger=logger,
+                schema_base=SCHEMA_BASE,
             )
 
-        assert "contains extra keys" in str(exc_info.value)
-        assert "extra_key" in str(exc_info.value)
+        assert "Schema validation failed" in str(exc_info.value)
 
-    def test_fails_on_wrong_type_for_final_script(
+    def test_fails_on_wrong_type_for_issues_found(
         self,
         temp_run_dir_with_sections: Path,
         temp_context_dir: Path,
         temp_prompts_dir: Path,
     ) -> None:
-        """Fails if final_script is not a string."""
-        invalid_response = json.dumps(
-            {
-                "final_script": 123,  # Should be string
-                "editor_report": {},
-            }
+        """Fails if editor_report.issues_found is not an array (two-block format)."""
+        invalid_response = (
+            "===FINAL_SCRIPT===\n\ntest\n\n===EDITOR_REPORT_JSON===\n\n"
+            + json.dumps(
+                {"issues_found": "not an array", "changes_applied": []}, indent=2
+            )
         )
         provider = _MockLLMProvider(response_content=invalid_response)
 
@@ -863,7 +912,7 @@ Content without frontmatter.
                 logger=logger,
             )
 
-        assert "final_script must be a string" in str(exc_info.value)
+        assert "editor_report.issues_found must be an array" in str(exc_info.value)
 
     def test_fails_on_wrong_type_for_editor_report(
         self,
@@ -871,12 +920,9 @@ Content without frontmatter.
         temp_context_dir: Path,
         temp_prompts_dir: Path,
     ) -> None:
-        """Fails if editor_report is not a dict."""
-        invalid_response = json.dumps(
-            {
-                "final_script": "test",
-                "editor_report": "not a dict",  # Should be dict
-            }
+        """Fails if editor_report block is not a JSON object (two-block format)."""
+        invalid_response = (
+            "===FINAL_SCRIPT===\n\ntest\n\n===EDITOR_REPORT_JSON===\n\n[]"
         )
         provider = _MockLLMProvider(response_content=invalid_response)
 
@@ -891,7 +937,7 @@ Content without frontmatter.
                 logger=logger,
             )
 
-        assert "editor_report must be a dictionary" in str(exc_info.value)
+        assert "editor_report must be a JSON object" in str(exc_info.value)
 
     def test_fails_on_schema_validation_error(
         self,
@@ -899,15 +945,14 @@ Content without frontmatter.
         temp_context_dir: Path,
         temp_prompts_dir: Path,
     ) -> None:
-        """Fails if editor_report doesn't match schema."""
-        invalid_response = json.dumps(
-            {
-                "final_script": "test",
-                "editor_report": {
-                    "issues_found": "should be array",  # Should be array
-                    "changes_applied": [],
-                },
-            }
+        """Fails if editor_report doesn't match schema (two-block format)."""
+        # Parser accepts this; schema rejects non-string item in issues_found
+        invalid_response = (
+            "===FINAL_SCRIPT===\n\ntest\n\n===EDITOR_REPORT_JSON===\n\n"
+            + json.dumps(
+                {"issues_found": [123], "changes_applied": []},
+                indent=2,
+            )
         )
         provider = _MockLLMProvider(response_content=invalid_response)
 
@@ -932,7 +977,7 @@ Content without frontmatter.
         temp_prompts_dir: Path,
         valid_critic_response: str,
     ) -> None:
-        """Logs stage start and end correctly."""
+        """Step logs critic response and token usage on success."""
         provider = _MockLLMProvider(response_content=valid_critic_response)
         logger = RunLogger(temp_run_dir_with_sections / "run.log")
 
@@ -946,8 +991,8 @@ Content without frontmatter.
         )
 
         log_content = (temp_run_dir_with_sections / "run.log").read_text()
-        assert "Stage started: critic" in log_content
-        assert "Stage ended: critic (success)" in log_content
+        assert "Critic step LLM response" in log_content
+        assert "critic" in log_content.lower()
 
     def test_logs_failure_on_error(
         self,
@@ -955,7 +1000,7 @@ Content without frontmatter.
         temp_context_dir: Path,
         temp_prompts_dir: Path,
     ) -> None:
-        """Logs failure when step errors."""
+        """On provider error, step raises and llm_io/critic/meta.json has status=error."""
         provider = _MockLLMProvider()
         provider.set_failure(should_fail=True)
 
@@ -970,6 +1015,8 @@ Content without frontmatter.
                 logger=logger,
             )
 
-        log_content = (temp_run_dir_with_sections / "run.log").read_text()
-        assert "Stage started: critic" in log_content
-        assert "Stage ended: critic (failure)" in log_content
+        meta_path = temp_run_dir_with_sections / "llm_io" / "critic" / "meta.json"
+        assert meta_path.exists()
+        with meta_path.open(encoding="utf-8") as f:
+            meta = json.load(f)
+        assert meta.get("status") == "error"

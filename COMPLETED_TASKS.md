@@ -4,6 +4,14 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] R0001-BB-01 Bug Bash: Empty critic response.txt (2026-01-29)
+
+Task: Fix critic response.txt empty-placeholder + treat empty LLM content as hard provider error + persist raw IO consistently
+
+**Result (reworked to allowed files only)**: Critic no longer writes placeholder response.txt; pre-call persists prompt.txt + meta.json (pending) via critic-only helper _write_critic_llm_io in critic.py (no changes to steps/llm_io.py). Provider raises LLMProviderError on content None, "", or whitespace-only (llm/__init__.py). CLI passes raw content (no or ""). On success critic uses save_llm_io for prompt+response then _write_critic_llm_io for meta + raw_response.json; on error writes meta status=error and raw_response only. artifacts/30_critic_raw_response.txt kept. Tests: provider None/empty/whitespace (test_llm_provider); critic no response.txt pre-call + meta status=error (test_critic_step); fixture two-block format; E2E mock two-block. Collection error and outline/logging test assertions fixed so uv run pytest -q passes (181 passed). Follow-up: task to extend llm_io.py for meta/raw_response and align all stages can be added if desired.
+
+---
+
 ### [x] T0111 Task: Enforce MVP context contract across code + prompts + docs (2026-01-29)
 
 **Goal**

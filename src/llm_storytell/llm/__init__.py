@@ -236,9 +236,12 @@ class OpenAIProvider(LLMProvider):
         first_choice = choices[0]
         message = first_choice.get("message", {})
         content = message.get("content")
+        if content is None:
+            raise LLMProviderError("Missing assistant content")
         if not isinstance(content, str):
-            msg = "OpenAI response missing assistant message content"
-            raise LLMProviderError(msg)
+            raise LLMProviderError("Missing assistant content")
+        if content == "" or content.strip() == "":
+            raise LLMProviderError("Empty assistant content")
 
         usage = response.get("usage") or {}
         prompt_tokens = usage.get("prompt_tokens")

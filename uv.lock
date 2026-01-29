@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -217,12 +217,8 @@ source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
     { name = "openai" },
-    { name = "pyyaml" },
-]
-
-[package.optional-dependencies]
-dev = [
     { name = "pytest" },
+    { name = "pyyaml" },
     { name = "ruff" },
 ]
 
@@ -230,11 +226,10 @@ dev = [
 requires-dist = [
     { name = "jsonschema", specifier = ">=4.0.0" },
     { name = "openai", specifier = ">=1.0.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.14" },
+    { name = "ruff", specifier = ">=0.14.14" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "openai"

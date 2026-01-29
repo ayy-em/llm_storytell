@@ -2,11 +2,18 @@
 
 Consolidates and corrects the full draft by reviewing all sections,
 identifying issues, and producing a final script with an editor report.
+
+Critic expects LLM output in strict two-block format:
+===FINAL_SCRIPT===
+<markdown>
+===EDITOR_REPORT_JSON===
+<JSON>
 """
 
 import json
 import re
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +26,55 @@ from ..logging import RunLogger
 from ..prompt_render import MissingVariableError, TemplateNotFoundError, render_prompt
 from ..schemas import SchemaValidationError, validate_json_schema
 from .llm_io import save_llm_io
+
+# Keys whose values are redacted when writing raw_response.json (critic only)
+_CRITIC_REDACT_KEYS = frozenset(
+    k.lower()
+    for k in ("api_key", "apikey", "token", "secret", "password", "credential", "auth")
+)
+
+
+def _write_critic_llm_io(
+    run_dir: Path,
+    prompt: str,
+    meta: dict[str, Any],
+    raw_response: Any | None = None,
+    response_text: str | None = None,
+) -> None:
+    """Write llm_io/critic/ files from critic step only (no changes to llm_io.py).
+
+    Writes prompt.txt, meta.json, optionally response.txt (only when non-empty),
+    and optionally raw_response.json (redacted). Used for pre-call (pending),
+    success (meta + raw only; prompt+response via save_llm_io), and error (meta + raw).
+    """
+    llm_io_dir = run_dir / "llm_io" / "critic"
+    llm_io_dir.mkdir(parents=True, exist_ok=True)
+    (llm_io_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
+    (llm_io_dir / "meta.json").write_text(
+        json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    if response_text is not None and response_text.strip() != "":
+        (llm_io_dir / "response.txt").write_text(response_text, encoding="utf-8")
+    if raw_response is not None:
+        try:
+            if isinstance(raw_response, dict):
+                payload = {
+                    k: "[REDACTED]" if k.lower() in _CRITIC_REDACT_KEYS else v
+                    for k, v in raw_response.items()
+                }
+            elif isinstance(raw_response, list):
+                payload = raw_response
+            else:
+                payload = {"raw": str(raw_response)}
+            (llm_io_dir / "raw_response.json").write_text(
+                json.dumps(payload, indent=2, default=str, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except (TypeError, ValueError):
+            (llm_io_dir / "raw_response.json").write_text(
+                json.dumps({"error": "Could not serialize raw response"}, indent=2),
+                encoding="utf-8",
+            )
 
 
 class CriticStepError(Exception):
@@ -222,7 +278,10 @@ def _parse_two_block_response(content: str) -> tuple[str, dict[str, Any]]:
     # Extract final_script (markdown block)
     script_content_start = script_start + len(final_script_marker)
     # Skip leading whitespace/newlines after marker
-    while script_content_start < len(content) and content[script_content_start] in " \t\n\r":
+    while (
+        script_content_start < len(content)
+        and content[script_content_start] in " \t\n\r"
+    ):
         script_content_start += 1
 
     # Extract up to (but not including) the editor report marker
@@ -233,7 +292,10 @@ def _parse_two_block_response(content: str) -> tuple[str, dict[str, Any]]:
     # Extract editor_report (JSON block)
     report_content_start = report_start + len(editor_report_marker)
     # Skip leading whitespace/newlines after marker
-    while report_content_start < len(content) and content[report_content_start] in " \t\n\r":
+    while (
+        report_content_start < len(content)
+        and content[report_content_start] in " \t\n\r"
+    ):
         report_content_start += 1
 
     # Extract JSON from rest of content
@@ -417,10 +479,21 @@ def execute_critic_step(
         except MissingVariableError as e:
             raise CriticStepError(f"Missing variables in prompt template: {e}") from e
 
-        # Save LLM I/O for debugging
+        # Persist prompt and pending meta only (no response.txt until we have content)
         stage_name = "critic"
+        effective_model = getattr(llm_provider, "_default_model", "unknown")
         try:
-            save_llm_io(run_dir, stage_name, rendered_prompt, "")
+            _write_critic_llm_io(
+                run_dir,
+                rendered_prompt,
+                meta={
+                    "stage": stage_name,
+                    "provider": llm_provider.provider_name,
+                    "model": effective_model,
+                    "status": "pending",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
         except OSError as e:
             logger.warning(f"Failed to save prompt for {stage_name}: {e}")
 
@@ -433,27 +506,46 @@ def execute_critic_step(
                 timeout=600,
             )
         except LLMProviderError as e:
-            # Save raw response even on error for debugging
             try:
-                save_llm_io(run_dir, stage_name, rendered_prompt, str(e))
+                _write_critic_llm_io(
+                    run_dir,
+                    rendered_prompt,
+                    meta={
+                        "stage": stage_name,
+                        "provider": llm_provider.provider_name,
+                        "model": effective_model,
+                        "status": "error",
+                        "error": str(e),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                    raw_response={"error": str(e), "error_type": type(e).__name__},
+                )
             except OSError:
                 pass
             raise CriticStepError(f"LLM provider error: {e}") from e
 
-        # Save LLM response
+        # Persist response via save_llm_io (same mechanism as other stages), then meta + raw
         try:
             save_llm_io(run_dir, stage_name, rendered_prompt, result.content)
+            _write_critic_llm_io(
+                run_dir,
+                rendered_prompt,
+                meta={
+                    "stage": stage_name,
+                    "provider": result.provider,
+                    "model": result.model,
+                    "status": "success",
+                    "prompt_tokens": result.prompt_tokens,
+                    "completion_tokens": result.completion_tokens,
+                    "total_tokens": result.total_tokens,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+                raw_response=result.raw_response,
+            )
         except OSError as e:
             logger.warning(f"Failed to save response for {stage_name}: {e}")
 
-        # Log response diagnostics
-        logger.info(
-            f"Critic step LLM response: length={len(result.content)} chars, "
-            f"first 200 chars: {result.content[:200]!r}, "
-            f"last 200 chars: {result.content[-200:]!r}"
-        )
-
-        # Always write raw response artifact for debugging
+        # Always write raw response artifact for debugging (kept per task scope)
         artifacts_dir = run_dir / "artifacts"
         artifacts_dir.mkdir(exist_ok=True)
         raw_response_path = artifacts_dir / "30_critic_raw_response.txt"
@@ -462,15 +554,20 @@ def execute_critic_step(
         except OSError as e:
             logger.warning(f"Failed to write raw response artifact: {e}")
 
+        # Log response diagnostics
+        logger.info(
+            f"Critic step LLM response: length={len(result.content)} chars, "
+            f"first 200 chars: {result.content[:200]!r}, "
+            f"last 200 chars: {result.content[-200:]!r}"
+        )
+
         # Parse two-block response (strict)
         try:
             final_script, editor_report = _parse_two_block_response(result.content)
         except CriticStepError:
             raise
         except Exception as e:
-            raise CriticStepError(
-                f"Error parsing two-block response: {e}"
-            ) from e
+            raise CriticStepError(f"Error parsing two-block response: {e}") from e
 
         # Validate editor_report against schema
         if schema_base is None:

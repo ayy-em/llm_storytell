@@ -13,7 +13,11 @@ from src.llm_storytell.context import ContextLoaderError, build_prompt_context_v
 from src.llm_storytell.llm import LLMProvider, LLMProviderError
 from src.llm_storytell.llm.token_tracking import record_token_usage
 from src.llm_storytell.logging import RunLogger
-from src.llm_storytell.prompt_render import MissingVariableError, TemplateNotFoundError, render_prompt
+from src.llm_storytell.prompt_render import (
+    MissingVariableError,
+    TemplateNotFoundError,
+    render_prompt,
+)
 from src.llm_storytell.schemas import SchemaValidationError, validate_json_schema
 from src.llm_storytell.steps.llm_io import save_llm_io
 
@@ -228,7 +232,7 @@ def execute_outline_step(
         # Parse JSON response
         # Try direct JSON parse first
         content_to_parse = result.content.strip()
-        
+
         # If wrapped in markdown code block, extract JSON
         if content_to_parse.startswith("```"):
             # Try to extract JSON from markdown code block
@@ -246,7 +250,7 @@ def execute_outline_step(
             if start_idx is not None and end_idx is not None:
                 content_to_parse = "\n".join(lines[start_idx:end_idx]).strip()
                 logger.info("Extracted JSON from markdown code block")
-        
+
         try:
             outline_data = json.loads(content_to_parse)
         except json.JSONDecodeError as e:
