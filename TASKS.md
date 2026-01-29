@@ -176,8 +176,34 @@ Acceptance criteria:
 - Provide a brief list of fixes made (bullets) and the test(s) added.
 - Points where each error previously happened are now logged upon success/failure
 - Update TASKS.md for the active task only (mark complete when success achieved).
-- One commit for the task (if your workflow requires it).
 
+
+### [ ] R0001-1 Scope increase for v1.0: modify model selection logic
+
+Goals: 
+1. Change default model for OpenAI provider prompts to "gpt-4.1-mini"
+2. Add support for parsing optional CLI "--model" flag in "llm_storytell run ..." command and using that model in all calls for that run (fail immediately if provider API does not identify requested model)
+3. Document the new functionality in relevant docs (README/SPEC)
+
+Inputs: 
+CLI command ``./.venv/bin/python -m llm_storytell run --app grim-narrator --model gpt-4.1.nano --seed "A story of how suffering is a grim reality at lower society levels in the future."`` (macOS version of command) 
+
+Allowed files:
+* `README.md`
+* `SPEC.md`
+* `CONTRIBUTING.md`
+* `src/llm_storytell/cli.py`
+* `src/llm_storytell/steps/*`
+* `src/llm_storytell/pipeline/*`
+* `src/llm_storytell/llm/*`
+
+Acceptance criteria:
+- The CLI command results in a successful run using gpt-4.1-nano model instead of default one.
+- Provide the final successful run directory path.
+- Provide a brief list of fixes made (bullets) and the test(s) added.
+- Points where each error previously happened are now logged upon success/failure
+- Marked this task as done in TASKS.md and moved the section to COMPLETED_TASKS.md
+- A commit is prepared with the task's solution
 
 ### [ ] R0002 Documentation cleanup for v1.0
 
