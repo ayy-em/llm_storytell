@@ -274,6 +274,11 @@ def execute_section_step(
         continuity_ledger = state.get("continuity_ledger", {})
         continuity_context = get_continuity_context(continuity_ledger)
 
+        # Get seed from state
+        seed = state.get("seed")
+        if not seed:
+            raise SectionStepError("Seed not found in state.json")
+
         # Load context files
         context_vars = _load_context_files(context_dir, state)
 
@@ -288,6 +293,7 @@ def execute_section_step(
         prompt_vars = {
             "section_id": section_id,
             "section_index": section_index,
+            "seed": seed,
             "outline_beat": json.dumps(beat, indent=2),
             "rolling_summary": rolling_summary,
             "continuity_context": continuity_context,

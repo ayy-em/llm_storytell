@@ -330,3 +330,92 @@ Prove the pipeline works end-to-end.
 * Context selection is deterministic and logged
 * Error handling with clear messages
 * State updates only after successful steps
+
+---
+
+### [x] R0005 Prompt ↔ pipeline consistency audit (pre-v1.0) (2026-01-29)
+
+**Goal**
+Ensure full consistency between available prompt templates, pipeline expectations, code-level prompt rendering, and user-facing documentation before the v1.0 release.
+
+**Context**
+The pipeline relies on prompt templates (`00_*.md` → `30_*.md`) that must align exactly with:
+
+* pipeline step definitions
+* code-level prompt rendering and variable injection
+* available app context files
+* documented user expectations
+
+Any mismatch at this stage risks silent failures, confusing errors, or undocumented constraints for end users.
+
+**Deliverables**
+
+* Verification that all required prompt templates for the app exist:
+
+  * `00_seed.md`
+  * `10_outline.md`
+  * `20_section.md`
+  * `21_summarize.md`
+  * `30_critic.md`
+* Verification that:
+
+  * the pipeline references only existing prompt files
+  * prompt filenames match pipeline configuration exactly
+* Audit of prompt inputs:
+
+  * inputs expected by each prompt
+  * variables passed from code to prompt renderer
+  * naming consistency between prompts, pipeline, and code
+* Audit of context usage:
+
+  * confirm which context `.md` files are loaded per step
+  * confirm prompts reference and use provided context
+  * identify unused or undocumented context inputs
+* Documentation update:
+
+  * document all prompt-related quirks, assumptions, and constraints that an end user must know
+  * clarify required vs optional inputs at the pipeline and step level
+
+**Acceptance criteria**
+
+* Every pipeline step references an existing prompt file
+* Every variable referenced in a prompt is provided by code or explicitly documented as optional
+* No unused or silently ignored prompt variables remain
+* Context files loaded by the pipeline are either:
+
+  * used by prompts, or
+  * explicitly documented as optional / future-facing
+* README.md clearly documents:
+
+  * required vs optional app inputs
+  * prompt expectations and limitations
+  * known quirks or non-obvious behaviors
+* No code behavior contradicts documented behavior
+
+**Allowed files**
+
+* `prompts/apps/**`
+* `config/pipeline.yaml`
+* `src/llm-storytell/steps/**`
+* `src/llm-storytell/prompt_render.py`
+* `src/llm-storytell/context/**`
+* `README.md`
+* `SPEC.md`
+
+**Commands to run**
+
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Notes**
+
+* This task is **audit and alignment only**
+* Do not add new features or pipeline stages
+* Prefer fixing documentation over changing code unless a real mismatch exists
+* Any discovered inconsistencies must either be:
+
+  * resolved, or
+  * explicitly documented as intentional
+
+*Result*: Updated all prompt templates (`10_outline.md`, `20_section.md`, `30_critic.md`) to match code-provided variables. Removed references to non-existent variables (`seed_intent`, `world_history`, `world_states`, `style_narration`, `style_tone`). Standardized on `style_rules` (combined from style/*.md files). Added `seed` variable to section.py and critic.py step implementations (was missing). Documented `00_seed.md` as unused/reserved for future seed normalization step. Added comprehensive "Prompt Variable Contracts" section to SPEC.md documenting per-step required vs optional variables, variable sources, naming consistency, and validation behavior. Created `tests/test_prompt_variable_contracts.py` to validate prompt templates only reference allowed variables (filters out JSON examples). Updated README.md with "Prompt Templates and Variable Contracts" section documenting strict variable validation, code-authoritative approach, and known limitations. All tests pass (169 total). Commands run: `uv run ruff format .` (32 files left unchanged), `uv run ruff check .` (all checks passed), `uv run pytest -q` (169 passed).

@@ -3,16 +3,11 @@
 ## Required inputs
 - seed (string, required)
 - lore_bible (string, required)
+- style_rules (string, required)
 - full_draft (string, required)
+- outline (string, required)
 
 ## Optional inputs
-- outline (object, optional)
-- rolling_summary (string, optional)
-- continuity_context (string, optional)
-- world_history (string, optional)
-- world_states (string, optional)
-- style_narration (string, optional)
-- style_tone (string, optional)
 - location_context (string, optional)
 - character_context (string, optional)
 
@@ -32,9 +27,7 @@ Corrections must preserve intent, continuity, and lore consistency.
 ### Layer 1: Consistency & continuity (hard correctness)
 - Check for contradictions with:
   - lore_bible
-  - continuity_context (if provided)
-  - world_states (if provided)
-  - outline (if provided, ensure beat order and intent match)
+  - outline (ensure beat order and intent match)
 - Fix contradictions and continuity errors with minimal edits.
 
 ### Layer 2: Structural integrity (format and invariants)
@@ -53,7 +46,7 @@ Corrections must preserve intent, continuity, and lore consistency.
 - Do NOT change plot content while doing this.
 
 ### Layer 4: Style alignment (polish within constraints)
-- Apply tone and narration rules (if provided) to fix inconsistencies in voice.
+- Apply style rules to fix inconsistencies in voice.
 - Do NOT add decorative flourish if it changes intent.
 
 ## Context
@@ -63,26 +56,11 @@ Seed:
 Lore bible:
 {lore_bible}
 
-Outline (if any):
+Style rules:
+{style_rules}
+
+Outline:
 {outline}
-
-Rolling summary (if any):
-{rolling_summary}
-
-Continuity ledger (if any):
-{continuity_context}
-
-World history (if any):
-{world_history}
-
-World states (if any):
-{world_states}
-
-Narration style (if any):
-{style_narration}
-
-Tone rules (if any):
-{style_tone}
 
 Location context (if any):
 {location_context}

@@ -399,6 +399,11 @@ def execute_critic_step(
         expected_section_count = len(outline)
         full_draft = _load_all_sections(run_dir, expected_section_count)
 
+        # Get seed from state
+        seed = state.get("seed")
+        if not seed:
+            raise CriticStepError("Seed not found in state.json")
+
         # Load context files
         context_vars = _load_context_files(context_dir, state)
 
@@ -408,6 +413,7 @@ def execute_critic_step(
             raise CriticStepError(f"Prompt template not found: {prompt_path}")
 
         prompt_vars = {
+            "seed": seed,
             "full_draft": full_draft,
             "lore_bible": context_vars["lore_bible"],
             "style_rules": context_vars["style_rules"],

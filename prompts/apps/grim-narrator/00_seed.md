@@ -1,4 +1,17 @@
 # Seed normalization prompt
+#
+# NOTE: This prompt template is currently UNUSED and RESERVED for future implementation.
+# The pipeline currently passes the raw seed string directly to outline, section, and critic steps.
+# This template would be used if a seed normalization step is added to the pipeline in the future.
+#
+# If implementing seed normalization:
+# - This step would run before outline generation
+# - It would transform the raw seed into a structured seed_intent object
+# - The seed_intent would then be passed to downstream steps instead of raw seed
+#
+# DO NOT DELETE: Reserved for v1.1+ seed normalization feature.
+
+# Seed normalization prompt
 
 ## Required inputs
 - seed (string, required)

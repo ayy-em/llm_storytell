@@ -1,56 +1,39 @@
 # Outline generation prompt
 
 ## Required inputs
-- seed_intent (object, required)
-  - intent_summary (string)
-  - explicit_constraints (object)
-  - implicit_constraints (array of strings)
-  - excluded_elements (array of strings)
+- seed (string, required)
 - beats_count (integer, required)
 - lore_bible (string, required)
-- world_history (string, required)
-- world_states (string, required)
-- style_narration (string, required)
-- style_tone (string, required)
+- style_rules (string, required)
 - location_context (string, required)
 - character_context (string, required)
 
 ## Purpose
-Generate a structured, machine-readable narrative outline that decomposes the normalized seed intent into a fixed number of beats.
+Generate a structured, machine-readable narrative outline that decomposes the seed into a fixed number of beats.
 This outline serves as the sole structural plan for all downstream section generation.
 
 ## Instructions
-- Use the normalized seed intent as the authoritative source of intent.
-- Respect all explicit and implicit constraints.
-- Do NOT introduce plot elements that contradict the lore bible or world state.
+- Use the seed as the authoritative source of intent.
+- Do NOT introduce plot elements that contradict the lore bible.
 - Do NOT include prose, dialogue, or stylistic embellishment.
 - Each beat must represent a meaningful narrative transition.
 - Beats must be ordered, deterministic, and internally consistent.
 
 ## Context
+Seed:
+{seed}
+
 Lore bible:
 {lore_bible}
 
-World history:
-{world_history}
-
-World states:
-{world_states}
-
-Narration style:
-{style_narration}
-
-Tone rules:
-{style_tone}
+Style rules:
+{style_rules}
 
 Location context:
 {location_context}
 
 Character context:
 {character_context}
-
-Seed intent:
-{seed_intent}
 
 Requested number of beats:
 {beats_count}

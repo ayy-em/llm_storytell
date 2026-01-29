@@ -1,34 +1,27 @@
 # Section generation prompt
 
 ## Required inputs
+- section_id (integer, required)
 - section_index (integer, required)
 - seed (string, required)
+- outline_beat (string, required)
 - lore_bible (string, required)
+- style_rules (string, required)
 
 ## Optional inputs
-- outline_beat (object, optional)
 - rolling_summary (string, optional)
 - continuity_context (string, optional)
-- world_history (string, optional)
-- world_states (string, optional)
-- style_narration (string, optional)
-- style_tone (string, optional)
 - location_context (string, optional)
 - character_context (string, optional)
 
 ## Purpose
-Write a single narrative section.
-If an outline beat is provided, follow it.
-If not, advance the narrative naturally from the seed while respecting the lore bible.
+Write a single narrative section following the provided outline beat.
+Maintain consistency with prior sections using rolling summary and continuity context.
 
 ## Instructions
 - The lore bible is authoritative and must not be contradicted.
-- If outline_beat is provided:
-  - Follow it strictly.
-  - Do not introduce events outside its scope.
-- If outline_beat is not provided:
-  - Advance the narrative conservatively.
-  - Do not introduce major new plot elements.
+- Follow the outline_beat strictly.
+- Do not introduce events outside the beat's scope.
 - If rolling_summary or continuity_context is provided:
   - Maintain consistency with prior content.
 - Do NOT include meta commentary.
@@ -41,6 +34,9 @@ Seed:
 Lore bible:
 {lore_bible}
 
+Style rules:
+{style_rules}
+
 Outline beat:
 {outline_beat}
 
@@ -49,18 +45,6 @@ Rolling summary (if any):
 
 Continuity ledger (if any):
 {continuity_context}
-
-World history (if any):
-{world_history}
-
-World states (if any):
-{world_states}
-
-Narration style (if any):
-{style_narration}
-
-Tone rules (if any):
-{style_tone}
 
 Location context (if any):
 {location_context}

@@ -224,10 +224,12 @@ Generate a high-level narrative structure.
 
 **Inputs**
 
-* `seed`
-* App style rules
-* Lore bible
-* Selected context snippets
+* `seed` (from state)
+* `beats_count` (from inputs)
+* `lore_bible` (from context)
+* `style_rules` (from context)
+* `location_context` (from selected context)
+* `character_context` (from selected context)
 
 **Process**
 
@@ -248,11 +250,14 @@ Runs once per outline beat. The draft pass must function correctly for any numbe
 
 #### Inputs per section
 
-* Current outline beat
-* Rolling summary (400–900 tokens)
-* Continuity ledger
-* App style rules
-* Selected context snippets
+* `seed` (from state)
+* Current outline beat (from state.outline)
+* Rolling summary (built from state.summaries)
+* Continuity ledger (from state.continuity_ledger)
+* `lore_bible` (from context)
+* `style_rules` (from context)
+* `location_context` (from selected context, optional)
+* `character_context` (from selected context, optional)
 
 #### Outputs per section
 
@@ -283,6 +288,16 @@ All structured outputs validated against schemas.
 **Purpose**
 Consolidate and correct.
 
+**Inputs**
+
+* `seed` (from state)
+* `full_draft` (combined from all section artifacts)
+* `outline` (from state)
+* `lore_bible` (from context)
+* `style_rules` (from context)
+* `location_context` (from selected context, optional)
+* `character_context` (from selected context, optional)
+
 **Checks**
 
 * Contradictions
@@ -294,6 +309,97 @@ Consolidate and correct.
 
 * `final_script.md`
 * `editor_report.json`
+
+---
+
+## Prompt Variable Contracts
+
+Each pipeline step has a strict contract defining which variables are provided to prompt templates. This ensures consistency between code and prompts, and enables fail-fast validation.
+
+### Variable Sources
+
+Variables come from three sources:
+1. **State** (`state.json`): `seed`, `outline`, `summaries`, `continuity_ledger`
+2. **Context files**: `lore_bible`, `style_rules`, `location_context`, `character_context`
+3. **Step-specific**: `beats_count`, `section_index`, `section_id`, `outline_beat`, `rolling_summary`, `full_draft`
+
+### Per-Step Contracts
+
+#### Outline Step (`10_outline.md`)
+
+**Required variables:**
+- `seed` (string): Raw seed from CLI
+- `beats_count` (integer): Number of outline beats to generate (1-20)
+- `lore_bible` (string): Combined lore bible content
+- `style_rules` (string): Combined style/*.md files
+- `location_context` (string): Selected location file content (may be empty)
+- `character_context` (string): Combined selected character files (may be empty)
+
+**Optional variables:** None
+
+**Validation:** All variables must be provided. `prompt_render.py` validates strict matching.
+
+#### Section Step (`20_section.md`)
+
+**Required variables:**
+- `section_id` (integer): 1-based section identifier
+- `section_index` (integer): 0-based section index
+- `seed` (string): Raw seed from state
+- `outline_beat` (string): JSON-serialized outline beat object
+- `lore_bible` (string): Combined lore bible content
+- `style_rules` (string): Combined style/*.md files
+
+**Optional variables:**
+- `rolling_summary` (string): Summary of prior sections (may be empty for first section)
+- `continuity_context` (string): Continuity ledger context (may be empty)
+- `location_context` (string): Selected location file content (may be empty)
+- `character_context` (string): Combined selected character files (may be empty)
+
+**Validation:** Required variables must be provided. Optional variables are provided but may be empty strings.
+
+#### Summarize Step (`21_summarize.md`)
+
+**Required variables:**
+- `section_id` (integer): 1-based section identifier
+- `section_content` (string): Full markdown content of the section to summarize
+
+**Optional variables:**
+- `lore_bible` (string): Currently not provided, reserved for future use
+
+**Validation:** Required variables must be provided.
+
+#### Critic Step (`30_critic.md`)
+
+**Required variables:**
+- `seed` (string): Raw seed from state
+- `lore_bible` (string): Combined lore bible content
+- `style_rules` (string): Combined style/*.md files
+- `full_draft` (string): Combined markdown from all sections
+- `outline` (string): JSON-serialized outline array
+
+**Optional variables:**
+- `location_context` (string): Selected location file content (may be empty)
+- `character_context` (string): Combined selected character files (may be empty)
+
+**Validation:** Required variables must be provided. Optional variables are provided but may be empty strings.
+
+### Variable Naming Consistency
+
+- **Style inputs:** Always use `style_rules` (combined from `style/*.md`). Do not use `style_narration` or `style_tone` (these are not provided).
+- **Context inputs:** Use `location_context` and `character_context` (may be empty strings if no context selected).
+- **State inputs:** Use `seed`, `outline`, `summaries`, `continuity_ledger` (from state.json).
+
+### Unused Prompt Templates
+
+- `00_seed.md`: Reserved for future seed normalization step. Currently unused. The pipeline passes raw `seed` directly to all steps.
+
+### Validation and Fail-Fast Behavior
+
+The `prompt_render.py` module enforces strict variable validation:
+- All placeholders in prompt templates must be provided in the variables dictionary
+- Missing required variables raise `MissingVariableError` immediately
+- No silent fallbacks or default values
+- This ensures prompt-code consistency is caught at runtime, not silently ignored
 
 ---
 

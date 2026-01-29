@@ -143,6 +143,26 @@ All LLM calls go through a small provider interface (`LLMProvider`) instead of u
 
 Pipeline steps are responsible for taking this metadata and recording token usage into `run.log` and `state.json` via the logging and token-tracking utilities.
 
+### Prompt Templates and Variable Contracts
+
+Each pipeline step uses a prompt template (`.md` files in `prompts/apps/<app_name>/`) that defines the LLM instructions. These templates use Python string formatting with variables provided by the pipeline code.
+
+**Important constraints:**
+
+* **Strict variable validation**: All variables referenced in prompt templates must be provided by the corresponding step code. Missing variables cause immediate failures (no silent fallbacks).
+* **Code is authoritative**: Prompt templates must match the variables provided by pipeline steps, not vice versa.
+* **Variable contracts**: Each step has a documented contract of required vs optional variables (see `SPEC.md` for details).
+* **Fail-fast behavior**: The `prompt_render.py` module validates all variables before rendering, ensuring prompt-code consistency is caught at runtime.
+
+**Known limitations:**
+
+* `00_seed.md` exists but is currently unused (reserved for future seed normalization step).
+* Style inputs use `style_rules` (combined from `style/*.md` files), not separate `style_narration`/`style_tone` variables.
+* Context variables (`location_context`, `character_context`) may be empty strings if no context files are selected.
+* Optional variables are always provided but may be empty strings.
+
+For detailed per-step variable contracts, see `SPEC.md` section "Prompt Variable Contracts".
+
 ---
 
 ## Repository structure (simplified)
