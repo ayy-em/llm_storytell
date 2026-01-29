@@ -184,14 +184,21 @@ def _create_llm_provider_from_config(
         try:
             with creds_path.open(encoding="utf-8") as f:
                 creds = json.load(f)
-                api_key = creds.get("openai_api_key")
+                # Try multiple common key name variations
+                api_key = (
+                    creds.get("openai_api_key")
+                    or creds.get("OPENAI_KEY")
+                    or creds.get("OPEN_AI")
+                    or creds.get("OPENAI_API_KEY")
+                )
         except (OSError, json.JSONDecodeError, KeyError):
             pass
 
     if not api_key:
         print(
             "Error: No OpenAI API key found. "
-            "Create config/creds.json with 'openai_api_key' field.",
+            "Create config/creds.json with one of these fields: "
+            "'openai_api_key', 'OPENAI_KEY', 'OPEN_AI', or 'OPENAI_API_KEY'.",
             file=sys.stderr,
         )
         sys.exit(1)

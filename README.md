@@ -177,6 +177,8 @@ LLM-Storytell/
   COMPLETED_TASKS.md
 
   config/
+    creds.json
+    
   prompts/
     README.md
     shared/
@@ -228,7 +230,7 @@ Create credentials file:
 ```json
 // config/creds.json
 {
-  "openai_api_key": "your_api_key_here"
+  "OPENAI_KEY": "your_api_key_here"
 }
 ```
 
