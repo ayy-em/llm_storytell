@@ -14,11 +14,13 @@ The goal of **v1.0** is a **local, deterministic, multi-app-ready content genera
 * Read .cursor/rules/00-workflow.md
 * Read TASKS.md, read global rules and select the first unchecked task
 * Consult SPEC.md sections relevant to the task 
+* Always activate virtual environment before running any 
 
 ### Main workflow rules
 * Do not expand scope beyond the task.
 * Before implementation: propose a short solution design (5–15 bullets).
 * Implementation must include unit tests (or explicit justification why not).
+* Always make sure to activate the virtual environment before running any command or file
 * All changes must pass:
   * `uv run ruff format .`
   * `uv run ruff check .`
@@ -67,8 +69,9 @@ Each task includes:
 
 ## Definition of Done (v1.0)
 
-* `python -m llm_storytell run --app grim-narrator --seed "..."`
-  produces a valid final script
+* Running the command (based on current OS) produces a valid final script:
+  * Windows: `.\.venv\Scripts\python.exe -m llm_storytell run --app grim-narrator --seed "A story of how suffering is a grim reality at lower society levels in the future."`
+  * macOS: ``./.venv/bin/python -m llm_storytell run --app grim-narrator --seed "A story of how suffering is a grim reality at lower society levels in the future."``
 * Run folder contains:
   * logs
   * state

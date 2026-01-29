@@ -1,6 +1,6 @@
-You are operating in the repository using the agent workflow rules in `.cursor/rules/00-workflow.md`.
+You are operating in the repository using the agent workflow rules in `.cursor/rules/*00-workflow.md*`.
 
-1) Read `TASKS.md`, `SPEC.md`, and `CONTRIBUTING.md`. Also read `.cursor/rules/00-workflow.md`.
+1) Read `TASKS.md`, `SPEC.md`, and `CONTRIBUTING.md`. Also always read all the ruleset .md files in `.cursor/rules/**.md` before starting any task.
 2) Select the **first unchecked** task in `TASKS.md` only. Do not work on any other task.
 3) Pre-flight:
    - List relevant existing files and what is already implemented vs missing for the task.
