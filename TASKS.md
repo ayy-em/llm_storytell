@@ -84,7 +84,278 @@ Each task includes:
 
 ## v1.0 Release Preparation Tasks
 
-### [ ] R0001-BB Bug Bash: E2E Production test
+### [ ] R0001-BB-01 Bug Bash: Empty critic response.txt
+Task: Fix critic response.txt empty-placeholder + treat empty LLM content as hard provider error + persist raw IO consistently
+
+Goal - Make the pipeline never end up with the following:
+	•	a valid prompt.txt but an empty response.txt that looks “successful”, and
+	•	a confusing downstream parse failure that hides the true cause.
+
+Instead:
+	•	do not write placeholder response.txt before the LLM call
+	•	fail early on empty/None LLM content (with a clear error)
+	•	always persist prompt + metadata + raw provider payload for QA/debugging
+
+Allowed files (touch only these unless you hit a hard blocker)
+	1.	src/llm_storytell/steps/critic.py
+	2.	src/llm_storytell/llm/__init__.py
+	3.	src/llm_storytell/cli.py
+	4.	tests/test_critic.py (or nearest existing critic/provider tests file; create only if tests folder exists and current suite expects it)
+
+Explicitly NOT allowed
+  * Changes to any prompt templates (prompts/**)
+  * SPEC.md, README.md, CONTRIBUTING.md (unless acceptance criteria requires a doc update; in that case propose it but don’t do it in this task)
+  * Any unrelated step files
+  * Anything in runs/ folder
+
+**Detailed requirements**
+
+A) Remove placeholder empty response.txt
+
+In the critic stage, stop calling save_llm_io(..., response="") before the provider call.
+
+Instead, pre-call persist:
+	•	prompt.txt (always)
+	•	meta.json with at minimum:
+	•	stage
+	•	provider
+	•	model
+	•	status: "pending"
+	•	timestamp
+
+No response.txt should exist until you have a real response (non-empty).
+
+B) Treat empty/None content as a provider failure (early and loud)
+
+At the provider boundary (preferred) or immediately after the call in critic (acceptable), enforce:
+	•	If assistant message content is None → raise LLMProviderError("Missing assistant content")
+	•	If content is a string but content.strip() == "" → raise LLMProviderError("Empty assistant content")
+
+Do not normalize with content or "" anywhere. Replace it with explicit checks.
+
+C) Persist raw provider payload for QA/debugging
+
+When calling the LLM, store the following under the run directory:
+
+runs/<run_id>/llm_io/<stage_name>/
+	•	prompt.txt (always)
+	•	response.txt (only if non-empty)
+	•	meta.json (always) including:
+	•	provider/model
+	•	token usage (if available)
+	•	finish_reason (if available)
+	•	timestamps (started_at, ended_at)
+	•	status: pending | success | error
+	•	error summary (if error)
+	•	raw_response.json (always if available; otherwise best-effort)
+Must be the provider response as-is (minus secrets). If you can’t store true raw, store the parsed structure you have.
+
+Important: If the call errors, meta.json must be status error, and raw_response.json should contain whatever is available (exception details as structured JSON is fine).
+
+D) Error behavior and messaging
+
+When empty content occurs:
+	•	the pipeline should fail with an error message containing:
+	•	stage name
+	•	provider/model
+	•	“empty assistant content” / “missing assistant content”
+	•	response length (0)
+	•	it should not fail later with “missing block markers” or JSON parse errors in critic parsing.
+
+E) Tests (required)
+
+Add/modify tests to cover:
+	1.	Provider returns content=None → raises LLMProviderError
+	2.	Provider returns content="" or "   " → raises LLMProviderError
+	3.	Critic step does not create response.txt pre-call
+	4.	On provider error, meta.json is written with status=error
+
+Use small, deterministic fake provider responses. No network calls.
+
+⸻
+
+Acceptance criteria (definition of done)
+	•	Critic stage no longer creates a placeholder empty response.txt before the LLM call.
+	•	Any empty/None assistant content causes an immediate LLMProviderError (or equivalent) before parsing.
+	•	content or "" normalization is removed (or replaced with explicit checks) so empty content cannot silently pass.
+	•	Run folder contains llm_io/critic/ artifacts with:
+	•	prompt.txt always
+	•	meta.json always
+	•	raw_response.json captured (best-effort)
+	•	response.txt only when non-empty
+	•	Tests added and passing.
+	•	uv run ruff format ., uv run ruff check ., uv run pytest -q all green.
+	•	TASKS.md updated: task marked as completed, Result section is populated with a summary and task moved to COMPLETED_TASKS.md
+
+⸻
+
+Notes / guardrails (avoid dumb regressions)
+	•	Do not change prompt templates in this task.
+	•	Do not add “regex salvage” fallback parsing here.
+	•	Do not make the critic parser more permissive. This task is about IO integrity and error clarity.
+	•	When storing raw provider payload, redact anything that looks like credentials (API keys, tokens).
+
+⸻
+
+Include in final output:
+	•	bullet list of exact changes
+	•	paths of new artifacts
+	•	what the new failure mode looks like (example error message)
+	•	tests added
+
+Result: ...
+
+### [ ] R0001-BB-02 QA Assist: Start at critic with external prompt.txt
+
+Task: Implement optional CLI flag --start-at-critic <path/to/prompt.txt> to run only the critic stage using a provided prompt, skipping all prior stages to save cost and speed up iteration.
+
+Reason: You want to hammer the critic step with real API calls without regenerating outline/sections/summaries every run. Example prompt format is in the attached file.  ￼
+
+⸻
+
+Goal
+
+Make the pipeline support this flow:
+	•	You run something like:
+	•	uv run llm-storytell run ... --start-at-critic /path/to/prompt.txt
+	•	The system:
+	•	reads the file contents verbatim
+	•	invokes only the critic LLM call + parsing + artifact writing
+	•	persists the usual llm_io/critic/* artifacts
+	•	produces the normal critic outputs (final_script.md, editor_report.json, etc.)
+	•	does not run or require earlier stages
+
+⸻
+
+Allowed files (touch only these unless you hit a hard blocker)
+	1.	src/llm_storytell/cli.py (add CLI flag + wiring)
+	2.	src/llm_storytell/steps/critic.py (allow passing an override prompt string, if needed)
+	3.	src/llm_storytell/pipeline.py (or whichever module orchestrates stages; only if required to skip stages cleanly)
+	4.	tests/test_cli.py (or nearest existing CLI tests file)
+	5.	tests/test_critic.py (if needed for integration-level behavior)
+
+Explicitly NOT allowed
+	•	Changes to any prompt templates (prompts/**)
+	•	SPEC.md, README.md, CONTRIBUTING.md (unless acceptance criteria requires doc update; propose but don’t do here)
+	•	Any unrelated step files
+	•	Anything in runs/ folder
+	•	Any “helpful” refactors
+
+⸻
+
+Workflow constraints (must follow)
+	1.	Read first: SPEC.md, CONTRIBUTING.md, TASKS.md.
+	2.	Before editing any file, include a “Proposed Changes (exact)” section with:
+	•	exact files + functions to change
+	•	exact CLI behavior (including edge cases)
+	•	how outputs will be written (paths)
+	•	how this interacts with existing run_dir/state/artifacts
+	3.	Then implement exactly what you proposed (no scope creep).
+	4.	Run:
+	•	uv run ruff format .
+	•	uv run ruff check .
+	•	uv run pytest -q
+	5.	Update TASKS.md: mark complete, add a Result summary, move to COMPLETED_TASKS.md.
+
+⸻
+
+Detailed requirements
+
+A) New CLI flag + validation
+
+Add a CLI option:
+	•	--start-at-critic <prompt_path>
+where <prompt_path> points to a text file containing the full critic prompt to send as-is.
+
+Validation rules:
+	•	If the file does not exist → fail with a clear error.
+	•	If file is unreadable → fail with a clear error.
+	•	If file contents are empty/whitespace → fail with a clear error.
+	•	The flag is optional. Default behavior unchanged.
+
+B) Stage skipping behavior
+
+When --start-at-critic is provided:
+	•	Do not run outline, section_*, summarize_*, etc.
+	•	Run only the critic stage, using:
+	•	rendered_prompt = file_contents (no templating, no rewriting)
+	•	Ensure the critic stage still:
+	•	writes the usual artifacts (final script + editor report)
+	•	writes the llm_io/critic/* logs as per the previous task’s conventions
+
+C) Output locations and consistency
+
+Under the run directory, the critic step must still produce:
+	•	runs/<run_id>/llm_io/critic/prompt.txt (should equal the file contents exactly, byte-for-byte except line endings if unavoidable)
+	•	runs/<run_id>/llm_io/critic/response.txt (only if non-empty)
+	•	runs/<run_id>/llm_io/critic/meta.json (always)
+	•	runs/<run_id>/llm_io/critic/raw_response.json (best-effort)
+
+And the normal critic outputs in artifacts/ (whatever your pipeline uses today, unchanged).
+
+D) State + provenance (minimal, but required)
+
+When starting at critic:
+	•	Ensure the run state clearly indicates that earlier stages were skipped.
+	•	Add a small provenance field somewhere already standard (state JSON, meta.json, etc.), e.g.:
+	•	{"start_mode": "critic_from_file", "critic_prompt_path": "<path>"}
+
+No new complex state system. Keep it tiny.
+
+E) No hidden magic
+	•	Do not infer or recompute inputs (seed, lore_bible, etc.).
+	•	Do not attempt to parse the prompt file and “rebuild” a structured input object.
+	•	The whole point is: send the exact prompt text.
+
+⸻
+
+Tests (required)
+
+Add/modify tests to cover:
+	1.	CLI validation
+	•	nonexistent file path → exits non-zero with clear error
+	•	empty file → exits non-zero with clear error
+	2.	Behavior
+	•	when --start-at-critic is set, the pipeline calls only the critic stage runner (mock/stub earlier stages and assert not called)
+	•	critic receives prompt text matching file content
+	3.	Artifacts
+	•	llm_io/critic/prompt.txt is written and matches expected content
+	•	run does not require outputs from previous stages
+
+No network calls. Use deterministic fakes/mocks for the LLM provider.
+
+⸻
+
+Acceptance criteria (definition of done)
+	•	--start-at-critic <path> exists and is documented in CLI --help output (auto).
+	•	With the flag:
+	•	earlier stages are skipped
+	•	critic runs using file contents as prompt
+	•	artifacts are produced normally
+	•	llm_io/critic/prompt.txt matches the input file content
+	•	Without the flag: pipeline behavior unchanged.
+	•	Tests added and passing.
+	•	uv run ruff format ., uv run ruff check ., uv run pytest -q all green.
+	•	TASKS.md updated: task marked completed, Result section filled, moved to COMPLETED_TASKS.md.
+
+⸻
+
+Notes / guardrails
+	•	Do not touch prompt templates.
+	•	Do not create new “partial pipeline” frameworks. This is a single pragmatic switch.
+	•	Do not store absolute paths in artifacts unless already standard (prefer storing the provided string and, if needed, also a normalized path).
+
+⸻
+
+Include in final output
+	•	Bullet list of exact changes
+	•	Paths of new/affected artifacts
+	•	Example usage command
+	•	Tests added
+
+Result: … (to be filled by agent after implementation)
+
+### [ ] R0001-BB-03 Bug Bash: E2E Production test
 TASK: Fix-the-run loop (no-refactor, artifact-driven)
 
 Goal
