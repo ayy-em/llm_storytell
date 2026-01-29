@@ -112,8 +112,9 @@ CRITICAL RULES (non-negotiable)
    - Why this fix is minimal
 
 Inputs
-CLI command to run (copy/paste exactly):
-`python -m llm_storytell run --app grim-narrator --beats 10 --seed "Each day in the life of a low-class citizen is filled with fear, hunger and despair."`
+CLI command to run (copy/paste exactly, based on current OS):
+  * Windows: `.\.venv\Scripts\python.exe -m llm_storytell run --app grim-narrator --seed "A story of how suffering is a grim reality at lower society levels in the future."`
+  * macOS: ``./.venv/bin/python -m llm_storytell run --app grim-narrator --seed "A story of how suffering is a grim reality at lower society levels in the future."``
 
 **Iteration protocol** (repeat until success)
 Step 0: Preconditions

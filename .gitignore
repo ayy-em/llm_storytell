@@ -7,8 +7,12 @@ wheels/
 *.egg-info
 .pytest_cache/
 
+# OS-specific
+*.DS_Store
+
 # IDE
 .vscode/
+.idea/
 
 # Virtual environments
 .venv
