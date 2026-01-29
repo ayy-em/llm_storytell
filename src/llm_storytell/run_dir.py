@@ -7,9 +7,11 @@ Ensures atomic creation: failed runs do not leave partial state.
 import json
 import shutil
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
 
 from .logging import RunLogger
 
@@ -132,17 +134,18 @@ def initialize_run(
         raise RunInitializationError(f"Run directory already exists: {final_run_dir}")
 
     # Ensure runs directory exists
-    runs_dir.mkdir(parents=True, exist_ok=True)
+    _retry_fs(lambda: runs_dir.mkdir(parents=True, exist_ok=True))
 
     # Create in temp directory first for atomicity
     temp_dir = None
     try:
         # Create temp directory in the same filesystem for atomic rename
-        temp_dir = Path(tempfile.mkdtemp(dir=runs_dir, prefix=".tmp_"))
+        temp_dir = Path(tempfile.mkdtemp(dir=runs_dir, prefix=f"_build_{actual_run_id}_"))
 
         # Create artifacts subdirectory
         artifacts_dir = temp_dir / "artifacts"
-        artifacts_dir.mkdir()
+        _retry_fs(lambda: artifacts_dir.mkdir())
+
 
         # Write inputs.json
         inputs_data = _create_inputs_json(
@@ -154,8 +157,12 @@ def initialize_run(
             prompts_dir=prompts_dir,
         )
         inputs_path = temp_dir / "inputs.json"
-        with inputs_path.open("w", encoding="utf-8") as f:
-            json.dump(inputs_data, f, indent=2)
+        def _write_inputs() -> None:
+            with inputs_path.open("w", encoding="utf-8") as f:
+                json.dump(inputs_data, f, indent=2)
+
+        _retry_fs(_write_inputs)
+
 
         # Write initial state.json
         state_data = _create_initial_state(app_name=app_name, seed=seed)
@@ -165,7 +172,7 @@ def initialize_run(
 
         # Create run.log (empty initially, logger will write to it)
         log_path = temp_dir / "run.log"
-        log_path.touch()
+        _retry_fs(lambda: log_path.touch())
 
         # Initialize logger and write initial entries
         logger = RunLogger(log_path)
@@ -177,7 +184,7 @@ def initialize_run(
         )
 
         # Atomic rename to final location
-        temp_dir.rename(final_run_dir)
+        _retry_fs(lambda: temp_dir.rename(final_run_dir))
         temp_dir = None  # Prevent cleanup since rename succeeded
 
         return final_run_dir
@@ -185,7 +192,7 @@ def initialize_run(
     except Exception as e:
         # Clean up temp directory on any failure
         if temp_dir is not None and temp_dir.exists():
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            _retry_fs(lambda: shutil.rmtree(temp_dir, ignore_errors=True))
 
         if isinstance(e, RunInitializationError):
             raise
@@ -213,3 +220,20 @@ def get_run_logger(run_dir: Path) -> RunLogger:
         raise RunInitializationError(f"Log file does not exist: {log_path}")
 
     return RunLogger(log_path)
+
+
+def _retry_fs(op, *, attempts: int = 8, delay: float = 0.05):
+    """Retry a filesystem operation to mitigate transient Windows file locks.
+
+    Retries PermissionError with exponential backoff.
+    """
+    last: PermissionError | None = None
+    for i in range(attempts):
+        try:
+            return op()
+        except PermissionError as e:
+            last = e
+            time.sleep(delay * (2**i))
+    # If we exhausted retries, re-raise the last PermissionError
+    raise last if last is not None else PermissionError("Operation failed after retries")
+
