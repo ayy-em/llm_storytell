@@ -4,6 +4,18 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] R0001-BB-03 Bug Bash: E2E Production test (2026-01-30)
+
+TASK: Fix-the-run loop (no-refactor, artifact-driven)
+
+**Goal**: Given ONE exact CLI command, execute it until it succeeds. On each failure: gather evidence, diagnose, apply smallest fix, rerun.
+
+**CLI command (macOS)**: `./.venv/bin/python -m llm_storytell run --app grim-narrator --beats 2 --seed "A story of how suffering is a grim reality at lower society levels in the future."`
+
+**Result**: One failure: outline stage failed because `prompts/apps/grim-narrator/10_outline.md` contained a JSON example with unescaped `{`/`}`; the formatter treated `{ "beats"}` as a placeholder and raised UnsupportedPlaceholderError. Fix: escaped all braces in the JSON example block to `{{`/`}}`. Added success/failure logging in outline step (print on prompt render success; catch UnsupportedPlaceholderError and print before re-raise). No new test added—`tests/test_template_fix.py` already renders the outline template and would have caught this. Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest --ignore=tests/test_e2e.py -q` (179 passed). E2E run succeeded; final run dir: `runs/run-20260130-174742`.
+
+---
+
 ### [x] R0001-BB-01a (Follow-up) Unify llm_io persistence across stages (2026-01-30)
 
 **Goal**: Extend `steps/llm_io.py` so all stages use the same mechanism for prompt.txt, response.txt (only when non-empty), meta.json, and raw_response.json; then refactor critic to use it and remove critic-only _write_critic_llm_io.

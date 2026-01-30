@@ -43,15 +43,15 @@ Beats count:
 - Match the schema exactly.
 
 ```json
-{
+{{
   "beats": [
-    {
+    {{
       "beat_id": 1,
       "title": "Short descriptive title",
       "summary": "1–2 sentence factual description of the narrative event"
-    }
+    }}
   ]
-}
+}}
 ```
 
 ## Constraints

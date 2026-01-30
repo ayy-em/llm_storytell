@@ -17,6 +17,7 @@ from src.llm_storytell.logging import RunLogger
 from src.llm_storytell.prompt_render import (
     MissingVariableError,
     TemplateNotFoundError,
+    UnsupportedPlaceholderError,
     render_prompt,
 )
 from src.llm_storytell.schemas import SchemaValidationError, validate_json_schema
@@ -191,10 +192,16 @@ def execute_outline_step(
 
         try:
             rendered_prompt = render_prompt(prompt_path, prompt_vars)
+            print("[outline] Prompt rendered successfully")
         except TemplateNotFoundError as e:
             raise OutlineStepError(f"Prompt template not found: {e}") from e
         except MissingVariableError as e:
             raise OutlineStepError(f"Missing variables in prompt template: {e}") from e
+        except UnsupportedPlaceholderError as e:
+            print(f"[outline] Prompt render failed (unsupported placeholder): {e}")
+            raise OutlineStepError(
+                f"Invalid placeholder in prompt template: {e}"
+            ) from e
 
         # Save LLM I/O for debugging (pre-call: prompt + meta, no response.txt)
         stage_name = "outline"
