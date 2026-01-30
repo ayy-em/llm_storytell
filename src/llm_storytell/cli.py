@@ -9,6 +9,7 @@ from typing import Any
 from .config import AppNotFoundError, AppPaths, resolve_app
 from .context import ContextLoader, ContextLoaderError
 from .llm import LLMProvider, LLMProviderError, OpenAIProvider
+from .llm.pricing import estimate_run_cost
 from .run_dir import RunInitializationError, get_run_logger, initialize_run
 from .steps.critic import CriticStepError, execute_critic_step
 from .steps.outline import OutlineStepError, execute_outline_step
@@ -420,9 +421,37 @@ def _run_pipeline(
             return 1
 
         logger.info(f"Pipeline completed successfully. Run directory: {run_dir}")
+        print("[llm_storytell] Run complete.", flush=True)
+        # Token and cost summary from state
+        try:
+            with (run_dir / "state.json").open(encoding="utf-8") as f:
+                state = json.load(f)
+            usage = state.get("token_usage") or []
+            model, prompt_total, completion_total, total_tokens, cost_usd = (
+                estimate_run_cost(usage)
+            )
+            if model is not None:
+                print(f"[llm_storytell] Model: {model}", flush=True)
+            if prompt_total or completion_total or total_tokens:
+                print(
+                    f"[llm_storytell] Tokens: {prompt_total:,} prompt, "
+                    f"{completion_total:,} completion ({total_tokens:,} total)",
+                    flush=True,
+                )
+            if cost_usd is not None:
+                print(
+                    f"[llm_storytell] Estimated cost: ~${cost_usd:.4g} (Standard pricing)",
+                    flush=True,
+                )
+            elif model is not None:
+                print(
+                    "[llm_storytell] Estimated cost: N/A (model not in pricing table)",
+                    flush=True,
+                )
+        except (OSError, json.JSONDecodeError, KeyError):
+            pass
         print(
-            f"[llm_storytell] Pipeline completed successfully. "
-            f"Artifacts are in: {run_dir / 'artifacts'}",
+            f"[llm_storytell] Artifacts are in: {run_dir / 'artifacts'}",
             flush=True,
         )
         return 0

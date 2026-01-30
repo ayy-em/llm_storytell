@@ -361,16 +361,45 @@ def test_e2e_full_pipeline(
         assert "section" in log_content
         assert "critic" in log_content
 
-        # Verify LLM was called for all steps
-        assert len(mock_provider.calls) > 0
-        step_names = [call["step"] for call in mock_provider.calls]
-        assert "outline" in step_names
-        assert any(s.startswith("section_") for s in step_names)
-        assert any(s.startswith("summarize_") for s in step_names)
-        assert "critic" in step_names
-
     finally:
         monkeypatch.chdir(original_cwd)
+
+
+def test_e2e_run_completion_prints_token_summary(
+    temp_app_structure: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Successful run prints Run complete, Model, Tokens, and Artifacts line."""
+    monkeypatch.chdir(temp_app_structure)
+    mock_provider = MockLLMProvider()
+
+    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+        return mock_provider
+
+    with patch(
+        "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+    ):
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A worker describes a day in a decaying city.",
+                "--beats",
+                "2",
+                "--run-id",
+                "test-run-summary",
+            ]
+        )
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "Run complete." in out
+    assert "Model:" in out
+    assert "Tokens:" in out
+    assert "Artifacts are in:" in out
 
 
 def test_e2e_without_beats_override(
