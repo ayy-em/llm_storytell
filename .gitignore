@@ -33,3 +33,6 @@ config/creds.json
 
 # Prompts for testing
 tests/test_critic_prompt.txt
+
+# random IDE extensions
+.VSCodeCounter/

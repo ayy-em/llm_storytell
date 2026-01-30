@@ -1,23 +1,23 @@
-# Outline generation prompt
+# Outline generation
 
-## Required inputs
-- seed (string, required)
-- beats_count (integer, required)
-- lore_bible (string, required)
-- style_rules (string, required)
-- location_context (string, required)
-- character_context (string, required)
+## Inputs
+- seed
+- beats_count
+- lore_bible
+- style_rules
+- location_context
+- character_context
 
-## Purpose
-Generate a structured, machine-readable narrative outline that decomposes the seed into a fixed number of beats.
-This outline serves as the sole structural plan for all downstream section generation.
+## Task
+Generate a deterministic narrative outline that decomposes the seed into exactly `beats_count` ordered beats.
+This outline is the sole structural plan for downstream sections.
 
-## Instructions
-- Use the seed as the authoritative source of intent.
-- Do NOT introduce plot elements that contradict the lore bible.
-- Do NOT include prose, dialogue, or stylistic embellishment.
-- Each beat must represent a meaningful narrative transition.
-- Beats must be ordered, deterministic, and internally consistent.
+## Rules
+- Seed defines intent.
+- Lore bible is authoritative.
+- Do not add prose, dialogue, or stylistic embellishment.
+- Beats must represent meaningful narrative transitions.
+- Do not contradict lore or context.
 
 ## Context
 Seed:
@@ -35,32 +35,28 @@ Location context:
 Character context:
 {character_context}
 
-Requested number of beats:
+Beats count:
 {beats_count}
 
-## Output format
-Output MUST be valid JSON.
-Do NOT wrap in markdown.
-Do NOT include commentary or explanations.
+## Output
+- Output valid JSON only (no markdown, no commentary).
+- Match the schema exactly.
 
-## Output schema
-{{
+```json
+{
   "beats": [
-    {{
+    {
       "beat_id": 1,
-      "title": "Short, descriptive title",
+      "title": "Short descriptive title",
       "summary": "1–2 sentence factual description of the narrative event"
-    }}
+    }
   ]
-}}
+}
+```
 
-## Length targets
-- beats array length MUST equal beats_count
-- title: max 10 words, min 3 characters
-- summary: min 20 characters
-
-## Validation rules
-- beat_id must be an integer starting at 1, incrementing sequentially (1, 2, 3, ...)
-- Do not add or remove fields. Only include: beat_id, title, summary
-- title must be at least 3 characters
-- summary must be at least 20 characters
+## Constraints
+- beats.length === beats_count
+- beat_id starts at 1 and increments sequentially
+- title: ≤10 words, ≥3 characters
+- summary: ≥20 characters
+- Fields allowed: beat_id, title, summary

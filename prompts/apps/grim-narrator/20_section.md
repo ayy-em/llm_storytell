@@ -1,35 +1,35 @@
-# Section generation prompt
+# Section generation
 
-## Required inputs
-- section_id (integer, required)
-- section_index (integer, required)
-- seed (string, required)
-- outline_beat (string, required)
-- lore_bible (string, required)
-- style_rules (string, required)
+## Inputs
+Required:
+- section_id
+- seed
+- outline_beat
+- lore_bible
+- style_rules
 
-## Optional inputs
-- rolling_summary (string, optional)
-- continuity_context (string, optional)
-- location_context (string, optional)
-- character_context (string, optional)
+Optional:
+- rolling_summary
+- continuity_context
+- location_context
+- character_context
 
-## Purpose
-Write a single narrative section following the provided outline beat.
-Maintain consistency with prior sections using rolling summary and continuity context.
+## Task
+Write one narrative section that realizes the given outline beat.
+Respect prior content if provided.
 
-## Instructions
-- The lore bible is authoritative and must not be contradicted.
-- Follow the outline_beat strictly.
-- Do not introduce events outside the beat's scope.
-- If rolling_summary or continuity_context is provided:
-  - Maintain consistency with prior content.
-- Do NOT include meta commentary.
-- Do NOT explain your choices.
+## Rules
+- Lore bible is authoritative.
+- Follow the outline beat strictly. Do not add extra events.
+- Maintain continuity with prior sections when context is provided.
+- No meta commentary. No explanations.
 
 ## Context
 Seed:
 {seed}
+
+Outline beat:
+{outline_beat}
 
 Lore bible:
 {lore_bible}
@@ -37,55 +37,36 @@ Lore bible:
 Style rules:
 {style_rules}
 
-Outline beat:
-{outline_beat}
-
-Rolling summary (if any):
+Rolling summary:
 {rolling_summary}
 
-Continuity ledger (if any):
+Continuity ledger:
 {continuity_context}
 
-Location context (if any):
+Location context:
 {location_context}
 
-Character context (if any):
+Character context:
 {character_context}
 
-## Output format
-Output MUST be valid Markdown.
-Output MUST begin with a YAML frontmatter block.
+## Output
+- Valid Markdown.
+- Begin with YAML frontmatter exactly matching the required schema.
+- No extra frontmatter fields.
 
-## YAML frontmatter schema
-The frontmatter MUST include these exact fields (all required):
-
+### Frontmatter schema (required)
 ---
 section_id: {section_id}
-local_summary: "<A summary of this section's content, at least 100 characters long. Describe the key events, character actions, and narrative developments in this section.>"
-new_entities: ["<entity1>", "<entity2>", ...]
-new_locations: ["<location1>", "<location2>", ...]
-unresolved_threads: ["<thread1>", "<thread2>", ...]
+local_summary: "<≥100 chars summarizing this section>"
+new_entities: []
+new_locations: []
+unresolved_threads: []
 ---
 
-**Required fields:**
-- `section_id`: Integer (use {section_id})
-- `local_summary`: String, minimum 100 characters. Summarize this section's key events and developments.
-- `new_entities`: Array of strings. List any new characters, objects, or concepts introduced in this section. Use empty array [] if none.
-- `new_locations`: Array of strings. List any new locations introduced in this section. Use empty array [] if none.
-- `unresolved_threads`: Array of strings. List any plot threads, questions, or conflicts introduced or left unresolved in this section. Use empty array [] if none.
-
-## Prose requirements
-- Write only the prose for this section.
-- No headings outside the frontmatter.
-- No summaries.
-- No lists.
+## Prose constraints
+- Prose only, after frontmatter.
+- No headings, lists, or summaries.
 - Dialogue only if justified by context.
 
-## Length targets
-- Prose length: 400–800 words
-
-## Validation rules
-- Frontmatter must be present and valid YAML.
-- Frontmatter keys must match the schema exactly.
-- Use null if outline_beat is not provided.
-- Do not add additional frontmatter fields.
+## Length
+- 400–800 words
