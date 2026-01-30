@@ -12,7 +12,7 @@ The primary goal is **correctness, reproducibility, and determinism**, not cleve
 - `SPEC.md` is the authoritative description of pipeline behavior.
 - `README.md` is the authoritative user-facing overview and usage guide.
 - `TASKS.md` is the authoritative execution queue.
-- `.cursor/rules/*` defines the required agent workflow for this repository.
+- `.cursor/rules/00-workflow.md` defines the required agent workflow for this repository. It is authoritive, so if inconsistencies with other docs arise, rules defined in 00-workflow.md apply.
 
 If an implementation conflicts with `SPEC.md`, the implementation is wrong.
 
@@ -94,6 +94,13 @@ At minimum, tests should cover:
 * CLI argument parsing
 
 If something can fail, there should be a test proving it fails correctly.
+
+Test integrity rule
+* Tests may only be changed if:
+* The SPEC changed, or
+* The test was objectively incorrect
+* Tests must never be modified to accommodate buggy behavior
+
 
 ---
 

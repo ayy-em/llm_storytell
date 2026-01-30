@@ -1,4 +1,8 @@
-# How to orchestrate agentic workflow in Cursor without chaos
+# Cursor Workflow - For Humans
+
+If you are an AI agent, DO NOT read this file. Instructions and other information presented here is not to be used in any way by LLMs, AI agents and automations. 
+
+## How to orchestrate agentic workflow in Cursor without chaos
 
 The "cycle" workflow we aim for is: 
 - Agent picks up the first unchecked task in TASKS.md 
@@ -26,7 +30,7 @@ How to enforece this:
 >
 >After approval: implement, add tests, run ruff format, ruff check, pytest. 
 >
->Update TASKS.md marking the task done with a Result note. 
+>Update TASKS.md marking the task done with a Result note. Then move the tasl's section to COMPLETED_TASKS.md.
 >
 >Stop.
 - Alternatively, use this if there were already previous attempts at the task and/or some parts of it already implemented:
@@ -43,7 +47,7 @@ How to enforece this:
 > - `uv run ruff check .`
 > - `uv run pytest -q` 
 >
->Update TASKS.md: mark [x] and add a Result note (what changed + commands run). 
+>Update TASKS.md: mark [x] and add a Result note (what changed + commands run). Then move the tasl's section to COMPLETED_TASKS.md.
 >
 >Stop.
 

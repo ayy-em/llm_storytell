@@ -42,6 +42,11 @@ If any command fails:
 - Fix the issue
 - Rerun until all are green
 
+If you touch a file outside “Allowed files”:
+- The task is invalid
+- Roll back changes
+- Re-propose
+
 ## Task completion
 - In `TASKS.md`: mark completed task [x] and add "Result" note, then remove the task from `TASKS.md`
 - Append to `COMPLETED_TASKS.md`: paste the completed task (including Result note), ideally including completion date in task's header; optionally include commit hash

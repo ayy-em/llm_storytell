@@ -17,8 +17,11 @@ The pipeline is intentionally **sequential**, not conversational.
 All long-term memory is explicit and persisted to disk.
 All run outputs are treated as immutable after completion.
 
-Schemas are authoritative: all structured outputs must validate against schemas in
-`src/llm_storytell/schemas/`.
+Schemas are authoritative: all structured outputs must validate against schemas in `src/llm_storytell/schemas/`. Output schemas are frozen. Any format change requires:
+- SPEC update
+- Schema update
+- Explicit approval
+
 
 The pipeline is designed to support **variable output scale**, ranging from:
 * Single-section, short-form stories generated from minimal context
@@ -119,12 +122,14 @@ Generated content must never be committed.
 
 ## CLI Interface
 
-### Command
+### Command (MacOS)
 
 ```bash
+source .venv/bin/activate
 python -m llm_storytell run \
   --app <app_name> \
-  --seed "<story description>"
+  --seed "<story description>" \
+  --beats <int>
 ```
 
 ### Required arguments
@@ -186,6 +191,15 @@ No pipeline logic may assume a fixed number of context files. Missing optional f
 ---
 
 ## Pipeline Stages (v1.0)
+
+### Criteria of Success for a Run
+A run is successful if all expected artifacts exist and are non-empty:
+- outline
+- all sections
+- summaries
+- final_script
+- editor_report
+
 
 ### Stage 0: Run Initialization
 
@@ -584,3 +598,5 @@ levels of Skrepa Union's MotherCity"
 * No hidden state outside `runs/`
 * Pipeline failures are detectable and debuggable
 * No manual intervention required once invoked
+* The task is not done unless the pipeline can be executed manually at least once for a real run.
+

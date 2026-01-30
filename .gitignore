@@ -30,3 +30,6 @@ assets/
 # Credentials, secrets and keys
 config/secrets.yaml
 config/creds.json
+
+# Prompts for testing
+tests/test_critic_prompt.txt

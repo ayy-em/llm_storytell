@@ -260,6 +260,9 @@ Before making changes:
 * Follow `.cursor/rules/`
 * Work one task at a time from `TASKS.md` (completed tasks are moved to `COMPLETED_TASKS.md`)
 
+Agent workflow source of truth: .cursor/rules/00-workflow.md. If any workflow instructions conflict, the Cursor rules win.
+
+
 If something is unclear, stop.
 
 ---
