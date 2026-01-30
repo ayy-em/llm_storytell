@@ -4,6 +4,29 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] R0001-1 Scope increase for v1.0: modify model selection logic (2026-01-30)
+
+**Goals**
+1. Change default model for OpenAI provider prompts to "gpt-4.1-mini"
+2. Add support for parsing optional CLI "--model" flag in "llm_storytell run ..." command and using that model in all calls for that run (fail immediately if provider API does not identify requested model)
+3. Document the new functionality in relevant docs (README/SPEC)
+
+**Inputs**
+CLI command (macOS): `./.venv/bin/python -m llm_storytell run --app grim-narrator --model gpt-4.1.nano --seed "A story of how suffering is a grim reality at lower society levels in the future."`
+
+**Allowed files**
+README.md, SPEC.md, CONTRIBUTING.md, src/llm_storytell/cli.py, src/llm_storytell/steps/*, src/llm_storytell/pipeline/*, src/llm_storytell/llm/*; tests expanded for --model and invalid-model behaviour.
+
+**Result**
+- **cli.py**: Added optional `--model`; default model changed from `gpt-4` to `gpt-4.1-mini`. `_run_pipeline` now takes `model` and passes it to `_create_llm_provider_from_config(default_model=model)` so the same provider (and thus the same model) is used for every LLM call in the run.
+- **llm/__init__.py**: When the client raises an exception whose message indicates model not recognized (e.g. "does not exist", "not found", "invalid"), `OpenAIProvider.generate` raises `LLMProviderError` immediately without retrying.
+- **SPEC.md**: Documented `--model` under Optional arguments (default gpt-4.1-mini; run fails immediately if provider does not identify the model).
+- **README.md**: Documented optional `--model` and default in the "Running the pipeline" section.
+- **Tests**: `test_llm_provider.py`: added `TestOpenAIProviderModelNotRecognized.test_model_not_recognized_fails_immediately_without_retry` (client raises "does not exist" → one call, no retry, clear error). `test_e2e.py`: added `test_e2e_model_flag_passed_to_provider_and_used_for_all_calls` (--model gpt-4.1-nano → provider created with default_model="gpt-4.1-nano"); `test_e2e_default_model_when_no_model_flag` (no --model → default_model="gpt-4.1-mini").
+- Commands run: `uv run ruff format .`, `uv run ruff check .`, `PYTHONPATH=. uv run pytest -q` (190 passed).
+
+---
+
 ### [x] R0001-BB-03 Bug Bash: E2E Production test (2026-01-30)
 
 TASK: Fix-the-run loop (no-refactor, artifact-driven)

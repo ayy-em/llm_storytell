@@ -419,6 +419,94 @@ def test_e2e_without_beats_override(
         monkeypatch.chdir(original_cwd)
 
 
+def test_e2e_model_flag_passed_to_provider_and_used_for_all_calls(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When --model is set, that model is passed to the provider and used for all LLM calls in the run."""
+    original_cwd = Path.cwd()
+    try:
+        monkeypatch.chdir(temp_app_structure)
+
+        mock_provider = MockLLMProvider()
+        provider_create_calls: list[tuple[Any, ...]] = []
+
+        def spy_create_provider(
+            config_path: Path, default_model: str = "gpt-4.1-mini"
+        ) -> Any:
+            provider_create_calls.append((config_path, default_model))
+            return mock_provider
+
+        with patch(
+            "llm_storytell.cli._create_llm_provider_from_config", spy_create_provider
+        ):
+            exit_code = main(
+                [
+                    "run",
+                    "--app",
+                    "test-app",
+                    "--seed",
+                    "A worker describes a day.",
+                    "--beats",
+                    "2",
+                    "--run-id",
+                    "test-run-model-flag",
+                    "--model",
+                    "gpt-4.1-nano",
+                ]
+            )
+
+        assert exit_code == 0
+        assert len(provider_create_calls) == 1
+        _, default_model = provider_create_calls[0]
+        assert default_model == "gpt-4.1-nano"
+        # Provider is created once; all steps use it without passing model=, so all calls use that model
+        assert len(mock_provider.calls) > 0
+    finally:
+        monkeypatch.chdir(original_cwd)
+
+
+def test_e2e_default_model_when_no_model_flag(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When --model is not set, default gpt-4.1-mini is passed to the provider."""
+    original_cwd = Path.cwd()
+    try:
+        monkeypatch.chdir(temp_app_structure)
+
+        mock_provider = MockLLMProvider()
+        provider_create_calls: list[tuple[Any, ...]] = []
+
+        def spy_create_provider(
+            config_path: Path, default_model: str = "gpt-4.1-mini"
+        ) -> Any:
+            provider_create_calls.append((config_path, default_model))
+            return mock_provider
+
+        with patch(
+            "llm_storytell.cli._create_llm_provider_from_config", spy_create_provider
+        ):
+            exit_code = main(
+                [
+                    "run",
+                    "--app",
+                    "test-app",
+                    "--seed",
+                    "A simple story.",
+                    "--run-id",
+                    "test-run-default-model",
+                    "--beats",
+                    "1",
+                ]
+            )
+
+        assert exit_code == 0
+        assert len(provider_create_calls) == 1
+        _, default_model = provider_create_calls[0]
+        assert default_model == "gpt-4.1-mini"
+    finally:
+        monkeypatch.chdir(original_cwd)
+
+
 def test_e2e_validates_beats_range(
     temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

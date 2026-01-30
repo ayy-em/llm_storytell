@@ -187,6 +187,16 @@ class OpenAIProvider(LLMProvider):
         attempts = 0
         max_attempts = self._max_retries + 1
 
+        _MODEL_NOT_RECOGNIZED_PHRASES = (
+            "does not exist",
+            "not found",
+            "invalid",
+            "unknown model",
+            "no such model",
+            "model_not_found",
+            "invalid_model",
+        )
+
         while attempts < max_attempts:
             try:
                 response = self._client(
@@ -197,6 +207,11 @@ class OpenAIProvider(LLMProvider):
                 break
             except Exception as exc:  # pragma: no cover - exercised via tests
                 last_error = exc
+                msg_lower = str(exc).lower()
+                if any(phrase in msg_lower for phrase in _MODEL_NOT_RECOGNIZED_PHRASES):
+                    raise LLMProviderError(
+                        f"Provider API does not identify requested model: {effective_model}. {exc!s}"
+                    ) from exc
                 attempts += 1
                 if attempts >= max_attempts:
                     msg = f"OpenAI call failed after {attempts} attempts"

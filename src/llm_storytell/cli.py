@@ -62,6 +62,11 @@ def create_parser() -> argparse.ArgumentParser:
         default=Path("config/"),
         help="Path to configuration directory (default: config/)",
     )
+    run_parser.add_argument(
+        "--model",
+        required=False,
+        help="Model identifier for all LLM calls in this run (default: gpt-4.1-mini). Fails immediately if the provider does not recognize the model.",
+    )
 
     return parser
 
@@ -107,13 +112,13 @@ def _update_state_selected_context(
 
 
 def _create_llm_provider_from_config(
-    config_path: Path, default_model: str = "gpt-4"
+    config_path: Path, default_model: str = "gpt-4.1-mini"
 ) -> LLMProvider:
     """Create LLM provider from configuration.
 
     Args:
         config_path: Path to config directory.
-        default_model: Default model to use if config is missing.
+        default_model: Model to use for all LLM calls (CLI override or default).
 
     Returns:
         LLM provider instance.
@@ -197,6 +202,7 @@ def _run_pipeline(
     beats: int | None,
     run_id: str | None,
     config_path: Path,
+    model: str = "gpt-4.1-mini",
     llm_provider: LLMProvider | None = None,
 ) -> int:
     """Run the complete content generation pipeline.
@@ -207,6 +213,7 @@ def _run_pipeline(
         beats: Number of outline beats (None for app-defined default).
         run_id: Optional run ID override.
         config_path: Path to configuration directory.
+        model: Model identifier for all LLM calls in this run.
         llm_provider: Optional LLM provider (for testing). If None, creates from config.
 
     Returns:
@@ -258,9 +265,11 @@ def _run_pipeline(
         }
         _update_state_selected_context(run_dir, selected_context)
 
-        # Create or use provided LLM provider
+        # Create or use provided LLM provider (model applies to all LLM calls in this run)
         if llm_provider is None:
-            llm_provider = _create_llm_provider_from_config(config_path)
+            llm_provider = _create_llm_provider_from_config(
+                config_path, default_model=model
+            )
 
         # Get schema base path
         schema_base = base_dir / "src" / "llm_storytell" / "schemas"
@@ -476,6 +485,9 @@ def main(argv: list[str] | None = None) -> int:
         if beats is None:
             beats = 5
 
+        # Model for all LLM calls: CLI override or default
+        model = args.model if args.model is not None else "gpt-4.1-mini"
+
         # Run the pipeline
         return _run_pipeline(
             app_paths=app_paths,
@@ -483,6 +495,7 @@ def main(argv: list[str] | None = None) -> int:
             beats=beats,
             run_id=args.run_id,
             config_path=args.config_path,
+            model=model,
         )
 
     return 0

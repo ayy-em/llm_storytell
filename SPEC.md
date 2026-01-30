@@ -161,6 +161,11 @@ python -m llm_storytell run \
 * `--config-path`
 
   * Default: `config/`
+* `--model`
+
+  * Optional override for the model identifier used for **all** LLM calls in this run.
+  * Default: `gpt-4.1-mini`
+  * If the provider API does not recognize the requested model, the run fails immediately (no retries).
 
 Apps define *recommended* values. The pipeline enforces *absolute* limits.
 

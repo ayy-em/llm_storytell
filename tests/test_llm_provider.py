@@ -367,3 +367,36 @@ class TestOpenAIProviderEmptyContent:
             provider.generate("Hi", step="outline")
 
         assert "Empty assistant content" in str(exc_info.value)
+
+
+class TestOpenAIProviderModelNotRecognized:
+    """Provider fails immediately when API does not identify the requested model."""
+
+    def test_model_not_recognized_fails_immediately_without_retry(self) -> None:
+        """When the client raises a model-not-found type error, fail immediately, no retries."""
+        call_count = 0
+
+        def client_that_raises_model_not_found(
+            *_: Any, **kwargs: Any
+        ) -> Mapping[str, Any]:
+            nonlocal call_count
+            call_count += 1
+            raise ValueError(
+                "The model 'gpt-4.1-nano' does not exist or you do not have access to it."
+            )
+
+        provider = OpenAIProvider(
+            client_that_raises_model_not_found,
+            default_model="gpt-4.1-nano",
+            max_retries=2,
+        )
+
+        with pytest.raises(LLMProviderError) as exc_info:
+            provider.generate("Hi", step="outline")
+
+        msg = str(exc_info.value)
+        assert "Provider API does not identify requested model" in msg
+        assert "gpt-4.1-nano" in msg
+        assert "does not exist" in msg
+        # Must not retry: client called exactly once
+        assert call_count == 1

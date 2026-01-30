@@ -239,6 +239,11 @@ python -m llm_storytell run \
 ```
 
 The `--app` argument selects the content profile to use. Only `grim-narrator` app exists in v1.0.
+
+Optional arguments include `--model` (model identifier for all LLM calls in the run; default: `gpt-4.1-mini`; run fails immediately if the provider does not recognize the model), `--beats` / `--sections` (1–20), `--run-id`, and `--config-path`. See `SPEC.md` for full CLI reference.
+
+For the OpenAI provider, `--model` accepts any model ID supported by the OpenAI Chat Completions API (e.g. `gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-4o`, `gpt-4`). See [OpenAI’s models documentation](https://platform.openai.com/docs/models) for the current list.
+
 On success, a new directory appears under `runs/` containing:
 
 * All intermediate artifacts
