@@ -422,7 +422,7 @@ Logging behavior must not vary by app. Apps may influence content generation, bu
 **Logged events (required)**
 
 * Run initialization (run_id, app, seed)
-* Selected context files (including randomized selections)
+* Selected context files (deterministic; no randomness)
 * Each pipeline stage:
     start timestamp
     end timestamp
@@ -536,16 +536,9 @@ class LLMProvider:
 
 ## Pipeline Configuration
 
-Defined in `config/pipeline.yaml`.
+Step order is fixed and implemented in the orchestrator (e.g. `cli.py`). The file `config/pipeline.yaml` exists but may be empty or used for reference only; the pipeline does not load step order from YAML in v1.0.
 
-The pipeline is declarative:
-
-* Step order
-* Prompt template paths
-* Validators
-* Loop definitions
-
-The orchestrator executes strictly in order.
+The orchestrator executes strictly in order: run init → outline → (for each beat: section, then summarize) → critic.
 
 ---
 
@@ -562,15 +555,27 @@ runs/<run_id>/
     10_outline.json
     20_section_01.md
     ...
+    30_critic_raw_response.txt
     final_script.md
     editor_report.json
+  llm_io/
+    <stage_name>/
+      prompt.txt
+      response.txt   (only when non-empty)
+      meta.json
+      raw_response.json
 ```
 
 Runs are immutable once complete.
 
+### Failure semantics
+
+* **Missing required context** (e.g. no `lore_bible.md` or no character file): run fails at initialization with a clear error message; no run directory is left behind (or init is atomic so partial state is not committed).
+* **Step failure** (outline, section, summarize, critic): process exits non-zero; error is printed to stderr; details are written to `run.log`; `state.json` is not updated for the failed step (state is only updated after successful step completion).
+* **Validation failure** (schema or prompt variable): step raises; orchestrator logs and exits non-zero; see `run.log` for the failing step and artifact.
+
 ---
-python -m llm_storytell run --app grim-narrator --seed "Police brutality, no matter how severe, is just a mundane part of existence in the lower 
-levels of Skrepa Union's MotherCity"
+
 ## Roadmap (Directional)
 
 * **v1.0** – Local, text-only pipeline (multi-app capable)

@@ -120,7 +120,7 @@ For the active app (e.g. `grim-narrator`):
 1. A short seed prompt is provided via CLI
 2. The active app’s rules and context are loaded
 3. A fixed multi-stage pipeline runs:
-   * outline → draft → critique
+   * outline → (for each beat: section then summarize) → critic
 4. All intermediate artifacts are persisted
 5. A final script is produced
 6. Later versions convert this into audio and video
@@ -171,7 +171,9 @@ LLM-Storytell/
   COMPLETED_TASKS.md
 
   config/
-    creds.json
+    pipeline.yaml
+    model.yaml
+    creds.json (gitignored)
 
   prompts/
     README.md
@@ -187,7 +189,12 @@ LLM-Storytell/
       lore_bible.md
 
   runs/
-    <immutable run outputs>
+    <run_id>/
+      run.log
+      inputs.json
+      state.json
+      artifacts/
+      llm_io/
 
   src/
     llm_storytell/
@@ -219,38 +226,69 @@ cd llm_storytell
 uv sync
 ```
 
-Create credentials file:
+Credentials are read from a file; no environment variables are required. Create `config/creds.json`:
 
 ```json
-// config/creds.json
 {
   "OPENAI_KEY": "your_api_key_here"
 }
 ```
 
+**Minimal .gitignore:** The repo ignores `runs/`, `context/`, and `config/creds.json`. App context files (lore, characters, etc.) live under `context/<app_name>/` and are not committed.
+
 ---
 
 ## Running the pipeline (MVP)
 
+From the project root (with venv active or via `uv run`):
+
 ```bash
-python -m llm_storytell run \
+uv run python -m llm_storytell run \
   --app grim-narrator \
   --seed "A low-level worker describes a single ordinary day in a decaying future city."
 ```
 
-The `--app` argument selects the content profile to use. Only `grim-narrator` app exists in v1.0.
+On success, a new directory `runs/<run_id>/` is created containing:
 
-Optional arguments include `--model` (model identifier for all LLM calls in the run; default: `gpt-4.1-mini`; run fails immediately if the provider does not recognize the model), `--beats` / `--sections` (1–20), `--run-id`, and `--config-path`. See `SPEC.md` for full CLI reference.
-
-For the OpenAI provider, `--model` accepts any model ID supported by the OpenAI Chat Completions API (e.g. `gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-4o`, `gpt-4`). See [OpenAI’s models documentation](https://platform.openai.com/docs/models) for the current list.
-
-On success, a new directory appears under `runs/` containing:
-
-* All intermediate artifacts
-* `state.json`
-* Final script output
+* `run.log` — timestamped run and stage log
+* `inputs.json` — run inputs (app, seed, beats, paths)
+* `state.json` — pipeline state (outline, sections, summaries, token usage)
+* `artifacts/` — `10_outline.json`, `20_section_01.md` … `20_section_NN.md`, `final_script.md`, `editor_report.json`
+* `llm_io/` — per-stage prompt/response debug files
 
 Runs are immutable once completed.
+
+---
+
+## Supported CLI arguments
+
+| Argument       | Required | Description |
+|----------------|----------|-------------|
+| `--app`        | Yes      | App name (must exist under `context/` and `prompts/apps/`) |
+| `--seed`       | Yes      | Short story description (2–3 sentences) |
+| `--beats`      | No       | Number of outline beats (1–20). Default: 5 |
+| `--sections`   | No       | Alias for `--beats` (use one or the other) |
+| `--run-id`     | No       | Override run ID (default: `run-YYYYMMDD-HHMMSS`) |
+| `--config-path`| No       | Config directory (default: `config/`) |
+| `--model`      | No       | Model for all LLM calls (default: `gpt-4.1-mini`). Run fails immediately if the provider does not recognize the model. |
+
+Full reference: `SPEC.md` (CLI Interface).
+
+---
+
+## How to add a new app
+
+1. Create **context** directory: `context/<app_name>/` with at least:
+   * `lore_bible.md` (required)
+   * `characters/` with at least one `.md` file (required)
+   * Optionally: `locations/`, `world/`, `style/` (see Context handling above)
+
+2. Create **prompts** directory: `prompts/apps/<app_name>/` with the pipeline templates:
+   * `10_outline.md`, `20_section.md`, `21_summarize.md`, `30_critic.md` (and optionally `00_seed.md`)
+
+3. Ensure **both** `context/<app_name>/` and `prompts/apps/<app_name>/` exist. The CLI resolves an app only when both directories exist; missing either yields a clear error.
+
+4. Run with `--app <app_name>`. Variable contracts and schema validation are the same for all apps; see `SPEC.md` (Prompt Variable Contracts, Schemas).
 
 ---
 

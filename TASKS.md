@@ -77,65 +77,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 ## v1.0 Release Preparation Tasks
 
-### [ ] R0002 Documentation cleanup for v1.0
-
-**Goal**
-Make documentation boring, accurate, and aligned with actual v1.0 behavior.
-
-**Context**
-The MVP implementation is complete. Documentation must reflect what the system actually does today, not intentions, not future plans, and not outdated assumptions from earlier design phases.
-
-**Deliverables**
-
-* Review `README.md` - it should cover these items (do not change if already present and accurate):
-  * Quickstart:
-    * Minimal project setup using uv
-    * Required env vars and/or credentials in `creds.json`
-    * Minimal set of required files in .gitignore (app files, context .md files, etc)
-  * Section - "How to add a new app"
-  * Section - "Supported CLI arguments"
-  * Expected outputs and run lifecycle
-  * High-level E2E pipeline flow
-* Updated `SPEC.md` aligned with implemented behavior:
-
-  * pipeline stages
-  * state structure
-  * artifact layout
-  * validation and failure semantics
-* Updated `CONTRIBUTING.md`:
-
-  * current workflow rules
-  * required commands
-  * test and formatting expectations
-
-**Acceptance criteria**
-
-* All documented commands run successfully when copy-pasted
-* No documentation claims features not present in v1.0
-* Pipeline description matches actual execution order and artifacts
-* Failure modes described match real error behavior
-* MVP scope and constraints are explicit
-
-**Allowed files**
-
-* `README.md`
-* `SPEC.md`
-* `CONTRIBUTING.md`
-
-**Commands to run**
-
-* `uv run ruff format .`
-* `uv run ruff check .`
-* `uv run pytest -q`
-
-**Notes**
-
-* No new features
-* No roadmap speculation
-* Prefer deleting misleading text over inventing explanations
-
----
-
 ### [ ] R0003 Test coverage confidence pass
 
 **Goal**

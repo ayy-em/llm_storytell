@@ -33,6 +33,18 @@ If an implementation conflicts with `SPEC.md`, the implementation is wrong.
 
 If ruff reports an error, it must be fixed. Explanations are not fixes.
 
+### Required commands
+
+After implementation (and before considering a task done), run:
+
+```bash
+uv run ruff format .
+uv run ruff check .
+uv run pytest -q
+```
+
+All three must pass. Fix any failures and rerun until green.
+
 ---
 
 ## Dependencies
@@ -185,6 +197,7 @@ A task is considered complete only if:
 * The code can be run from a clean checkout without manual intervention
 * Rules defined at repository level (e.g. `/.cursor/rules`) are respected
 * The completed task is marked [x] in TASKS.md with a Result note, then moved to COMPLETED_TASKS.md.
+* Required commands (`uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q`) have been run and all pass.
 
 If any of the above is not true, the task is not done.
 
