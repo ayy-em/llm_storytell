@@ -24,8 +24,6 @@ apps/*
 !apps/default_config.yaml
 prompts/apps/
 runs/
-context/
-!src/llm_storytell/context
 assets/
 
 # Ruff & uv stuff
