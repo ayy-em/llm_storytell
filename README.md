@@ -17,7 +17,7 @@ It is designed to support **multiple content “apps”** (profiles), each with 
 * Output length and structure
 * Audio / voice / background style (v1.1+)
 
-The first app is **grim-narrator** (all the lore content is .gitignored tho). It will not be the last.
+The committed example app is **example_app**; run with `--app example_app` to try the pipeline. It will not be the last.
 
 ---
 
@@ -92,26 +92,27 @@ Apps may range from minimal configurations (e.g. a single lore file and a short 
 
 Example apps:
 
+* `example_app` — minimal committed app under `apps/example_app/`; run with `--app example_app` to try the pipeline.
 * `grim-narrator`
   60-minute bleak, depressive, slow-paced stories
 * `toddler-bedtime` (future)
-  10-minute lighthearted stories, upbeat tone, calm voice
+  10-minute lighthearted stories about cars, upbeat tone, calm voice
 * others later
 
 ### MVP scope
 
-* Only **grim-narrator** exists
+* **example_app** (committed) exists; other apps are gitignored under `apps/`.
 * Architecture assumes more will be added
 
 ---
 
 ## Context handling (MVP behavior)
 
-For the active app (e.g. `grim-narrator`):
+For the active app (e.g. `example_app`), context lives under `apps/<app_name>/context/`:
 
-* **Required:** The app’s **lore bible** (`context/<app>/lore_bible.md`) must exist, and at least one character file in `context/<app>/characters/*.md` must exist. If either is missing, the run fails early with a clear error.
-* **Optional:** If `context/<app>/locations/` has `.md` files, exactly one location is included (first alphabetically). If `context/<app>/world/` has `.md` files, all are loaded in alphabetical order and folded into the lore bible with a visible separator; the list is stored in `selected_context.world_files`.
-* Selection is **deterministic** (no randomness): location = first alphabetically, characters = first N (up to 3) alphabetically. Selections are logged and persisted in `state.json` for reproducibility.
+* **Required:** The app’s **lore bible** (`apps/<app_name>/context/lore_bible.md`) must exist, and at least one character file in `apps/<app_name>/context/characters/*.md` must exist. If either is missing, the run fails early with a clear error.
+* **Optional:** If `apps/<app_name>/context/locations/` has `.md` files, exactly one location is included (first alphabetically). If `apps/<app_name>/context/world/` has `.md` files, all are loaded in alphabetical order and folded into the lore bible with a visible separator; the list is stored in `selected_context.world_files`.
+* Selection is **deterministic** (no randomness): location = first alphabetically, characters = first N (from app config or pipeline default) alphabetically. Selections are logged and persisted in `state.json` for reproducibility.
 
 ---
 
@@ -139,7 +140,7 @@ Pipeline steps are responsible for taking this metadata and recording token usag
 
 ### Prompt Templates and Variable Contracts
 
-Each pipeline step uses a prompt template (`.md` files in `prompts/apps/<app_name>/`) that defines the LLM instructions. These templates use Python string formatting with variables provided by the pipeline code.
+Each pipeline step uses a prompt template from `apps/<app_name>/prompts/` if that directory exists, otherwise from `prompts/app-defaults/`. Templates are `.md` files and use Python string formatting with variables provided by the pipeline code.
 
 **Important constraints:**
 
@@ -175,18 +176,22 @@ LLM-Storytell/
     model.yaml
     creds.json (gitignored)
 
+  apps/
+    default_config.yaml
+    <app_name>/
+      context/
+        lore_bible.md
+        characters/
+        locations/
+        world/
+        style/
+      prompts/         (optional; if absent, app uses app-defaults)
+      app_config.yaml  (optional)
+
   prompts/
     README.md
     shared/
-    apps/
-      <app_name>/
-  context/
-    <app_name>/
-      characters/
-      locations/
-      style/
-      world/
-      lore_bible.md
+    app-defaults/
 
   runs/
     <run_id>/
@@ -206,7 +211,7 @@ LLM-Storytell/
     fixtures/
 ```
 
-App-specific structure may evolve and change from app to app. Generated content must never be committed.
+App-specific structure may evolve. Generated content must never be committed.
 
 ---
 
@@ -234,7 +239,7 @@ Credentials are read from a file; no environment variables are required. Create 
 }
 ```
 
-**Minimal .gitignore:** The repo ignores `runs/`, `context/`, and `config/creds.json`. App context files (lore, characters, etc.) live under `context/<app_name>/` and are not committed.
+**Minimal .gitignore:** The repo ignores `runs/`, `apps/` (except `apps/example_app/`), and `config/creds.json`. App data lives under `apps/<app_name>/`; only `apps/example_app/` is committed as an example.
 
 ---
 
@@ -244,7 +249,7 @@ From the project root (with venv active or via `uv run`):
 
 ```bash
 uv run python -m llm_storytell run \
-  --app grim-narrator \
+  --app example_app \
   --seed "A low-level worker describes a single ordinary day in a decaying future city."
 ```
 
@@ -262,15 +267,16 @@ Runs are immutable once completed.
 
 ## Supported CLI arguments
 
-| Argument       | Required | Description |
-|----------------|----------|-------------|
-| `--app`        | Yes      | App name (must exist under `context/` and `prompts/apps/`) |
-| `--seed`       | Yes      | Short story description (2–3 sentences) |
-| `--beats`      | No       | Number of outline beats (1–20). Default: 5 |
-| `--sections`   | No       | Alias for `--beats` (use one or the other) |
-| `--run-id`     | No       | Override run ID (default: `run-YYYYMMDD-HHMMSS`) |
-| `--config-path`| No       | Config directory (default: `config/`) |
-| `--model`      | No       | Model for all LLM calls (default: `gpt-4.1-mini`). Run fails immediately if the provider does not recognize the model. |
+| Flag | Values allowed | Description |
+|------|----------------|-------------|
+| `--app` | app name (required) | App to run. Must exist under `apps/` (i.e. `apps/<app_name>/` with at least `context/lore_bible.md`). |
+| `--seed` | string (required) | Short story description (2–3 sentences). |
+| `--beats` | integer 1–20 | Number of outline beats. Default: from app config (or pipeline default). |
+| `--sections` | integer 1–20 | Alias for `--beats` (use one or the other). |
+| `--run-id` | string | Override run ID. Default: `run-YYYYMMDD-HHMMSS`. |
+| `--config-path` | path | Config directory. Default: `config/`. |
+| `--model` | model identifier | Model for all LLM calls. Default: `gpt-4.1-mini`. Run fails immediately if the provider does not recognize the model. |
+| `--section-length` | integer N | Target words per section; pipeline uses range `[N*0.8, N*1.2]`. Overrides app config when set. |
 
 Full reference: `SPEC.md` (CLI Interface).
 
@@ -278,15 +284,14 @@ Full reference: `SPEC.md` (CLI Interface).
 
 ## How to add a new app
 
-1. Create **context** directory: `context/<app_name>/` with at least:
-   * `lore_bible.md` (required)
-   * `characters/` with at least one `.md` file (required)
-   * Optionally: `locations/`, `world/`, `style/` (see Context handling above)
+1. Create **app directory**: `apps/<app_name>/` with at least:
+   * **Context:** `apps/<app_name>/context/lore_bible.md` (required)
+   * **Characters:** `apps/<app_name>/context/characters/` with at least one `.md` file (required for a run to succeed)
+   * Optionally: `context/locations/`, `context/world/`, `context/style/` (see Context handling above)
 
-2. Create **prompts** directory: `prompts/apps/<app_name>/` with the pipeline templates:
-   * `10_outline.md`, `20_section.md`, `21_summarize.md`, `30_critic.md` (and optionally `00_seed.md`)
+2. **Optional:** Add `apps/<app_name>/app_config.yaml` to override defaults (beats, section_length, context limits, model). If absent, the pipeline uses `apps/default_config.yaml` or built-in defaults.
 
-3. Ensure **both** `context/<app_name>/` and `prompts/apps/<app_name>/` exist. The CLI resolves an app only when both directories exist; missing either yields a clear error.
+3. **Optional:** Add `apps/<app_name>/prompts/` with pipeline templates (`10_outline.md`, `20_section.md`, etc.). If absent, the app uses `prompts/app-defaults/`. Only `lore_bible.md` is required when using default_config; prompts default to app-defaults.
 
 4. Run with `--app <app_name>`. Variable contracts and schema validation are the same for all apps; see `SPEC.md` (Prompt Variable Contracts, Schemas).
 

@@ -27,7 +27,7 @@ The pipeline is designed to support **variable output scale**, ranging from:
 * Single-section, short-form stories generated from minimal context
 * Multi-section, long-form narratives using extensive rotating context
 
-While v1.0 ships with a single app (`grim-narrator`) and a default configuration, the orchestrator must not assume fixed story length, fixed beat count, or fixed context volume.
+While v1.0 ships with a committed example app (`example_app`) and a default configuration, the orchestrator must not assume fixed story length, fixed beat count, or fixed context volume.
 
 ---
 
@@ -45,7 +45,7 @@ The pipeline itself is generic. Behavior changes based on the selected app.
 
 ### MVP apps
 
-* `grim-narrator` (only app in v1.0)
+* `example_app` (committed example app in v1.0)
 
 The architecture must assume multiple apps from the beginning.
 
@@ -66,30 +66,33 @@ LLM-Storytell/
     model.yaml
     creds.json (gitignored)
 
-  context/
+  apps/
+    default_config.yaml
     <app_name>/
-      lore_bible.md
-      world/
+      context/
+        lore_bible.md
+        world/
+          *.md
+        locations/
+          *.md
+        characters/
+          *.md
+        style/
+          *.md
+      prompts/          (optional; if absent, app uses app-defaults)
         *.md
-      locations/
-        *.md
-      characters/
-        *.md
-      style/
-        narration.md
-        tone.md
+      app_config.yaml   (optional)
 
   prompts/
     README.md
     shared/
       dev_workflow_prompt.md
-    apps/
-      <app_name>/
-        00_seed.md
-        10_outline.md
-        20_section.md
-        21_summarize.md
-        30_critic.md
+    app-defaults/
+      00_seed.md
+      10_outline.md
+      20_section.md
+      21_summarize.md
+      30_critic.md
 
   runs/
     <run_id>/
@@ -132,62 +135,40 @@ python -m llm_storytell run \
   --beats <int>
 ```
 
-### Required arguments
+### Arguments
 
-* `--app`
+| Flag | Values allowed | Description |
+|------|----------------|-------------|
+| `--app` | app name (required) | Name of the app to run. Must correspond to a directory under `apps/` (i.e. `apps/<app_name>/` with at least `apps/<app_name>/context/lore_bible.md`). |
+| `--seed` | string (required) | Short natural-language description (2–3 sentences). Describes setting, POV, and general premise. |
+| `--beats` | integer 1–20 | Number of outline beats. Default: from app config (or pipeline default). Overrides app when set. |
+| `--sections` | integer 1–20 | Alias for `--beats` (one section per beat). Use one or the other. |
+| `--run-id` | string | Override run ID. Default: `run-YYYYMMDD-HHMMSS`. |
+| `--config-path` | path | Config directory. Default: `config/`. |
+| `--model` | model identifier | Model used for **all** LLM calls in this run. Default: `gpt-4.1-mini`. Run fails immediately if the provider does not recognize the model. |
+| `--section-length` | integer N | Target words per section; pipeline uses range `[N*0.8, N*1.2]`. Overrides app config when set. |
 
-  * Name of the app to run
-  * Must correspond to a directory under `context/`
-* `--seed`
-
-  * Short natural-language description (2–3 sentences)
-  * Describes setting, POV, and general premise
-
-### Optional arguments (v1.0 defaults)
-
-* `--beats`
-
-  * Optional override for number of outline beats
-  * Default: 5 (v1.0 hardcoded default; app-defined defaults planned for future versions)
-  * Allowed range: **1–20**
-* `--sections`
-
-  * Alias of `--beats` (one section per beat)
-  * Included for clarity; only one should be used
-* `--run-id`
-
-  * Optional override
-  * Default format: `run-YYYYMMDD-HHMMSS`
-* `--config-path`
-
-  * Default: `config/`
-* `--model`
-
-  * Optional override for the model identifier used for **all** LLM calls in this run.
-  * Default: `gpt-4.1-mini`
-  * If the provider API does not recognize the requested model, the run fails immediately (no retries).
-
-Apps define *recommended* values. The pipeline enforces *absolute* limits.
+Defaults for beats and section_length come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits.
 
 ---
 
 ## Context Loading (v1.0)
 
-Context loading is **app-defined but platform-executed**. A single `ContextLoader` validates and selects context at run start; all steps use shared `build_prompt_context_vars(context_dir, state)` for prompt variables.
+Context loading is **app-defined but platform-executed**. A single `ContextLoader` validates and selects context at run start; all steps use shared `build_prompt_context_vars(context_dir, state)` for prompt variables. Context lives under `apps/<app_name>/context/`.
 
 ### Required (run fails early with clear message if missing)
 
-* `context/<app>/lore_bible.md` must exist.
-* At least one `.md` file in `context/<app>/characters/` must exist (directory must exist and be non-empty).
+* `apps/<app_name>/context/lore_bible.md` must exist.
+* At least one `.md` file in `apps/<app_name>/context/characters/` must exist (directory must exist and be non-empty).
 
 ### Optional (missing folders must not stop output)
 
-* **Locations:** If `context/<app>/locations/` exists and contains `.md` files, exactly **one** location is included (deterministic: first alphabetically). Otherwise `location_context` is `""`.
-* **World:** If `context/<app>/world/` exists and contains `.md` files, **all** world files are loaded in alphabetical order, appended to lore_bible with a clear separator header (`---\n## World context (from world/*.md)\n\n`), and the list of world file paths is recorded in `state.json` under `selected_context.world_files`. If absent, generation still proceeds.
+* **Locations:** If `apps/<app_name>/context/locations/` exists and contains `.md` files, exactly **one** location is included (deterministic: first alphabetically). Otherwise `location_context` is `""`.
+* **World:** If `apps/<app_name>/context/world/` exists and contains `.md` files, **all** world files are loaded in alphabetical order, appended to lore_bible with a clear separator header (`---\n## World context (from world/*.md)\n\n`), and the list of world file paths is recorded in `state.json` under `selected_context.world_files`. If absent, generation still proceeds.
 
 ### Selection rules
 
-* **Deterministic:** No randomness. Location: first file alphabetically. Characters: first N alphabetically (N = up to 3, or all if fewer). World: all files in alphabetical order.
+* **Deterministic:** No randomness. Location: first file alphabetically. Characters: first N alphabetically (N from app config or pipeline default). World: all files in alphabetical order.
 * **Logged:** Selections are written to `run.log`.
 * **Persisted:** `state.json.selected_context` records `characters` (list of basenames), `location` (basename or null), and `world_files` (list of basenames) for reproducibility.
 
@@ -475,7 +456,7 @@ When combined context (lore + style + location + characters) approaches or excee
 
 ```json
 {
-  "app": "grim-narrator",
+  "app": "example_app",
   "seed": "...",
   "selected_context": {
     "location": "<basename or null>",

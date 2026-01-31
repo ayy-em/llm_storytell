@@ -59,7 +59,7 @@ Each task includes:
 
 Agent is to stop after reading task and request clarification if any of the non-optional items are missing.
 
-## Task's: Definition of Done
+## Task: Definition of Done
 
 1. Running the CLI command defined in SPEC.md successfully 
 2. Run folder is created upon success, containing:
@@ -74,49 +74,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 6. All tests pass (`uv run pytest -q`).
 7. README.md and SPEC.md are up-to-date and accurately reflect actual scope, technical solution design and other project information.
 8. No finished tasks are found in TASKS.md file.
-
-## [ ] T006 v1.0.2 .gitignore apps/ except example_app
-
-**Goal**
-Update `.gitignore` so `apps/` is ignored except for a committed `apps/example_app/` (or equivalent). 
-Add `apps/example_app/` with minimal required context and optional app_config.yaml
-
-**Acceptance criteria**
-* `.gitignore` excludes `apps/` but not `apps/example_app/` (or the chosen name).
-* `apps/example_app/` exists in repo with at least `context/lore_bible.md` and optional `app_config.yaml` so new users can run with `--app example_app`.
-
-**Allowed files**
-* `.gitignore`
-* `apps/example_app/**` (new directory and files)
-* `README.md` (optional: pointer to example_app)
-
-**Commands to run**
-* `uv run ruff format .`
-* `uv run ruff check .`
-* `uv run pytest -q`
-
----
-
-## [ ] T007 v1.0.2 Update README and SPEC for new app structure and CLI
-
-**Goal**
-Update README and SPEC to describe the `apps/` layout (introduced in T002), `app_config.yaml`, `apps/default_config.yaml`, section_length (T004), and `--section-length` CLI flag. Update "How to add a new app" to use apps/ and default_config.
-
-**Acceptance criteria**
-* README and SPEC describe `apps/<app_name>/` structure (context, prompts, app_config.yaml).
-* CLI documentation includes `--section-length` (from T004).
-* "How to add a new app" reflects apps/ and that only lore_bible.md is required when using default_config.
-
-**Allowed files**
-* `README.md`
-* `SPEC.md`
-
-**Commands to run**
-* `uv run ruff format .`
-* `uv run ruff check .`
-* `uv run pytest -q`
-
----
 
 ## [ ] T008 v1.0.3 Target word count CLI
 
@@ -135,7 +92,7 @@ Add `--word-count N` CLI flag for target total word count. Given word-count and 
 **Allowed files**
 * `src/llm_storytell/cli.py`
 * `src/llm_storytell/` (orchestration / run init as needed)
-* `tests/**` (do not modify)
+* `tests/**` (do not modify, only add new test)
 * `README.md`
 * `SPEC.md`
 

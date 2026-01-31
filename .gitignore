@@ -18,8 +18,8 @@ wheels/
 .venv
 
 # Actual content and inputs for the pipeline, i.e. runs, lore and assets
-apps/
-!apps/example_app/*
+apps/*
+!apps/example_app/
 !apps/default_config.yaml
 prompts/apps/
 runs/

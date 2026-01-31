@@ -4,6 +4,55 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T007 v1.0.2 Update README and SPEC for new app structure and CLI (2026-01-31)
+
+**Goal**
+Update README and SPEC to describe the `apps/` layout (introduced in T002), `app_config.yaml`, `apps/default_config.yaml`, section_length (T004), and `--section-length` CLI flag. Update "How to add a new app" to use apps/ and default_config.
+
+**Acceptance criteria**
+* README and SPEC describe `apps/<app_name>/` structure (context, prompts, app_config.yaml).
+* CLI documentation includes `--section-length` (from T004).
+* "How to add a new app" reflects apps/ and that only lore_bible.md is required when using default_config.
+
+**Allowed files**
+* `README.md`
+* `SPEC.md`
+
+**Commands to run**
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Result**
+SPEC: Repository Structure updated to `apps/<app_name>/` (context, optional prompts, app_config.yaml) and `prompts/app-defaults/`. CLI section replaced with a single markdown table (flag | values allowed | description) including `--app`, `--seed`, `--beats`, `--sections`, `--run-id`, `--config-path`, `--model`, `--section-length`. Context Loading paths changed from `context/<app>/` to `apps/<app_name>/context/`. README: Context handling, Prompt templates, Repository structure, .gitignore, and "How to add a new app" updated to apps/ and default_config; Supported CLI arguments reformatted to same three-column table. No code or test changes. Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (223 passed).
+
+---
+
+### [x] T006 v1.0.2 .gitignore apps/ except example_app (2026-01-31)
+
+**Goal**
+Update `.gitignore` so `apps/` is ignored except for a committed `apps/example_app/` (or equivalent). 
+Add `apps/example_app/` with minimal required context and optional app_config.yaml
+
+**Acceptance criteria**
+* `.gitignore` excludes `apps/` but not `apps/example_app/` (or the chosen name).
+* `apps/example_app/` exists in repo with at least `context/lore_bible.md` and optional `app_config.yaml` so new users can run with `--app example_app`.
+
+**Allowed files**
+* `.gitignore`
+* `apps/example_app/**` (new directory and files)
+* `README.md` (optional: pointer to example_app)
+
+**Commands to run**
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Result**
+Updated `.gitignore`: replaced `apps/` with `apps/*` and `!apps/example_app/*` with `!apps/example_app/` so Git tracks only `apps/example_app/` and `apps/default_config.yaml`; rest of `apps/` remains ignored. Ensured `apps/example_app/` has `context/lore_bible.md`, `context/characters/example_character.md` (minimal required for run), and optional `app_config.yaml` (comment only). Added README pointer under Example apps and updated MVP scope to mention example_app and that other apps are gitignored. No new tests (allowed files did not include tests/; no new code behaviour). Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (223 passed).
+
+---
+
 ### [x] T005 v1.0.2 Context selection limits from app config (2026-01-31)
 
 **Goal**
