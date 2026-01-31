@@ -407,7 +407,7 @@ Logging is defined once at the platform level and applies uniformly to all apps.
 runs/<run_id>/run.log
 ```
 
-Logging behavior must not vary by app. Apps may influence content generation, but not observability.
+Logging behavior does not vary by app. Apps may influence content generation, but not observability.
 
 **Logged events (required)**
 
@@ -524,12 +524,11 @@ class LLMProvider:
 
 ### Rationale
 
-* Enables future support for:
-
-  * Multiple providers
-  * Local models
-  * Fallback strategies
-  * Cost-aware routing
+Enables future support for:
+- Multiple providers
+- Local models
+- Fallback strategies
+- Cost-aware routing
 
 ---
 
@@ -598,16 +597,3 @@ Runs are immutable once complete.
 * Multi-user concurrency
 * UI beyond CLI
 * Monetization or platform integration
-
----
-
-## Definition of Done (v1.0)
-
-* CLI produces a complete `final_script.md`
-* Context selection is logged and reproducible
-* All structured outputs validate against schemas
-* No hidden state outside `runs/`
-* Pipeline failures are detectable and debuggable
-* No manual intervention required once invoked
-* The task is not done unless the pipeline can be executed manually at least once for a real run.
-

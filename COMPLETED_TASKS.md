@@ -4,6 +4,36 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T0124 – Implement audio-prep step (stitching + background music) (2026-01-31)
+
+**Goal**
+Produce a single narrated audio file with background music and volume automation.
+
+**Inputs**
+0 < N ≤ 22 audio segments from llm-tts.
+
+**Acceptance criteria**
+- Steps:
+  1. Stitch segments into one voiceover track.
+  2. Calculate voiceover duration.
+  3. Load background music: apps/<app_name>/assets/bg-music.* if exists, else assets/default-bg-music.wav.
+  4. Loop bg music with 2s crossfade to duration + 6s.
+  5. Apply bg volume envelope: 0–1.5s 75%, 1.5–3s fade to 10%, 10% during narration, after narration fade to 70% over 2s.
+  6. Mix voiceover + bg music.
+- Output: stitched voiceover to runs/<run_id>/voiceover/; final to runs/<run_id>/artifacts/narration-<app_name>.<ext>.
+- Implementation uses ffmpeg via subprocess (PATH assumed).
+- Tests mock subprocess and verify command construction and timing.
+
+**Allowed files**
+- src/llm_storytell/steps/audio_prep.py
+- src/llm_storytell/utils/** (if strictly necessary)
+- tests/test_audio_prep_step.py
+
+**Result**
+Implemented src/llm_storytell/steps/audio_prep.py: execute_audio_prep_step(run_dir, base_dir, logger, app_name=None); segment discovery from tts/outputs (1–22 segments, extension from first file); stitch via ffmpeg concat; ffprobe duration; bg resolution (apps/<app>/assets/bg-music.* else assets/default-bg-music.wav); loop with 2s crossfade (or simple loop when bg ≤2s); volume envelope (0.75→0.1→0.1→0.7); mix to artifacts/narration-<app>.<ext>. Tests in test_audio_prep_step.py: _get_app_name, _discover_segments, _resolve_bg_music, execute_audio_prep_step with mocked subprocess (stitch/amix commands, envelope expression, output paths, ffprobe/ffmpeg failure). Commands run: uv run ruff format ., uv run ruff check ., uv run pytest -q (291 passed).
+
+---
+
 ### [x] T0123 – Implement llm-tts pipeline step (chunking + synthesis) (2026-01-31)
 
 **Goal**

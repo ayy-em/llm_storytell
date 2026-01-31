@@ -77,44 +77,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 
 ## Tasks for v1.2 (including v1.1) release
-### [ ] T0124 – Implement audio-prep step (stitching + background music)
-
-Goal: Produce a single narrated audio file with background music and volume automation.
-
-Inputs: 0 < N ≤ 22 audio segments from llm-tts.
-
-Acceptance criteria
-- Steps:
-	1.	Stitch segments into one voiceover track.
-	2.	Calculate voiceover duration.
-	3.	Load background music:
-    - apps/<app_name>/assets/bg-music.* if exists
-    - else assets/default-bg-music.wav
-	4.	Loop bg music with 2s crossfade to duration + 6s.
-	5.	Apply bg volume envelope:
-    - 0–1.5s: 75%
-    - 1.5–3.0s: fade to 10%
-    - stay at 10% during narration
-    - after narration end: fade to 70% over 2s
-	6.	Mix voiceover + bg music.
-- Output:
-  - stitched voiceover saved to runs/<run_id>/voiceover/
-  - final output saved to `runs/<run_id>/artifacts/narration-<app_name>.<ext>`
-- Implementation uses ffmpeg via subprocess (PATH assumed).
-- Tests mock subprocess calls and verify command construction and timing math.
-
-Allowed files (Hard constraint)
-- src/llm_storytell/steps/audio_prep.py
-- src/llm_storytell/utils/** (if strictly necessary)
-- tests/test_audio_prep_step.py
-
-Commands to run
-- uv run ruff format .
-- uv run ruff check .
-- uv run pytest -q
-
-Result: 
-
 ### [ ] T0125 – Documentation updates for audio pipeline
 
 Goal: Bring documentation in sync with reality so future-you doesn’t curse present-you.

@@ -289,16 +289,18 @@ Full reference: `SPEC.md` (CLI Interface).
 
 ## How to add a new app
 
-1. Create **app directory**: `apps/<app_name>/` with at least:
-   * **Context:** `apps/<app_name>/context/lore_bible.md` (required)
-   * **Characters:** `apps/<app_name>/context/characters/` with at least one `.md` file (required for a run to succeed)
-   * Optionally: `context/locations/`, `context/world/`, `context/style/` (see Context handling above)
+1. Create **app directory**: `apps/<app_name>/` containing:
+  - **Story Context:** `apps/<app_name>/context/lore_bible.md` (required)
+  - **Character:** `apps/<app_name>/context/characters/` (required: at least one `.md` file)
+- Additionally (not required for a run to succeed), any number of `.md` files with additional background info on your stories' universe: `context/locations/`, `context/world/`, `context/style/` (see Context handling above)
 
 2. **Optional:** Add `apps/<app_name>/app_config.yaml` to override defaults (beats, section_length, context limits, model). If absent, the pipeline uses `apps/default_config.yaml` or built-in defaults.
 
-3. **Optional:** Add `apps/<app_name>/prompts/` with pipeline templates (`10_outline.md`, `20_section.md`, etc.). If absent, the app uses `prompts/app-defaults/`. Only `lore_bible.md` is required when using default_config; prompts default to app-defaults.
+3. **Optional:** Add `apps/<app_name>/prompts/` with pipeline templates (`10_outline.md`, `20_section.md`, etc.). If absent, the app uses prompts in `prompts/app-defaults/`.
 
 4. Run with `--app <app_name>`. Variable contracts and schema validation are the same for all apps; see `SPEC.md` (Prompt Variable Contracts, Schemas).
+
+See `apps/example_app` for a working example.
 
 ---
 
