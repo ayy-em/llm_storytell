@@ -583,28 +583,6 @@ Runs are immutable once complete.
 * **v1.5** – Vector database for large-scale context retrieval and rotation
 * **v1.6** – Multi-LLM provider support, routing, and cost-aware selection
 
-### Roadmap (v1.0.1 – v1.0.3) refined scope
-
-* **v1.0.1** – Soft warnings when approaching context limits  
-  * Define token or character thresholds for combined context.  
-  * Log a warning when combined context approaches threshold; no change to selection or pipeline success/failure.
-
-* **v1.0.2** – Apps directory structure and app-level config  
-  * All app-specific data lives under `apps/<app_name>/` (context, prompts, optional assets, `app_config.yaml`).  
-  * Pipeline default prompts live under `prompts/app-defaults/`; apps use them unless overridden.  
-  * `section_length` (words per section) from app config with pipeline default (e.g. "400-600"); no hardcoding in `20_section.md`.  
-  * CLI `--section-length` override (integer) passed to pipeline as range `[input*0.8, input*1.2]`.  
-  * `app_config.yaml` defines: LLM provider/model, default beats, default words per section, how many .md files per context subfolder.  
-  * `apps/default_config.yaml` provides defaults so an app is valid with only `apps/<app_name>/context/lore_bible.md`.  
-  * Only required app file: `apps/<app_name>/context/lore_bible.md`.  
-  * `.gitignore` apps directory except a committed `example_app`.  
-  * README and SPEC updated for new structure and CLI.
-
-* **v1.0.3** – Target word count CLI  
-  * `--word-count` CLI flag for total target word count.  
-  * Given word-count and section_length, compute beat_count (round to nearest integer) and per-section length; pass to pipeline.  
-  * Acceptance: generated stories within 10% of target word count.
-
 ---
 
 ## Non-goals (v1.x)
