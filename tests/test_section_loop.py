@@ -643,6 +643,33 @@ class TestSectionStepErrors:
         assert meta.get("status") == "error"
         assert "error" in meta
 
+    def test_on_section_provider_error_state_not_updated(
+        self,
+        temp_run_dir_with_outline: Path,
+        temp_context_dir: Path,
+        temp_prompts_dir: Path,
+    ) -> None:
+        """On section step failure (LLM error), state is not updated."""
+        provider = _MockLLMProvider()
+        provider.set_failure(should_fail=True)
+        logger = RunLogger(temp_run_dir_with_outline / "run.log")
+
+        with pytest.raises(SectionStepError):
+            execute_section_step(
+                run_dir=temp_run_dir_with_outline,
+                context_dir=temp_context_dir,
+                prompts_dir=temp_prompts_dir,
+                llm_provider=provider,
+                logger=logger,
+                section_index=0,
+                schema_base=SCHEMA_BASE,
+            )
+
+        with (temp_run_dir_with_outline / "state.json").open(encoding="utf-8") as f:
+            state = json.load(f)
+        assert state["sections"] == []
+        assert len(state["token_usage"]) == 0
+
 
 class TestSummarizeStepErrors:
     """Tests for summarize step error handling."""
@@ -700,3 +727,33 @@ class TestSummarizeStepErrors:
             meta = json.load(f)
         assert meta.get("status") == "error"
         assert "error" in meta
+
+    def test_on_summarize_provider_error_state_not_updated(
+        self,
+        temp_run_dir_with_outline: Path,
+        temp_prompts_dir: Path,
+        valid_section_content: str,
+    ) -> None:
+        """On summarize step failure (LLM error), state is not updated."""
+        artifact_path = temp_run_dir_with_outline / "artifacts" / "20_section_01.md"
+        artifact_path.write_text(valid_section_content)
+
+        provider = _MockLLMProvider()
+        provider.set_failure(should_fail=True)
+        logger = RunLogger(temp_run_dir_with_outline / "run.log")
+
+        with pytest.raises(SummarizeStepError):
+            execute_summarize_step(
+                run_dir=temp_run_dir_with_outline,
+                prompts_dir=temp_prompts_dir,
+                llm_provider=provider,
+                logger=logger,
+                section_index=0,
+                schema_base=SCHEMA_BASE,
+            )
+
+        with (temp_run_dir_with_outline / "state.json").open(encoding="utf-8") as f:
+            state = json.load(f)
+        assert state["summaries"] == []
+        assert state["continuity_ledger"] == {}
+        assert len(state["token_usage"]) == 0

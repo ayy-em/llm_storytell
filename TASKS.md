@@ -77,50 +77,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 ## v1.0 Release Preparation Tasks
 
-### [ ] R0003 Test coverage confidence pass
-
-**Goal**
-Ensure the critical v1.0 execution path is sufficiently tested.
-
-**Context**
-The pipeline now supports outline → section → summarize → critic stages. Tests exist, but coverage must be verified for all state mutations and failure paths.
-
-**Deliverables**
-
-* Identification of untested or weakly tested critical flows
-* Additional unit tests where gaps exist
-* No refactors unless strictly required to enable testing
-
-**Acceptance criteria**
-
-* Critical path stages are covered:
-  * outline
-  * section loop
-  * summarization
-  * critic / finalization
-* State mutation is tested to occur only on success
-* Failure cases are explicitly tested
-* All tests pass without network or API keys
-
-**Allowed files**
-
-* `tests/**`
-* Existing step files **only if strictly required for testability**
-
-**Commands to run**
-
-* `uv run ruff format .`
-* `uv run ruff check .`
-* `uv run pytest -q`
-
-**Notes**
-
-* Coverage percentage is secondary to correctness
-* Mock LLM provider must be used
-* Do not introduce new dependencies
-
----
-
 ## [ ] R0004 Milestone planning (v1.1 + v1.2)
 
 **Goal**
@@ -167,6 +123,7 @@ v1.0 scope is frozen. Future milestones must be planned using the same task stru
 
 * **v1.0** – Local, text-only pipeline (multi-app capable)
 * **v1.0.1** - Add soft warnings when approaching context limits
+* **v1.0.2** - Refactor adding apps, context structure and introduce app-level configs
 * **v1.1** – Text-to-speech audiobook output
 * **v1.2** – Background music mixing and audio polish
 * **v1.3** – Cloud execution + scheduled delivery (Telegram / email)

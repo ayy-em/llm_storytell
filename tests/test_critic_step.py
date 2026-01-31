@@ -769,6 +769,32 @@ Content without frontmatter.
 
         assert "LLM provider error" in str(exc_info.value)
 
+    def test_on_provider_error_state_not_updated(
+        self,
+        temp_run_dir_with_sections: Path,
+        temp_context_dir: Path,
+        temp_prompts_dir: Path,
+    ) -> None:
+        """On critic step failure (LLM error), state is not updated."""
+        provider = _MockLLMProvider()
+        provider.set_failure(should_fail=True)
+        logger = RunLogger(temp_run_dir_with_sections / "run.log")
+
+        with pytest.raises(CriticStepError):
+            execute_critic_step(
+                run_dir=temp_run_dir_with_sections,
+                context_dir=temp_context_dir,
+                prompts_dir=temp_prompts_dir,
+                llm_provider=provider,
+                logger=logger,
+            )
+
+        with (temp_run_dir_with_sections / "state.json").open(encoding="utf-8") as f:
+            state = json.load(f)
+        assert "final_script_path" not in state
+        assert "editor_report_path" not in state
+        assert len(state["token_usage"]) == 0
+
     def test_on_provider_error_no_response_txt_and_meta_status_error(
         self,
         temp_run_dir_with_sections: Path,

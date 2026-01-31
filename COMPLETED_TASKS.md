@@ -4,6 +4,53 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] R0003 Test coverage confidence pass (2026-01-31)
+
+**Goal**
+Ensure the critical v1.0 execution path is sufficiently tested.
+
+**Context**
+The pipeline now supports outline → section → summarize → critic stages. Tests exist, but coverage must be verified for all state mutations and failure paths.
+
+**Deliverables**
+
+* Identification of untested or weakly tested critical flows
+* Additional unit tests where gaps exist
+* No refactors unless strictly required to enable testing
+
+**Acceptance criteria**
+
+* Critical path stages are covered:
+  * outline
+  * section loop
+  * summarization
+  * critic / finalization
+* State mutation is tested to occur only on success
+* Failure cases are explicitly tested
+* All tests pass without network or API keys
+
+**Allowed files**
+
+* `tests/**`
+* Existing step files **only if strictly required for testability**
+
+**Commands to run**
+
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Notes**
+
+* Coverage percentage is secondary to correctness
+* Mock LLM provider must be used
+* Do not introduce new dependencies
+
+**Result**
+Identified gap: no tests asserted that state is unchanged when a step fails. Added four unit tests (tests only): (1) `test_outline_step.py`: `test_on_provider_error_state_not_updated` — on outline LLM error, state outline and token_usage remain empty; (2) `test_section_loop.py`: `test_on_section_provider_error_state_not_updated` — on section LLM error, state sections and token_usage unchanged; (3) `test_section_loop.py`: `test_on_summarize_provider_error_state_not_updated` — on summarize LLM error, state summaries, continuity_ledger, token_usage unchanged; (4) `test_critic_step.py`: `test_on_provider_error_state_not_updated` — on critic LLM error, state has no final_script_path/editor_report_path and token_usage not appended. All use existing fixtures and mocks; no network or API keys. Commands run: `uv run ruff format .`, `uv run ruff check .`, `PYTHONPATH=. uv run pytest -q` (204 passed).
+
+---
+
 ### [x] R0002 Documentation cleanup for v1.0 (2026-01-31)
 
 **Goal**

@@ -440,6 +440,32 @@ class TestExecuteOutlineStepErrors:
         assert meta.get("status") == "error"
         assert "error" in meta
 
+    def test_on_provider_error_state_not_updated(
+        self,
+        temp_run_dir: Path,
+        temp_context_dir: Path,
+        temp_prompts_dir: Path,
+    ) -> None:
+        """On outline step failure (e.g. LLM error), state is not updated."""
+        provider = _MockLLMProvider()
+        provider.set_failure(should_fail=True)
+        logger = RunLogger(temp_run_dir / "run.log")
+
+        with pytest.raises(OutlineStepError):
+            execute_outline_step(
+                run_dir=temp_run_dir,
+                context_dir=temp_context_dir,
+                prompts_dir=temp_prompts_dir,
+                llm_provider=provider,
+                logger=logger,
+                schema_base=SCHEMA_BASE,
+            )
+
+        with (temp_run_dir / "state.json").open(encoding="utf-8") as f:
+            state = json.load(f)
+        assert state["outline"] == []
+        assert state["token_usage"] == []
+
     def test_fails_on_invalid_beats_count(
         self,
         temp_run_dir: Path,
