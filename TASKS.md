@@ -75,35 +75,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 7. README.md and SPEC.md are up-to-date and accurately reflect actual scope, technical solution design and other project information.
 8. No finished tasks are found in TASKS.md file.
 
-## [ ] T004 v1.0.2 section_length from app config and CLI override
-
-**Goal**
-Use `section_length` from app config (already in `apps/default_config.yaml` and `AppConfig` per T002) in the section prompt. Remove hardcoded word count from `20_section.md`. Add CLI `--section-length N` override; pipeline receives range `[N*0.8, N*1.2]` as section_length value for that run.
-
-**Acceptance criteria**
-* `20_section.md` receives a `section_length` variable (e.g. range string); no hardcoded word count in the prompt body.
-* Section step and prompt render pass `section_length` from app config (or CLI-derived range when `--section-length N` is set) into the section prompt.
-* CLI accepts `--section-length N` (integer); when set, pipeline uses range `[N*0.8, N*1.2]` for that run instead of app config value.
-
-**Notes**
-* T002 already added `section_length` to `apps/default_config.yaml` and `AppConfig`; this task wires it into the section prompt and adds the CLI override.
-
-**Allowed files**
-* `config/`
-* `prompts/app-defaults/20_section.md`
-* `src/llm_storytell/config/`
-* `src/llm_storytell/steps/section.py`
-* `src/llm_storytell/prompt_render.py`
-* `src/llm_storytell/cli.py`
-* `tests/**`
-
-**Commands to run**
-* `uv run ruff format .`
-* `uv run ruff check .`
-* `uv run pytest -q`
-
----
-
 ## [ ] T005 v1.0.2 Context selection limits from app config
 
 **Goal**

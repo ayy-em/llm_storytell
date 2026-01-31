@@ -352,6 +352,44 @@ def test_e2e_run_completion_prints_token_summary(
     assert "Artifacts are in:" in out
 
 
+def test_e2e_section_length_cli_override(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When --section-length N is set, pipeline uses range [N*0.8, N*1.2] in section prompt."""
+    monkeypatch.chdir(temp_app_structure)
+    mock_provider = MockLLMProvider()
+
+    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+        return mock_provider
+
+    with patch(
+        "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+    ):
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story.",
+                "--beats",
+                "1",
+                "--run-id",
+                "test-section-length",
+                "--section-length",
+                "500",
+            ]
+        )
+
+    assert exit_code == 0
+    run_dir = temp_app_structure / "runs" / "test-section-length"
+    section_prompt_path = run_dir / "llm_io" / "section_00" / "prompt.txt"
+    assert section_prompt_path.exists()
+    prompt_content = section_prompt_path.read_text(encoding="utf-8")
+    assert "400-600" in prompt_content
+    assert "words" in prompt_content
+
+
 def test_e2e_without_beats_override(
     temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

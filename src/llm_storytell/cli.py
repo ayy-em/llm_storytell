@@ -74,6 +74,13 @@ def create_parser() -> argparse.ArgumentParser:
         required=False,
         help="Model identifier for all LLM calls in this run (default: gpt-4.1-mini). Fails immediately if the provider does not recognize the model.",
     )
+    run_parser.add_argument(
+        "--section-length",
+        type=int,
+        required=False,
+        metavar="N",
+        help="Target words per section; pipeline uses range [N*0.8, N*1.2]. Overrides app config when set.",
+    )
 
     return parser
 
@@ -207,6 +214,7 @@ def _run_pipeline(
     app_paths: AppPaths,
     seed: str,
     beats: int | None,
+    section_length: str,
     run_id: str | None,
     config_path: Path,
     model: str = "gpt-4.1-mini",
@@ -218,6 +226,7 @@ def _run_pipeline(
         app_paths: Resolved app paths.
         seed: Story seed/description.
         beats: Number of outline beats (None for app-defined default).
+        section_length: Target word range for sections (e.g. "400-600").
         run_id: Optional run ID override.
         config_path: Path to configuration directory.
         model: Model identifier for all LLM calls in this run.
@@ -352,6 +361,7 @@ def _run_pipeline(
                     llm_provider=llm_provider,
                     logger=logger,
                     section_index=section_index,
+                    section_length=section_length,
                     schema_base=schema_base,
                 )
                 logger.log_stage_end(stage_name, success=True)
@@ -534,11 +544,20 @@ def main(argv: list[str] | None = None) -> int:
         # Model for all LLM calls: CLI override or default
         model = args.model if args.model is not None else "gpt-4.1-mini"
 
+        # Section length: CLI --section-length N -> range [N*0.8, N*1.2], else app config
+        if args.section_length is not None:
+            lo = int(args.section_length * 0.8)
+            hi = int(args.section_length * 1.2)
+            section_length = f"{lo}-{hi}"
+        else:
+            section_length = app_config.section_length
+
         # Run the pipeline
         return _run_pipeline(
             app_paths=app_paths,
             seed=args.seed,
             beats=beats,
+            section_length=section_length,
             run_id=args.run_id,
             config_path=args.config_path,
             model=model,

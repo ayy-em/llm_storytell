@@ -13,6 +13,7 @@ Optional:
 - continuity_context
 - location_context
 - character_context
+- section_length (target word range, e.g. "400-600")
 
 ## Task
 Write one narrative section that realizes the given outline beat.
@@ -69,4 +70,4 @@ unresolved_threads: []
 - Dialogue only if justified by context.
 
 ## Length
-- 400–800 words
+- {section_length} words

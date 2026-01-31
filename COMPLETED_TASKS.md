@@ -4,6 +4,38 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T004 v1.0.2 section_length from app config and CLI override (2026-01-31)
+
+**Goal**
+Use `section_length` from app config (already in `apps/default_config.yaml` and `AppConfig` per T002) in the section prompt. Remove hardcoded word count from `20_section.md`. Add CLI `--section-length N` override; pipeline receives range `[N*0.8, N*1.2]` as section_length value for that run.
+
+**Acceptance criteria**
+* `20_section.md` receives a `section_length` variable (e.g. range string); no hardcoded word count in the prompt body.
+* Section step and prompt render pass `section_length` from app config (or CLI-derived range when `--section-length N` is set) into the section prompt.
+* CLI accepts `--section-length N` (integer); when set, pipeline uses range `[N*0.8, N*1.2]` for that run instead of app config value.
+
+**Notes**
+* T002 already added `section_length` to `apps/default_config.yaml` and `AppConfig`; this task wires it into the section prompt and adds the CLI override.
+
+**Allowed files**
+* `config/`
+* `prompts/app-defaults/20_section.md`
+* `src/llm_storytell/config/`
+* `src/llm_storytell/steps/section.py`
+* `src/llm_storytell/prompt_render.py`
+* `src/llm_storytell/cli.py`
+* `tests/**`
+
+**Commands to run**
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Result**
+Replaced hardcoded "400–800 words" in `prompts/app-defaults/20_section.md` with `{section_length} words` and documented section_length in inputs. Added `section_length: str` to `execute_section_step()` and to prompt_vars. CLI: added `--section-length N`; when set, section_length = f"{int(N*0.8)}-{int(N*1.2)}", else app_config.section_length; passed to _run_pipeline and to each execute_section_step. Prompt variable contract: added section_length to SECTION_REQUIRED. Tests: test_section_loop all execute_section_step calls pass section_length; new test_section_prompt_includes_section_length; temp_prompts_dir fixture section template includes {section_length}; test_e2e_section_length_cli_override asserts --section-length 500 yields "400-600" in section prompt. Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (219 passed).
+
+---
+
 ### [x] T003 v1.0.2 Move app data under apps/<app_name>/, use app-defaults prompts (2026-01-31)
 
 **Goal**

@@ -170,6 +170,7 @@ Style: {style_rules}
 Location: {location_context}
 Characters: {character_context}
 
+Target length: {section_length} words.
 Generate section with YAML frontmatter.
 """
     (prompts_dir / "20_section.md").write_text(section_template)
@@ -292,6 +293,7 @@ class TestExecuteSectionStepSuccess:
             llm_provider=provider,
             logger=logger,
             section_index=0,
+            section_length="400-600",
             schema_base=SCHEMA_BASE,
         )
 
@@ -347,6 +349,7 @@ class TestExecuteSectionStepSuccess:
                 llm_provider=provider,
                 logger=logger,
                 section_index=i,
+                section_length="400-600",
                 schema_base=SCHEMA_BASE,
             )
 
@@ -393,6 +396,7 @@ class TestExecuteSectionStepSuccess:
             llm_provider=provider,
             logger=logger,
             section_index=1,
+            section_length="400-600",
             schema_base=SCHEMA_BASE,
         )
 
@@ -400,6 +404,31 @@ class TestExecuteSectionStepSuccess:
         call = provider.calls[0]
         prompt = call["prompt"]
         assert "Previous section summary" in prompt
+
+    def test_section_prompt_includes_section_length(
+        self,
+        temp_run_dir_with_outline: Path,
+        temp_context_dir: Path,
+        temp_prompts_dir: Path,
+        valid_section_content: str,
+    ) -> None:
+        """Section prompt includes section_length variable value."""
+        provider = _MockLLMProvider(response_content=valid_section_content)
+        logger = RunLogger(temp_run_dir_with_outline / "run.log")
+        execute_section_step(
+            run_dir=temp_run_dir_with_outline,
+            context_dir=temp_context_dir,
+            prompts_dir=temp_prompts_dir,
+            llm_provider=provider,
+            logger=logger,
+            section_index=0,
+            section_length="320-480",
+            schema_base=SCHEMA_BASE,
+        )
+        call = provider.calls[0]
+        prompt = call["prompt"]
+        assert "320-480" in prompt
+        assert "words" in prompt
 
 
 class TestExecuteSummarizeStepSuccess:
@@ -521,6 +550,7 @@ class TestSectionLoopIntegration:
                 llm_provider=provider,
                 logger=logger,
                 section_index=i,
+                section_length="400-600",
                 schema_base=SCHEMA_BASE,
             )
 
@@ -587,6 +617,7 @@ class TestSectionStepErrors:
                 llm_provider=provider,
                 logger=logger,
                 section_index=0,
+                section_length="400-600",
                 schema_base=SCHEMA_BASE,
             )
 
@@ -608,6 +639,7 @@ class TestSectionStepErrors:
                 llm_provider=provider,
                 logger=logger,
                 section_index=10,  # Out of range
+                section_length="400-600",
                 schema_base=SCHEMA_BASE,
             )
 
@@ -630,6 +662,7 @@ class TestSectionStepErrors:
                 llm_provider=provider,
                 logger=logger,
                 section_index=0,
+                section_length="400-600",
                 schema_base=SCHEMA_BASE,
             )
 
@@ -662,6 +695,7 @@ class TestSectionStepErrors:
                 llm_provider=provider,
                 logger=logger,
                 section_index=0,
+                section_length="400-600",
                 schema_base=SCHEMA_BASE,
             )
 

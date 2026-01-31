@@ -155,6 +155,7 @@ def execute_section_step(
     llm_provider: LLMProvider,
     logger: RunLogger,
     section_index: int,
+    section_length: str,
     schema_base: Path | None = None,
 ) -> None:
     """Execute the section generation step for a single outline beat.
@@ -170,6 +171,7 @@ def execute_section_step(
         logger: Run logger instance.
         section_index: Zero-based index of the section to generate
             (0 for first section, 1 for second, etc.).
+        section_length: Target word range for the section (e.g. "400-600").
         schema_base: Base path for schema resolution. If None, uses
             src/llm_storytell/schemas relative to run_dir.
 
@@ -235,6 +237,7 @@ def execute_section_step(
             "style_rules": context_vars["style_rules"],
             "location_context": context_vars["location_context"],
             "character_context": context_vars["character_context"],
+            "section_length": section_length,
         }
 
         try:

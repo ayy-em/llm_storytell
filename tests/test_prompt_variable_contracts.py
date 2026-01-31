@@ -34,6 +34,7 @@ SECTION_REQUIRED = {
     "outline_beat",
     "lore_bible",
     "style_rules",
+    "section_length",
 }
 SECTION_OPTIONAL = {
     "rolling_summary",
