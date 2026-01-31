@@ -77,54 +77,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 
 ## Tasks for v1.2 (including v1.1) release
-### [ ] T0123 – Implement llm-tts pipeline step (chunking + synthesis)
-
-Goal: Add a pipeline step that converts the final story text into multiple narrated audio segments.
-
-Input: final story artifact (.md, plain text).
-
-Acceptance criteria:
-- Chunking logic:
-  - target range: 700–1000 words
-  - cut at first newline after 700 words
-  - if none found by 1000:
-    - succeed
-    - log warning to run log + terminal
-    - enforce 1 ≤ segments ≤ 22
-- Artifacts written:
-  - runs/<run_id>/tts/prompts/segment_XX.txt
-  - runs/<run_id>/tts/outputs/segment_XX.<audio_ext>
-  - Segments sent sequentially to provider.
-- Logging includes:
-  - segment progress
-  - warnings on imperfect splits
-  - cumulative token usage:
-      response_prompt_tokens
-      response_completion_tokens
-      tts_prompt_tokens
-      total_text_tokens
-      total_tts_tokens
-      total_tokens
-  - State JSON records text vs TTS token usage separately.
-- Tests must cover:
-  - chunking edge cases
-  - warning path
-  - max segment enforcement
-  - artifact creation
-
-Allowed files (Hard constraint)
-- src/llm_storytell/steps/llm_tts.py
-- src/llm_storytell/pipeline/**
-- src/llm_storytell/logging.py
-- tests/test_llm_tts_step.py
-
-Commands to run
-- uv run ruff format .
-- uv run ruff check .
-- uv run pytest -q
-
-Result: 
-
 ### [ ] T0124 – Implement audio-prep step (stitching + background music)
 
 Goal: Produce a single narrated audio file with background music and volume automation.
@@ -193,9 +145,7 @@ Result:
 
 ## Roadmap (**do not start** yet unless explictly told)
 
-- **v1.0.1** - Add soft warnings when approaching context limits
-- **v1.0.2** - Refactor adding apps, context structure and introduce app-level configs
-- **v1.0.3** - Target word count CLI flag added
+
 - **v1.1** – Text-to-speech audiobook output
 - **v1.2** – Background music mixing and audio polish
 - **v1.3** – Cloud execution + scheduled delivery (Telegram / email)
@@ -205,4 +155,11 @@ Result:
 - **v1.6** – Multi-LLM provider support, routing, and cost-aware selection
 
 ## Previous Releases
-- **v1.0** – Local, text-only pipeline (multi-app capable) - **Current version**
+- **v1.0** – Local, text-only pipeline (multi-app capable)
+- **v1.0.1** - Add soft warnings when approaching context limits
+- **v1.0.2** - Refactor adding apps, context structure and introduce app-level configs
+- **v1.0.3** - Target word count CLI flag added - **Current version**
+
+## Backlog (Do not start)
+
+- **Stderr on failure:** Change codebase so the run command is more explicit about errors via stderr on failures (e.g. step failures, validation errors). To be worked on later; do not implement now.

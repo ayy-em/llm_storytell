@@ -147,6 +147,35 @@ class RunLogger:
             f"total_tokens={total_tokens}"
         )
 
+    def log_tts_cumulative(
+        self,
+        response_prompt_tokens: int,
+        response_completion_tokens: int,
+        tts_prompt_tokens: int,
+        total_text_tokens: int,
+        total_tts_tokens: int,
+        total_tokens: int,
+    ) -> None:
+        """Log cumulative token usage after TTS step (text + TTS breakdown).
+
+        Args:
+            response_prompt_tokens: Sum of prompt tokens from text/LLM steps.
+            response_completion_tokens: Sum of completion tokens from text/LLM steps.
+            tts_prompt_tokens: Sum of TTS input/prompt tokens.
+            total_text_tokens: Total tokens from text pipeline steps.
+            total_tts_tokens: Total tokens from TTS step.
+            total_tokens: Combined total (text + TTS).
+        """
+        self.info(
+            "Cumulative token usage: "
+            f"response_prompt_tokens={response_prompt_tokens}, "
+            f"response_completion_tokens={response_completion_tokens}, "
+            f"tts_prompt_tokens={tts_prompt_tokens}, "
+            f"total_text_tokens={total_text_tokens}, "
+            f"total_tts_tokens={total_tts_tokens}, "
+            f"total_tokens={total_tokens}"
+        )
+
     def log_context_selection(
         self,
         always_loaded: list[str],

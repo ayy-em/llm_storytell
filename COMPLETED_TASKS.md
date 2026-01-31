@@ -4,6 +4,31 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T0123 – Implement llm-tts pipeline step (chunking + synthesis) (2026-01-31)
+
+**Goal**
+Add a pipeline step that converts the final story text into multiple narrated audio segments.
+
+**Input**
+Final story artifact (.md, plain text).
+
+**Acceptance criteria**
+* Chunking logic: target range 700–1000 words; cut at first newline after 700 words; if none found by 1000, succeed and log warning; enforce 1 ≤ segments ≤ 22.
+* Artifacts: runs/<run_id>/tts/prompts/segment_XX.txt, runs/<run_id>/tts/outputs/segment_XX.<audio_ext>; segments sent sequentially to provider.
+* Logging: segment progress, warnings on imperfect splits, cumulative token usage (response_prompt_tokens, response_completion_tokens, tts_prompt_tokens, total_text_tokens, total_tts_tokens, total_tokens); state JSON records text vs TTS token usage separately (tts_token_usage[]).
+* Tests: chunking edge cases, warning path, max segment enforcement, artifact creation.
+
+**Allowed files**
+* src/llm_storytell/steps/llm_tts.py
+* src/llm_storytell/pipeline/**
+* src/llm_storytell/logging.py
+* tests/test_llm_tts_step.py
+
+**Result**
+Implemented src/llm_storytell/steps/llm_tts.py: _chunk_text (700–1000 words, cut at first newline after 700; if no newline by 1000 cut at 1000 and set imperfect; merge to ≤22 segments), _load_final_script (from state.final_script_path or artifacts/final_script.md), execute_llm_tts_step (chunk, write tts/prompts/segment_NN.txt, call TTS per segment, write tts/outputs/segment_NN.<ext>, append tts_token_usage to state, log progress and log_tts_cumulative). Added RunLogger.log_tts_cumulative in logging.py. Tests in test_llm_tts_step.py: _chunk_text (empty, short, under 700, newline cuts, no newline by 1000, >22 merged, 22 allowed), execute_llm_tts_step (missing script raises, artifacts and state updated, uses state final_script_path, TTS error raises, warning on imperfect, cumulative in log). Backlog task added to TASKS.md for stderr-on-failure (do not start). Commands run: uv run ruff format ., uv run ruff check ., uv run pytest -q (271 passed).
+
+---
+
 ### [x] T0122 – Add TTS provider abstraction + OpenAI implementation (2026-01-31)
 
 **Goal**
