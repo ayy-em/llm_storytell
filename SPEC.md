@@ -148,8 +148,14 @@ python -m llm_storytell run \
 | `--model` | model identifier | Model used for **all** LLM calls in this run. Default: `gpt-4.1-mini`. Run fails immediately if the provider does not recognize the model. |
 | `--section-length` | integer N | Target words per section; pipeline uses range `[N*0.8, N*1.2]`. Overrides app config when set. |
 | `--word-count` | integer N (100 < N < 15000) | Target total word count for the story. Pipeline derives beat count and section length from N (and from app/CLI section length when only `--word-count` is set). When both `--beats` and `--word-count` are provided, `word-count / beats` must be in (100, 1000) (words per section). |
+| `--tts` | flag | Enable TTS (text-to-speech) after critic step. Default when neither `--tts` nor `--no-tts` is set. |
+| `--no-tts` | flag | Disable TTS; pipeline ends after critic step. If both `--tts` and `--no-tts` are given, `--no-tts` wins. |
+| `--tts-provider` | string | TTS provider (e.g. `openai`). Overrides app config. Resolution order: CLI → `app_config.yaml` → default (OpenAI). |
+| `--tts-voice` | string | TTS voice name (e.g. `Onyx`). Overrides app config. Resolution order: CLI → `app_config.yaml` → default (Onyx). |
 
 Defaults for beats and section_length come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits.
+
+**TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`.
 
 **Target word count (v1.0.3):** When `--word-count N` is used, the pipeline derives `beat_count` (round N / baseline section length, clamped to 1–20) and per-section length (N / beat_count), then passes the range `[per_section*0.8, per_section*1.2]` as section_length. Generated stories are intended to fall within approximately 10% of the target word count; this is best-effort and can be verified manually or via tests.
 

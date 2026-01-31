@@ -278,6 +278,10 @@ Runs are immutable once completed.
 | `--model` | model identifier | Model for all LLM calls. Default: `gpt-4.1-mini`. Run fails immediately if the provider does not recognize the model. |
 | `--section-length` | integer N | Target words per section; pipeline uses range `[N*0.8, N*1.2]`. Overrides app config when set. |
 | `--word-count` | integer N (100 < N < 15000) | Target total word count. Pipeline derives beat count and section length; see SPEC. |
+| `--tts` | flag | Enable TTS after critic (default). |
+| `--no-tts` | flag | Disable TTS; pipeline ends after critic step. |
+| `--tts-provider` | string | TTS provider (e.g. openai). Overrides app config. Resolution: CLI → app_config → default. |
+| `--tts-voice` | string | TTS voice (e.g. Onyx). Overrides app config. Resolution: CLI → app_config → default. |
 
 Full reference: `SPEC.md` (CLI Interface).
 

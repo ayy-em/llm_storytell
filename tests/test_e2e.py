@@ -279,6 +279,7 @@ def test_e2e_full_pipeline(
         assert len(state["summaries"]) == 3
         assert "continuity_ledger" in state
         assert len(state["token_usage"]) > 0
+        assert "tts_config" in state
 
         # Verify artifacts
         assert (run_dir / "artifacts" / "10_outline.json").exists()
@@ -388,6 +389,44 @@ def test_e2e_section_length_cli_override(
     prompt_content = section_prompt_path.read_text(encoding="utf-8")
     assert "400-600" in prompt_content
     assert "words" in prompt_content
+
+
+def test_e2e_no_tts_pipeline_ends_after_critic(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With --no-tts, pipeline ends after critic; state has no tts_config."""
+    monkeypatch.chdir(temp_app_structure)
+    mock_provider = MockLLMProvider()
+
+    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+        return mock_provider
+
+    with patch(
+        "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+    ):
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story.",
+                "--beats",
+                "2",
+                "--run-id",
+                "test-no-tts",
+                "--no-tts",
+            ]
+        )
+
+    assert exit_code == 0
+    run_dir = temp_app_structure / "runs" / "test-no-tts"
+    assert run_dir.exists()
+    assert (run_dir / "artifacts" / "final_script.md").exists()
+    state_path = run_dir / "state.json"
+    with state_path.open(encoding="utf-8") as f:
+        state = json.load(f)
+    assert "tts_config" not in state
 
 
 def test_e2e_without_beats_override(

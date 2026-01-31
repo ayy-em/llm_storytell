@@ -77,42 +77,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 
 ## Tasks for v1.2 (including v1.1) release
-### [ ] T0121 – CLI flags for TTS control and overrides
-
-Goal: Expose TTS execution and override controls via CLI.
-
-Acceptance criteria
-- CLI supports the following flags:
-  - --tts / --no-tts (default: --tts)
-  - --tts-provider
-  - --tts-voice
-- Resolution order:
-	1.	CLI flags
-	2.	app_config.yaml
-	3.	defaults (OpenAI / gpt-4o-mini-tts / Onyx)
-- If --no-tts is set, pipeline ends after critic step.
-- Pipeline step registration respects the flag.
-- Tests cover:
-  - default behavior
-  - override precedence
-  - pipeline skipping logic
-- All flags are documented in SPEC.md and README.md
-
-Allowed files (Hard constraint)
-- src/llm_storytell/cli.py
-- src/llm_storytell/pipeline/**
-- tests/test_cli.py
-- tests/test_e2e.py
-- SPEC.md 
-- README.md
-
-Commands to run
-- uv run ruff format .
-- uv run ruff check .
-- uv run pytest -q
-
-Result: 
-
 ### [ ] T0122 – Add TTS provider abstraction + OpenAI implementation
 
 Goal: Introduce a provider-based TTS client system, starting with OpenAI.

@@ -89,6 +89,26 @@ def create_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Target total word count for the story (100 < N < 15000). Derives beat count and section length; see SPEC.",
     )
+    run_parser.add_argument(
+        "--tts",
+        action="store_true",
+        help="Enable TTS (text-to-speech) after critic step (default).",
+    )
+    run_parser.add_argument(
+        "--no-tts",
+        action="store_true",
+        help="Disable TTS; pipeline ends after critic step.",
+    )
+    run_parser.add_argument(
+        "--tts-provider",
+        required=False,
+        help="TTS provider (e.g. openai). Overrides app config. Resolution: CLI → app_config → default.",
+    )
+    run_parser.add_argument(
+        "--tts-voice",
+        required=False,
+        help="TTS voice name (e.g. Onyx). Overrides app config. Resolution: CLI → app_config → default.",
+    )
 
     return parser
 
@@ -247,6 +267,8 @@ def _run_pipeline(
     model: str = "gpt-4.1-mini",
     llm_provider: LLMProvider | None = None,
     word_count: int | None = None,
+    tts_enabled: bool = True,
+    resolved_tts_config: dict[str, Any] | None = None,
 ) -> int:
     """Run the complete content generation pipeline.
 
@@ -261,6 +283,8 @@ def _run_pipeline(
         model: Model identifier for all LLM calls in this run.
         llm_provider: Optional LLM provider (for testing). If None, creates from config.
         word_count: Optional target total word count (when --word-count was used).
+        tts_enabled: Whether to run TTS step after critic (when False, pipeline ends after critic).
+        resolved_tts_config: Resolved TTS config to persist in state when tts_enabled (CLI → app → defaults).
 
     Returns:
         Exit code (0 for success, 1 for failure).
@@ -277,6 +301,7 @@ def _run_pipeline(
             run_id=run_id,
             base_dir=base_dir,
             word_count=word_count,
+            resolved_tts_config=resolved_tts_config,
         )
 
         logger = get_run_logger(run_dir)
@@ -471,6 +496,11 @@ def _run_pipeline(
             )
             return 1
 
+        # TTS step: run only when tts_enabled (TTS step implementation in T0123)
+        if tts_enabled:
+            # Future: run TTS step here (T0123)
+            pass
+
         logger.info(f"Pipeline completed successfully. Run directory: {run_dir}")
         print("[llm_storytell] Run complete.", flush=True)
         # Token and cost summary from state
@@ -626,6 +656,16 @@ def main(argv: list[str] | None = None) -> int:
         # Model for all LLM calls: CLI override or default
         model = args.model if args.model is not None else "gpt-4.1-mini"
 
+        # TTS: resolution order CLI → app_config → defaults. --no-tts wins over --tts if both set.
+        tts_enabled = not getattr(args, "no_tts", False)
+        tts_provider = getattr(args, "tts_provider", None) or app_config.tts_provider
+        tts_voice = getattr(args, "tts_voice", None) or app_config.tts_voice
+        resolved_tts_config = None
+        if tts_enabled:
+            resolved_tts_config = dict(app_config.resolved_tts_config())
+            resolved_tts_config["tts_provider"] = tts_provider
+            resolved_tts_config["tts_voice"] = tts_voice
+
         # Run the pipeline
         return _run_pipeline(
             app_paths=app_paths,
@@ -637,6 +677,8 @@ def main(argv: list[str] | None = None) -> int:
             config_path=args.config_path,
             model=model,
             word_count=word_count,
+            tts_enabled=tts_enabled,
+            resolved_tts_config=resolved_tts_config,
         )
 
     return 0

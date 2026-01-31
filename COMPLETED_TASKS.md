@@ -4,6 +4,32 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T0121 – CLI flags for TTS control and overrides (2026-01-31)
+
+**Goal**
+Expose TTS execution and override controls via CLI.
+
+**Acceptance criteria**
+* CLI supports: --tts / --no-tts (default: --tts), --tts-provider, --tts-voice.
+* Resolution order: CLI flags → app_config.yaml → defaults (OpenAI / gpt-4o-mini-tts / Onyx).
+* If --no-tts is set, pipeline ends after critic step.
+* Pipeline step registration respects the flag (TTS step not run when disabled; placeholder for T0123 when enabled).
+* Tests cover: default behavior, override precedence, pipeline skipping logic.
+* All flags documented in SPEC.md and README.md.
+
+**Allowed files**
+* src/llm_storytell/cli.py
+* src/llm_storytell/pipeline/**
+* tests/test_cli.py
+* tests/test_e2e.py
+* SPEC.md
+* README.md
+
+**Result**
+Added --tts, --no-tts, --tts-provider, --tts-voice to run subparser. Resolved tts_enabled (default True; --no-tts wins over --tts), tts_provider and tts_voice (CLI → app_config → defaults). _run_pipeline accepts tts_enabled and resolved_tts_config; initialize_run receives resolved_tts_config only when tts_enabled (state has no tts_config when --no-tts). Pipeline ends after critic when --no-tts; placeholder for TTS step when enabled. New tests/test_cli.py: parser flags, default enabled, --no-tts disables, provider/voice override, --no-tts wins. test_e2e: test_e2e_no_tts_pipeline_ends_after_critic; test_e2e_full_pipeline asserts state has tts_config. SPEC.md and README.md updated with TTS flags and resolution order. Commands run: uv run ruff format ., uv run ruff check ., uv run pytest -q (246 passed).
+
+---
+
 ### [x] T0120 – Extend app config to support TTS + audio settings (2026-01-31)
 
 **Goal**
