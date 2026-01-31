@@ -1,0 +1,3 @@
+- Name: Example Guy
+- Occupation: Always made an example of
+- Sex/Age: M/69

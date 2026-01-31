@@ -77,37 +77,10 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 
 ## Tasks for v1.2 (including v1.1) release
-### [ ] T0125 – Documentation updates for audio pipeline
 
-Goal: Bring documentation in sync with reality so future-you doesn’t curse present-you.
-
-Acceptance criteria
-- README.md documents:
-  - --tts / --no-tts
-  - provider/voice overrides
-  - ffmpeg requirement
-  - where narration output lives
-- SPEC.md updated with:
-  - new pipeline steps
-  - artifact layout (tts/, voiceover/, final narration)
-  - failure + warning behavior
-- 0001-tech-stack.md mentions ffmpeg usage (no new deps added).
-
-Allowed files (Hard constraint)
-- README.md
-- SPEC.md
-- docs/decisions/0001-tech-stack.md
-
-Commands to run
-- uv run ruff format .
-- uv run ruff check .
-- uv run pytest -q
-
-Result: 
+(No outstanding tasks in v1.0, v1.1, or v1.2 scope.)
 
 ## Roadmap (**do not start** yet unless explictly told)
-
-
 - **v1.1** – Text-to-speech audiobook output
 - **v1.2** – Background music mixing and audio polish
 - **v1.3** – Cloud execution + scheduled delivery (Telegram / email)
@@ -118,9 +91,11 @@ Result:
 
 ## Previous Releases
 - **v1.0** – Local, text-only pipeline (multi-app capable)
-- **v1.0.1** - Add soft warnings when approaching context limits
-- **v1.0.2** - Refactor adding apps, context structure and introduce app-level configs
-- **v1.0.3** - Target word count CLI flag added - **Current version**
+- **v1.0.1** – Add soft warnings when approaching context limits
+- **v1.0.2** – Refactor adding apps, context structure and introduce app-level configs
+- **v1.0.3** – Target word count CLI flag added
+- **v1.1** – Text-to-speech audiobook output
+- **v1.2** – Background music mixing and audio polish — **current version**
 
 ## Backlog (Do not start)
 

@@ -100,6 +100,8 @@ LLM-Storytell/
       inputs.json
       state.json
       artifacts/
+      tts/           (when TTS ran: prompts/, outputs/)
+      voiceover/     (when TTS ran: stitched voiceover, bg)
 
   src/
     llm_storytell/
@@ -155,7 +157,7 @@ python -m llm_storytell run \
 
 Defaults for beats and section_length come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits.
 
-**TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`.
+**TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`. When TTS is enabled, the pipeline runs the TTS step then the audio-prep step; **ffmpeg** (and ffprobe) must be on PATH for the audio-prep step (stitching and mixing).
 
 **Target word count (v1.0.3):** When `--word-count N` is used, the pipeline derives `beat_count` (round N / baseline section length, clamped to 1–20) and per-section length (N / beat_count), then passes the range `[per_section*0.8, per_section*1.2]` as section_length. Generated stories are intended to fall within approximately 10% of the target word count; this is best-effort and can be verified manually or via tests.
 
@@ -476,18 +478,15 @@ When combined context (lore + style + location + characters) approaches or excee
   "sections": [...],
   "summaries": [...],
   "continuity_ledger": {...},
-  "token_usage": [
-    {
-      "step": "...",
-      "provider": "openai",
-      "model": "gpt-x",
-      "prompt_tokens": ...,
-      "completion_tokens": ...,
-      "total_tokens": ...
-    }
-  ]
+  "token_usage": [...],
+  "tts_config": { "tts_provider": "...", "tts_model": "...", "tts_voice": "...", ... },
+  "tts_token_usage": [...],
+  "final_script_path": "artifacts/final_script.md",
+  "editor_report_path": "artifacts/editor_report.json"
 }
 ```
+
+When `--no-tts` is set, `tts_config` is omitted. `tts_token_usage` is present only after the TTS step has run successfully. `final_script_path` and `editor_report_path` are set after the critic step.
 
 ### Rules
 
@@ -536,7 +535,13 @@ Enables future support for:
 
 Step order is fixed and implemented in the orchestrator (e.g. `cli.py`). The file `config/pipeline.yaml` exists but may be empty or used for reference only; the pipeline does not load step order from YAML in v1.0.
 
-The orchestrator executes strictly in order: run init → outline → (for each beat: section, then summarize) → critic.
+The orchestrator executes strictly in order:
+
+1. **Run init** — create run directory, inputs.json, state.json, run.log; load and select context.
+2. **Outline** — generate outline beats.
+3. **For each beat:** section, then summarize.
+4. **Critic** — final script and editor report.
+5. **When TTS is enabled (default):** **TTS step** (chunk final script, synthesize segments to audio) → **audio-prep step** (stitch segments, add background music, mix to final narration). When `--no-tts` is set, the pipeline ends after the critic step.
 
 ---
 
@@ -556,12 +561,25 @@ runs/<run_id>/
     30_critic_raw_response.txt
     final_script.md
     editor_report.json
+    narration-<app_name>.<ext>   (when TTS/audio ran)
   llm_io/
     <stage_name>/
       prompt.txt
       response.txt   (only when non-empty)
       meta.json
       raw_response.json
+  tts/                            (when TTS enabled and TTS step ran)
+    prompts/
+      segment_01.txt
+      ...
+    outputs/
+      segment_01.<ext>
+      ...
+  voiceover/                      (when TTS/audio ran)
+    voiceover.<ext>
+    concat_list.txt
+    bg_looped.wav
+    bg_enveloped.wav
 ```
 
 Runs are immutable once complete.
@@ -571,6 +589,8 @@ Runs are immutable once complete.
 * **Missing required context** (e.g. no `lore_bible.md` or no character file): run fails at initialization with a clear error message; no run directory is left behind (or init is atomic so partial state is not committed).
 * **Step failure** (outline, section, summarize, critic): process exits non-zero; error is printed to stderr; details are written to `run.log`; `state.json` is not updated for the failed step (state is only updated after successful step completion).
 * **Validation failure** (schema or prompt variable): step raises; orchestrator logs and exits non-zero; see `run.log` for the failing step and artifact.
+* **TTS step failure:** Missing final script, chunking producing no segments or more than 22, or TTS provider error raises `LLMTTSStepError`; process exits non-zero; error printed to stderr; state not updated for TTS. Imperfect chunking (no newline by max words) logs a warning but does not fail.
+* **Audio-prep step failure:** Missing `tts/outputs`, ffmpeg/ffprobe not on PATH or non-zero exit, or no background music file found raises `AudioPrepStepError`; process exits non-zero; error printed to stderr. **ffmpeg** (and ffprobe) must be on PATH when TTS/audio is run.
 
 ---
 
@@ -581,7 +601,7 @@ Runs are immutable once complete.
 * **v1.0.2** – Apps directory structure, app-level config, section_length and context limits from config
 * **v1.0.3** – Target word count CLI flag and derived beat_count / section_length
 * **v1.1** – Text-to-speech audiobook output
-* **v1.2** – Background music mixing and audio polish
+* **v1.2** – Background music mixing and audio polish — **current version**
 * **v1.3** – Cloud execution + scheduled delivery (Telegram / email)
 * **v1.4** – One-command video generation
 * **v1.4.1** – Burned-in subtitles

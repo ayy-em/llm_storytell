@@ -4,6 +4,26 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T0125 – Documentation updates for audio pipeline (2026-02-01)
+
+**Goal**
+Bring documentation in sync with reality, introduce consistency between core docs in this repo, and ensure current code base reflects what documentation promises.
+
+**Acceptance criteria**
+- README.md documents: --tts / --no-tts, provider/voice overrides, ffmpeg requirement, where narration output lives
+- SPEC.md fully reflects the current code: new pipeline steps, artifact layout (tts/, voiceover/, final narration), failure + warning behavior
+- 0001-tech-stack.md mentions all third party tools/extensions/sdks/packages used
+- TASKS.md has no outstanding tasks in v1.0, v1.1 and v1.2 scope + roadmap & previous releases updated to reflect v1.2 being the current version
+- Whenever "current version" is mentioned in the docs, it references v1.2
+
+**Allowed files**
+- README.md, SPEC.md, CONTRIBUTING.md, TASKS.md, docs/decisions/0001-tech-stack.md, prompts/README.md
+
+**Result**
+README.md: added ffmpeg to Prerequisites; documented intended run layout when TTS enabled (tts/, voiceover/, artifacts/narration-<app>.<ext>); clarified --tts/--no-tts and provider/voice overrides in CLI table; repository structure and roadmap updated (v1.2 current). SPEC.md: pipeline configuration now lists TTS step and audio-prep step when TTS enabled; Run Artifacts extended with tts/, voiceover/, narration-<app>.<ext>; state.json doc includes tts_config, tts_token_usage, final_script_path, editor_report_path; failure semantics added for TTS (LLMTTSStepError) and audio-prep (AudioPrepStepError, ffmpeg required); ffmpeg note in TTS paragraph; roadmap v1.2 current. docs/decisions/0001-tech-stack.md: added openai package (LLM + TTS) and ffmpeg (external binary for audio-prep). TASKS.md: T0125 removed; Previous Releases updated with v1.1, v1.2 (current); no outstanding v1.0/v1.1/v1.2 tasks. Commands run: uv run ruff format ., uv run ruff check ., uv run pytest -q.
+
+---
+
 ### [x] T0124 – Implement audio-prep step (stitching + background music) (2026-01-31)
 
 **Goal**
