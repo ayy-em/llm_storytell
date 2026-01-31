@@ -147,8 +147,11 @@ python -m llm_storytell run \
 | `--config-path` | path | Config directory. Default: `config/`. |
 | `--model` | model identifier | Model used for **all** LLM calls in this run. Default: `gpt-4.1-mini`. Run fails immediately if the provider does not recognize the model. |
 | `--section-length` | integer N | Target words per section; pipeline uses range `[N*0.8, N*1.2]`. Overrides app config when set. |
+| `--word-count` | integer N (100 < N < 15000) | Target total word count for the story. Pipeline derives beat count and section length from N (and from app/CLI section length when only `--word-count` is set). When both `--beats` and `--word-count` are provided, `word-count / beats` must be in (100, 1000) (words per section). |
 
 Defaults for beats and section_length come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits.
+
+**Target word count (v1.0.3):** When `--word-count N` is used, the pipeline derives `beat_count` (round N / baseline section length, clamped to 1–20) and per-section length (N / beat_count), then passes the range `[per_section*0.8, per_section*1.2]` as section_length. Generated stories are intended to fall within approximately 10% of the target word count; this is best-effort and can be verified manually or via tests.
 
 ---
 

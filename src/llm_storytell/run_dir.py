@@ -39,6 +39,7 @@ def _create_inputs_json(
     run_id: str,
     context_dir: Path,
     prompts_dir: Path,
+    word_count: int | None = None,
 ) -> dict[str, Any]:
     """Create the inputs.json structure.
 
@@ -49,11 +50,12 @@ def _create_inputs_json(
         run_id: The unique run identifier.
         context_dir: Path to the app's context directory.
         prompts_dir: Path to the app's prompts directory.
+        word_count: Optional target total word count (when --word-count was used).
 
     Returns:
         Dictionary representing inputs.json content.
     """
-    return {
+    data: dict[str, Any] = {
         "run_id": run_id,
         "app": app_name,
         "seed": seed,
@@ -62,6 +64,9 @@ def _create_inputs_json(
         "context_dir": str(context_dir),
         "prompts_dir": str(prompts_dir),
     }
+    if word_count is not None:
+        data["word_count"] = word_count
+    return data
 
 
 def _create_initial_state(app_name: str, seed: str) -> dict[str, Any]:
@@ -98,6 +103,7 @@ def initialize_run(
     beats: int | None = None,
     run_id: str | None = None,
     base_dir: Path | None = None,
+    word_count: int | None = None,
 ) -> Path:
     """Initialize a new run directory with all required files.
 
@@ -112,6 +118,7 @@ def initialize_run(
         beats: Number of outline beats (None for app-defined default).
         run_id: Optional run ID override. If None, generates one.
         base_dir: Base directory for runs. If None, uses current working directory.
+        word_count: Optional target total word count (when --word-count was used).
 
     Returns:
         Path to the created run directory.
@@ -156,6 +163,7 @@ def initialize_run(
             run_id=actual_run_id,
             context_dir=context_dir,
             prompts_dir=prompts_dir,
+            word_count=word_count,
         )
         inputs_path = temp_dir / "inputs.json"
 

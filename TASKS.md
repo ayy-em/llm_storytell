@@ -75,32 +75,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 7. README.md and SPEC.md are up-to-date and accurately reflect actual scope, technical solution design and other project information.
 8. No finished tasks are found in TASKS.md file.
 
-## [ ] T008 v1.0.3 Target word count CLI
-
-**Goal**
-Add `--word-count N` CLI flag for target total word count. Given word-count and section_length, compute beat_count (round to nearest integer) and per-section length; pass to pipeline. Generated stories should fall within 10% of target word count.
-
-**Acceptance criteria**
-* CLI accepts `--word-count N` (integer) where 15000 > N > 100. Fails loudly when N not in range. 
-* The flag and its purpose are reflected in SPEC.md and README.md
-* Pipeline first derives beat_count and section_length for the run, then successfully runs with these input parameters.
-* If both --beats and --word-count are provided, the following constraits are checked first (fail loudly with CLI output explaining reason):
-  - word-count / beats > 100
-  - word-count / beats < 1000
-* Acceptance criterion for the feature: generated stories fall within 10% interval of target word count (document in SPEC; tests or manual verification as appropriate).
-
-**Allowed files**
-* `src/llm_storytell/cli.py`
-* `src/llm_storytell/` (orchestration / run init as needed)
-* `tests/**` (do not modify, only add new test)
-* `README.md`
-* `SPEC.md`
-
-**Commands to run**
-* `uv run ruff format .`
-* `uv run ruff check .`
-* `uv run pytest -q`
-
 ---
 
 ## Roadmap (**do not start** yet unless explictly told)

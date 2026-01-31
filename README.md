@@ -277,6 +277,7 @@ Runs are immutable once completed.
 | `--config-path` | path | Config directory. Default: `config/`. |
 | `--model` | model identifier | Model for all LLM calls. Default: `gpt-4.1-mini`. Run fails immediately if the provider does not recognize the model. |
 | `--section-length` | integer N | Target words per section; pipeline uses range `[N*0.8, N*1.2]`. Overrides app config when set. |
+| `--word-count` | integer N (100 < N < 15000) | Target total word count. Pipeline derives beat count and section length; see SPEC. |
 
 Full reference: `SPEC.md` (CLI Interface).
 

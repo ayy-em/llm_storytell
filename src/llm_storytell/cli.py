@@ -82,8 +82,33 @@ def create_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Target words per section; pipeline uses range [N*0.8, N*1.2]. Overrides app config when set.",
     )
+    run_parser.add_argument(
+        "--word-count",
+        type=int,
+        required=False,
+        metavar="N",
+        help="Target total word count for the story (100 < N < 15000). Derives beat count and section length; see SPEC.",
+    )
 
     return parser
+
+
+def _section_length_midpoint(section_length_str: str) -> int:
+    """Parse section_length string (e.g. '400-600') to midpoint; fallback 500."""
+    s = section_length_str.strip()
+    if "-" in s:
+        parts = s.split("-", 1)
+        try:
+            lo, hi = int(parts[0].strip()), int(parts[1].strip())
+            if lo > 0 and hi >= lo:
+                return (lo + hi) // 2
+        except ValueError:
+            pass
+    try:
+        return int(s)
+    except ValueError:
+        pass
+    return 500
 
 
 def resolve_app_or_exit(app_name: str, base_dir: Path | None = None) -> AppPaths:
@@ -221,6 +246,7 @@ def _run_pipeline(
     config_path: Path,
     model: str = "gpt-4.1-mini",
     llm_provider: LLMProvider | None = None,
+    word_count: int | None = None,
 ) -> int:
     """Run the complete content generation pipeline.
 
@@ -234,6 +260,7 @@ def _run_pipeline(
         config_path: Path to configuration directory.
         model: Model identifier for all LLM calls in this run.
         llm_provider: Optional LLM provider (for testing). If None, creates from config.
+        word_count: Optional target total word count (when --word-count was used).
 
     Returns:
         Exit code (0 for success, 1 for failure).
@@ -249,6 +276,7 @@ def _run_pipeline(
             beats=beats,
             run_id=run_id,
             base_dir=base_dir,
+            word_count=word_count,
         )
 
         logger = get_run_logger(run_dir)
@@ -536,28 +564,67 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 beats = args.sections
 
-        # Validate beats range if provided
-        if beats is not None and (beats < 1 or beats > 20):
-            print(
-                "Error: --beats must be between 1 and 20 (inclusive)",
-                file=sys.stderr,
-            )
-            return 1
+        # Validate --word-count range when provided (100 < N < 15000)
+        word_count: int | None = getattr(args, "word_count", None)
+        if word_count is not None:
+            if word_count <= 100 or word_count >= 15000:
+                print(
+                    "Error: --word-count must be greater than 100 and less than 15000",
+                    file=sys.stderr,
+                )
+                return 1
 
-        # Use app config default beats when not overridden by CLI
-        if beats is None:
-            beats = app_config.beats
+        # Derive beats and section_length from --word-count when provided
+        if word_count is not None:
+            if beats is not None:
+                # Both --beats and --word-count: validate words-per-section
+                words_per = word_count / beats
+                if words_per <= 100:
+                    print(
+                        "Error: --word-count / --beats must be greater than 100 "
+                        f"(got {word_count}/{beats} = {words_per:.0f} words per section)",
+                        file=sys.stderr,
+                    )
+                    return 1
+                if words_per >= 1000:
+                    print(
+                        "Error: --word-count / --beats must be less than 1000 "
+                        f"(got {word_count}/{beats} = {words_per:.0f} words per section)",
+                        file=sys.stderr,
+                    )
+                    return 1
+                section_length_per = word_count / beats
+            else:
+                # Only --word-count: derive beats from baseline section length
+                if args.section_length is not None:
+                    baseline = args.section_length
+                else:
+                    baseline = _section_length_midpoint(app_config.section_length)
+                beats = max(1, min(20, round(word_count / baseline)))
+                section_length_per = word_count / beats
+            lo = int(section_length_per * 0.8)
+            hi = int(section_length_per * 1.2)
+            section_length = f"{lo}-{hi}"
+        else:
+            # No --word-count: validate beats range if provided
+            if beats is not None and (beats < 1 or beats > 20):
+                print(
+                    "Error: --beats must be between 1 and 20 (inclusive)",
+                    file=sys.stderr,
+                )
+                return 1
+            if beats is None:
+                beats = app_config.beats
+            # Section length: CLI --section-length N -> range [N*0.8, N*1.2], else app config
+            if args.section_length is not None:
+                lo = int(args.section_length * 0.8)
+                hi = int(args.section_length * 1.2)
+                section_length = f"{lo}-{hi}"
+            else:
+                section_length = app_config.section_length
 
         # Model for all LLM calls: CLI override or default
         model = args.model if args.model is not None else "gpt-4.1-mini"
-
-        # Section length: CLI --section-length N -> range [N*0.8, N*1.2], else app config
-        if args.section_length is not None:
-            lo = int(args.section_length * 0.8)
-            hi = int(args.section_length * 1.2)
-            section_length = f"{lo}-{hi}"
-        else:
-            section_length = app_config.section_length
 
         # Run the pipeline
         return _run_pipeline(
@@ -569,6 +636,7 @@ def main(argv: list[str] | None = None) -> int:
             run_id=args.run_id,
             config_path=args.config_path,
             model=model,
+            word_count=word_count,
         )
 
     return 0

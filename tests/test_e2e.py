@@ -740,3 +740,167 @@ def test_e2e_succeeds_when_optional_locations_missing(
         assert "world_files" in state["selected_context"]
     finally:
         monkeypatch.chdir(original_cwd)
+
+
+def test_e2e_word_count_validates_range(
+    temp_app_structure: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """--word-count must be greater than 100 and less than 15000."""
+    monkeypatch.chdir(temp_app_structure)
+
+    # N <= 100 fails
+    exit_code_low = main(
+        [
+            "run",
+            "--app",
+            "test-app",
+            "--seed",
+            "A story.",
+            "--word-count",
+            "100",
+        ]
+    )
+    assert exit_code_low == 1
+    err = capsys.readouterr().err
+    assert "word-count" in err and "100" in err
+
+    # N >= 15000 fails
+    exit_code_high = main(
+        [
+            "run",
+            "--app",
+            "test-app",
+            "--seed",
+            "A story.",
+            "--word-count",
+            "15000",
+        ]
+    )
+    assert exit_code_high == 1
+    err = capsys.readouterr().err
+    assert "word-count" in err and "15000" in err
+
+
+def test_e2e_word_count_and_beats_validates_ratio(
+    temp_app_structure: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When both --beats and --word-count are provided, word-count/beats must be in (100, 1000)."""
+    monkeypatch.chdir(temp_app_structure)
+
+    # word_count/beats <= 100 (e.g. 200/2 = 100) fails
+    exit_code_low = main(
+        [
+            "run",
+            "--app",
+            "test-app",
+            "--seed",
+            "A story.",
+            "--word-count",
+            "200",
+            "--beats",
+            "2",
+        ]
+    )
+    assert exit_code_low == 1
+    err = capsys.readouterr().err
+    assert "greater than 100" in err or "word-count" in err
+
+    # word_count/beats >= 1000 (e.g. 2000/2 = 1000) fails
+    exit_code_high = main(
+        [
+            "run",
+            "--app",
+            "test-app",
+            "--seed",
+            "A story.",
+            "--word-count",
+            "2000",
+            "--beats",
+            "2",
+        ]
+    )
+    assert exit_code_high == 1
+    err = capsys.readouterr().err
+    assert "less than 1000" in err or "word-count" in err
+
+
+def test_e2e_word_count_derives_beats_and_persists_word_count(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With --word-count only, pipeline derives beats and section_length; inputs.json has word_count."""
+    monkeypatch.chdir(temp_app_structure)
+    mock_provider = MockLLMProvider()
+
+    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+        return mock_provider
+
+    with patch(
+        "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+    ):
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story.",
+                "--word-count",
+                "3000",
+                "--run-id",
+                "test-word-count-derive",
+            ]
+        )
+
+    assert exit_code == 0
+    run_dir = temp_app_structure / "runs" / "test-word-count-derive"
+    assert run_dir.exists()
+    inputs_path = run_dir / "inputs.json"
+    assert inputs_path.exists()
+    with inputs_path.open(encoding="utf-8") as f:
+        inputs = json.load(f)
+    assert inputs["word_count"] == 3000
+    # Derived beats: 3000 / 500 (default section midpoint) = 6, clamped to 1-20
+    assert inputs["beats"] == 6
+
+
+def test_e2e_word_count_with_beats_valid_ratio(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With --word-count and --beats (valid ratio), run uses given beats and derived section_length; inputs.json has word_count."""
+    monkeypatch.chdir(temp_app_structure)
+    mock_provider = MockLLMProvider()
+
+    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+        return mock_provider
+
+    with patch(
+        "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+    ):
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story.",
+                "--word-count",
+                "2000",
+                "--beats",
+                "4",
+                "--run-id",
+                "test-word-count-beats",
+            ]
+        )
+
+    assert exit_code == 0
+    run_dir = temp_app_structure / "runs" / "test-word-count-beats"
+    assert run_dir.exists()
+    inputs_path = run_dir / "inputs.json"
+    with inputs_path.open(encoding="utf-8") as f:
+        inputs = json.load(f)
+    assert inputs["word_count"] == 2000
+    assert inputs["beats"] == 4

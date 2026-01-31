@@ -4,6 +4,37 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T008 v1.0.3 Target word count CLI (2026-01-31)
+
+**Goal**
+Add `--word-count N` CLI flag for target total word count. Given word-count and section_length, compute beat_count (round to nearest integer) and per-section length; pass to pipeline. Generated stories should fall within 10% of target word count.
+
+**Acceptance criteria**
+* CLI accepts `--word-count N` (integer) where 15000 > N > 100. Fails loudly when N not in range.
+* The flag and its purpose are reflected in SPEC.md and README.md
+* Pipeline first derives beat_count and section_length for the run, then successfully runs with these input parameters.
+* If both --beats and --word-count are provided, the following constraits are checked first (fail loudly with CLI output explaining reason):
+  - word-count / beats > 100
+  - word-count / beats < 1000
+* Acceptance criterion for the feature: generated stories fall within 10% interval of target word count (document in SPEC; tests or manual verification as appropriate).
+
+**Allowed files**
+* `src/llm_storytell/cli.py`
+* `src/llm_storytell/` (orchestration / run init as needed)
+* `tests/**` (do not modify, only add new test)
+* `README.md`
+* `SPEC.md`
+
+**Commands to run**
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Result**
+CLI: added `--word-count N` (100 < N < 15000); validation with clear stderr messages. When only `--word-count` is set, baseline section length from `--section-length` or app config midpoint; beat_count = round(word_count/baseline) clamped to 1–20; section_length derived as [per_section*0.8, per_section*1.2]. When both `--beats` and `--word-count` are set, validate word_count/beats in (100, 1000) then derive section_length. run_dir: optional `word_count` added to `_create_inputs_json` and `initialize_run`; persisted in inputs.json when provided. SPEC and README: `--word-count` added to CLI table; SPEC documents derivation and ~10% target. New tests: test_run_init (inputs.json includes word_count when provided), test_e2e (word_count range validation, beats+word_count ratio validation, derivation and persistence), test_cli_word_count (_section_length_midpoint). Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (232 passed).
+
+---
+
 ### [x] T007 v1.0.2 Update README and SPEC for new app structure and CLI (2026-01-31)
 
 **Goal**

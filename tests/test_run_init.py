@@ -299,6 +299,31 @@ class TestInitializeRun:
 
         assert inputs["beats"] is None
 
+    def test_creates_inputs_json_includes_word_count_when_provided(
+        self, temp_project: Path
+    ) -> None:
+        """inputs.json includes word_count when word_count is passed to initialize_run."""
+        context_dir = temp_project / "context" / "test-app"
+        prompts_dir = temp_project / "prompts" / "apps" / "test-app"
+
+        run_dir = initialize_run(
+            app_name="test-app",
+            seed="A story with target length.",
+            context_dir=context_dir,
+            prompts_dir=prompts_dir,
+            beats=6,
+            run_id="run-word-count",
+            base_dir=temp_project,
+            word_count=3000,
+        )
+
+        inputs_path = run_dir / "inputs.json"
+        with inputs_path.open() as f:
+            inputs = json.load(f)
+
+        assert inputs["word_count"] == 3000
+        assert inputs["beats"] == 6
+
 
 class TestRunLogger:
     """Tests for RunLogger."""
