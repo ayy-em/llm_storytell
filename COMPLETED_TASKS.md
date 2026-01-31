@@ -4,6 +4,28 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T0122 – Add TTS provider abstraction + OpenAI implementation (2026-01-31)
+
+**Goal**
+Introduce a provider-based TTS client system, starting with OpenAI.
+
+**Acceptance criteria**
+* New folder: src/llm_storytell/tts_providers/
+* openai_tts.py implements: text → audio synthesis; accepts model, voice, and tts-arguments; returns audio bytes + token usage metadata (best-effort).
+* No pipeline step imports provider SDKs directly.
+* Provider interface is minimal and explicit.
+* Tests mock OpenAI calls and verify: correct parameter passing, error propagation, token usage extraction.
+
+**Allowed files**
+* src/llm_storytell/tts_providers/**
+* src/llm_storytell/config/**
+* tests/test_openai_tts.py
+
+**Result**
+Added src/llm_storytell/tts_providers/ with __init__.py (TTSResult, TTSProviderError, TTSProvider ABC) and openai_tts.py (OpenAITTSProvider with injectable client callable; synthesize returns TTSResult with audio bytes and optional usage; supports prompt_tokens/input_tokens, completion_tokens/output_tokens, total_tokens). Tests in test_openai_tts.py: TTSResult, TTSProvider.synthesize NotImplementedError, OpenAITTSProvider param passing, model/voice override, tts_arguments, bytes-only return, error propagation, usage extraction (prompt/completion/total and input/output keys). Commands run: uv run ruff format ., uv run ruff check ., uv run pytest -q (258 passed).
+
+---
+
 ### [x] T0121 – CLI flags for TTS control and overrides (2026-01-31)
 
 **Goal**

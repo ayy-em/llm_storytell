@@ -77,35 +77,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 
 ## Tasks for v1.2 (including v1.1) release
-### [ ] T0122 – Add TTS provider abstraction + OpenAI implementation
-
-Goal: Introduce a provider-based TTS client system, starting with OpenAI.
-
-Acceptance criteria
-- New folder: src/llm_storytell/tts_providers/
-- openai_tts.py implements:
-- text → audio synthesis
-- accepts model, voice, and tts-arguments
-- returns audio bytes + token usage metadata (best-effort)
-- No pipeline step imports provider SDKs directly.
-- Provider interface is minimal and explicit.
-- Tests mock OpenAI calls and verify:
-- correct parameter passing
-- error propagation
-- token usage extraction
-
-Allowed files (Hard constraint)
-- src/llm_storytell/tts_providers/**
-- src/llm_storytell/config/**
-- tests/test_openai_tts.py
-
-Commands to run:
-- uv run ruff format .
-- uv run ruff check .
-- uv run pytest -q
-
-Result:
-
 ### [ ] T0123 – Implement llm-tts pipeline step (chunking + synthesis)
 
 Goal: Add a pipeline step that converts the final story text into multiple narrated audio segments.
