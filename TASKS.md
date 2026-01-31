@@ -75,35 +75,11 @@ Agent is to stop after reading task and request clarification if any of the non-
 7. README.md and SPEC.md are up-to-date and accurately reflect actual scope, technical solution design and other project information.
 8. No finished tasks are found in TASKS.md file.
 
-## [ ] T005 v1.0.2 Context selection limits from app config
-
-**Goal**
-Wire the context loader to use app config limits (already in `AppConfig`: `max_characters`, `max_locations`, `include_world` per T002) when selecting files, instead of hardcoded constants.
-
-**Acceptance criteria**
-* Context loader receives and uses app config limits (max character files, max location files, whether to include world) when selecting files; defaults come from `apps/default_config.yaml` via existing `load_app_config()`.
-* Deterministic selection order (e.g. alphabetical) is unchanged; only counts/limits are configurable.
-
-**Notes**
-* T002 already added `max_characters`, `max_locations`, `include_world` to `apps/default_config.yaml` and `AppConfig`; this task wires the context loader to use them (e.g. pass `AppConfig` or limits into `ContextLoader` and replace hardcoded `MAX_CHARACTERS` etc.).
-
-**Allowed files**
-* `config/`
-* `src/llm_storytell/config/`
-* `src/llm_storytell/context/loader.py`
-* `tests/**`
-
-**Commands to run**
-* `uv run ruff format .`
-* `uv run ruff check .`
-* `uv run pytest -q`
-
----
-
 ## [ ] T006 v1.0.2 .gitignore apps/ except example_app
 
 **Goal**
-Update `.gitignore` so `apps/` is ignored except for a committed `apps/example_app/` (or equivalent). Add `apps/example_app/` with minimal required context and optional app_config.
+Update `.gitignore` so `apps/` is ignored except for a committed `apps/example_app/` (or equivalent). 
+Add `apps/example_app/` with minimal required context and optional app_config.yaml
 
 **Acceptance criteria**
 * `.gitignore` excludes `apps/` but not `apps/example_app/` (or the chosen name).

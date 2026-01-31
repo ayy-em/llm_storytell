@@ -4,6 +4,35 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T005 v1.0.2 Context selection limits from app config (2026-01-31)
+
+**Goal**
+Wire the context loader to use app config limits (already in `AppConfig`: `max_characters`, `max_locations`, `include_world` per T002) when selecting files, instead of hardcoded constants.
+
+**Acceptance criteria**
+* Context loader receives and uses app config limits (max character files, max location files, whether to include world) when selecting files; defaults come from `apps/default_config.yaml` via existing `load_app_config()`.
+* Deterministic selection order (e.g. alphabetical) is unchanged; only counts/limits are configurable.
+
+**Notes**
+* T002 already added `max_characters`, `max_locations`, `include_world` to `apps/default_config.yaml` and `AppConfig`; this task wires the context loader to use them (e.g. pass `AppConfig` or limits into `ContextLoader` and replace hardcoded `MAX_CHARACTERS` etc.).
+
+**Allowed files**
+* `config/`
+* `src/llm_storytell/config/`
+* `src/llm_storytell/context/loader.py`
+* `src/llm_storytell/cli.py`
+* `tests/**`
+
+**Commands to run**
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Result**
+ContextLoader now accepts optional `app_config: AppConfig | None`; when provided, uses `max_characters`, `max_locations`, and `include_world` for selection. Replaced hardcoded `MAX_CHARACTERS` with `MAX_CHARACTERS_DEFAULT`; selection uses `_max_characters`, `_max_locations`, `_include_world` (from app_config or defaults). World is folded into lore only when `_include_world` is True; location is omitted when `_max_locations == 0`. CLI: load_app_config already called in main(); added `app_config` parameter to `_run_pipeline` and pass it into ContextLoader. Tests: new `TestContextLoaderAppConfigLimits` (max_characters=2, max_locations=0, include_world=False, no app_config defaults). Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (223 passed).
+
+---
+
 ### [x] T004 v1.0.2 section_length from app config and CLI override (2026-01-31)
 
 **Goal**

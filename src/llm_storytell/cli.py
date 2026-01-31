@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import (
+    AppConfig,
     AppConfigError,
     AppNotFoundError,
     AppPaths,
@@ -212,6 +213,7 @@ def _create_llm_provider_from_config(
 
 def _run_pipeline(
     app_paths: AppPaths,
+    app_config: AppConfig,
     seed: str,
     beats: int | None,
     section_length: str,
@@ -224,6 +226,7 @@ def _run_pipeline(
 
     Args:
         app_paths: Resolved app paths.
+        app_config: Merged app config (defaults + app overrides) for context limits, etc.
         seed: Story seed/description.
         beats: Number of outline beats (None for app-defined default).
         section_length: Target word range for sections (e.g. "400-600").
@@ -260,7 +263,11 @@ def _run_pipeline(
 
         # Load and select context (required: lore_bible + at least one character)
         try:
-            loader = ContextLoader(app_paths.context_dir, logger=logger)
+            loader = ContextLoader(
+                app_paths.context_dir,
+                logger=logger,
+                app_config=app_config,
+            )
             selection = loader.load_context(run_dir.name)
         except ContextLoaderError as e:
             logger.error(str(e))
@@ -555,6 +562,7 @@ def main(argv: list[str] | None = None) -> int:
         # Run the pipeline
         return _run_pipeline(
             app_paths=app_paths,
+            app_config=app_config,
             seed=args.seed,
             beats=beats,
             section_length=section_length,

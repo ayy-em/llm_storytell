@@ -4,10 +4,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..config.app_config import AppConfig
 from ..logging import RunLogger
 
-# Maximum number of character files to include (deterministic subset, alphabetical).
-MAX_CHARACTERS = 3
+# Default max character files when no app config is provided (backward compatibility).
+MAX_CHARACTERS_DEFAULT = 3
 
 # Separator header when folding world/*.md into lore_bible (traceable in output/logs).
 WORLD_FOLD_SEPARATOR = "\n\n---\n## World context (from world/*.md)\n\n"
@@ -54,7 +55,7 @@ class ContextSelection:
             all style/*.md files.
         selected_location: Relative path to selected location file, or None.
         selected_characters: List of relative paths to selected character files
-            (deterministic subset, up to MAX_CHARACTERS).
+            (deterministic subset, up to max_characters from app config or default).
         location_content: Content of selected location file, or None.
         character_contents: Dictionary mapping relative paths to file contents.
         world_files: List of relative paths to world/*.md files folded into
@@ -74,20 +75,36 @@ class ContextLoader:
 
     Handles:
     - Always-loaded files (lore_bible.md, optionally world/*.md folded in, style/*.md)
-    - Deterministic selection: 1 location (first alphabetically), up to
-      MAX_CHARACTERS characters (first alphabetically)
+    - Deterministic selection: location and character counts/limits from app config
+      (or defaults when app_config is None); selection order remains alphabetical.
     - Required: lore_bible.md must exist; at least one character file must exist.
     """
 
-    def __init__(self, context_dir: Path, logger: RunLogger | None = None) -> None:
+    def __init__(
+        self,
+        context_dir: Path,
+        logger: RunLogger | None = None,
+        app_config: AppConfig | None = None,
+    ) -> None:
         """Initialize the context loader.
 
         Args:
             context_dir: Path to the app's context directory.
             logger: Optional logger for recording selections.
+            app_config: Optional app config for max_characters, max_locations,
+                include_world. When None, uses built-in defaults (3 characters,
+                1 location, world included).
         """
         self.context_dir = context_dir.resolve()
         self.logger = logger
+        if app_config is not None:
+            self._max_characters = app_config.max_characters
+            self._max_locations = app_config.max_locations
+            self._include_world = app_config.include_world
+        else:
+            self._max_characters = MAX_CHARACTERS_DEFAULT
+            self._max_locations = 1
+            self._include_world = True
 
     def _normalize_path(self, path: Path) -> str:
         """Normalize a path to use forward slashes (POSIX-style)."""
@@ -118,14 +135,14 @@ class ContextLoader:
             ContextLoaderError: If lore_bible.md is missing or characters
                 directory is missing/empty.
         """
-        # Load lore_bible and world (folded), then style
+        # Load lore_bible and world (folded if include_world), then style
         always_loaded = self._load_lore_and_style()
         world_files = always_loaded.pop("_world_files", [])
 
-        # Deterministic: one location (first alphabetically)
+        # Deterministic: up to _max_locations location(s) (first alphabetically)
         selected_location, location_content = self._select_location()
 
-        # Deterministic: up to MAX_CHARACTERS characters (first alphabetically);
+        # Deterministic: up to _max_characters characters (first alphabetically);
         # at least one required (validated inside _select_characters)
         selected_characters, character_contents = self._select_characters()
 
@@ -174,11 +191,11 @@ class ContextLoader:
             )
         lore_content = self._read_file(lore_bible_path)
 
-        # World: load all world/*.md in alphabetical order, append with separator
+        # World: load all world/*.md in alphabetical order (only if include_world)
         world_dir = self.context_dir / "world"
         world_parts: list[str] = []
         world_files: list[str] = []
-        if world_dir.exists() and world_dir.is_dir():
+        if self._include_world and world_dir.exists() and world_dir.is_dir():
             for world_file in sorted(world_dir.glob("*.md")):
                 rel_path = world_file.relative_to(self.context_dir)
                 normalized = self._normalize_path(rel_path)
@@ -201,11 +218,16 @@ class ContextLoader:
         return result
 
     def _select_location(self) -> tuple[str | None, str | None]:
-        """Select exactly one location file deterministically (first alphabetically).
+        """Select up to _max_locations location file(s) deterministically (first alphabetically).
+
+        When _max_locations is 0, returns (None, None). When >= 1, selects the first
+        file (current API supports single location only).
 
         Returns:
-            Tuple of (relative_path, content) or (None, None) if no locations.
+            Tuple of (relative_path, content) or (None, None) if no locations or max_locations=0.
         """
+        if self._max_locations == 0:
+            return (None, None)
         locations_dir = self.context_dir / "locations"
         if not locations_dir.exists() or not locations_dir.is_dir():
             return (None, None)
@@ -218,7 +240,7 @@ class ContextLoader:
         return (normalized, self._read_file(selected))
 
     def _select_characters(self) -> tuple[list[str], dict[str, str]]:
-        """Select up to MAX_CHARACTERS character files deterministically (first alphabetically).
+        """Select up to _max_characters character files deterministically (first alphabetically).
 
         At least one character file is required; raises if characters dir
         is missing or empty.
@@ -238,7 +260,7 @@ class ContextLoader:
                 "No character files found in context/<app>/characters/ "
                 "(at least one .md file is required)"
             )
-        selected = character_files[:MAX_CHARACTERS]
+        selected = character_files[: self._max_characters]
         selected_paths: list[str] = []
         contents: dict[str, str] = {}
         for char_file in selected:

@@ -14,18 +14,38 @@ from importlib import import_module
 context_module = import_module("llm_storytell.context")
 loader_module = import_module("llm_storytell.context.loader")
 logging_module = import_module("llm_storytell.logging")
+config_app_config = import_module("llm_storytell.config.app_config")
 
 ContextLoader = context_module.ContextLoader
 ContextLoaderError = context_module.ContextLoaderError
 ContextSelection = context_module.ContextSelection
 RunLogger = logging_module.RunLogger
 build_prompt_context_vars = context_module.build_prompt_context_vars
+AppConfig = config_app_config.AppConfig
 CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT = (
     loader_module.CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT
 )
 CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL = (
     loader_module.CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL
 )
+
+
+def _make_app_config(
+    *,
+    max_characters: int = 3,
+    max_locations: int = 1,
+    include_world: bool = True,
+) -> AppConfig:
+    """Build AppConfig with default values for non-context fields."""
+    return AppConfig(
+        beats=5,
+        section_length="400-600",
+        max_characters=max_characters,
+        max_locations=max_locations,
+        include_world=include_world,
+        llm_provider="openai",
+        model="gpt-4.1-mini",
+    )
 
 
 @pytest.fixture
@@ -397,6 +417,67 @@ class TestContextLoader:
         if selection.selected_location:
             assert len(vars_out["location_context"]) > 0
         assert len(vars_out["character_context"]) > 0
+
+
+class TestContextLoaderAppConfigLimits:
+    """Tests for context selection limits from app config (T005)."""
+
+    def test_app_config_max_characters_limits_selection(
+        self, temp_context_dir: Path
+    ) -> None:
+        """When app_config has max_characters=2, only 2 character files are selected."""
+        app_config = _make_app_config(max_characters=2)
+        loader = ContextLoader(temp_context_dir, app_config=app_config)
+        selection = loader.load_context("run-limits-001")
+
+        assert len(selection.selected_characters) == 2
+        assert selection.selected_characters == [
+            "characters/hero.md",
+            "characters/mentor.md",
+        ]
+        assert len(selection.character_contents) == 2
+
+    def test_app_config_max_locations_zero_omits_location(
+        self, temp_context_dir: Path
+    ) -> None:
+        """When app_config has max_locations=0, no location is selected."""
+        app_config = _make_app_config(max_locations=0)
+        loader = ContextLoader(temp_context_dir, app_config=app_config)
+        selection = loader.load_context("run-noloc-001")
+
+        assert selection.selected_location is None
+        assert selection.location_content is None
+        assert len(selection.selected_characters) >= 1
+
+    def test_app_config_include_world_false_omits_world(self, tmp_path: Path) -> None:
+        """When app_config has include_world=False, world files are not loaded."""
+        context_dir = tmp_path / "context" / "test-app"
+        context_dir.mkdir(parents=True)
+        (context_dir / "lore_bible.md").write_text("# Lore\n\nCore lore.")
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("# One")
+        world_dir = context_dir / "world"
+        world_dir.mkdir()
+        (world_dir / "alpha.md").write_text("# Alpha world")
+
+        app_config = _make_app_config(include_world=False)
+        loader = ContextLoader(context_dir, app_config=app_config)
+        selection = loader.load_context("run-noworld-002")
+
+        assert selection.world_files == []
+        lore = selection.always_loaded["lore_bible.md"]
+        assert "Core lore." in lore
+        assert "Alpha world" not in lore
+        assert "World context" not in lore and "world/*.md" not in lore
+
+    def test_no_app_config_uses_default_limits(self, temp_context_dir: Path) -> None:
+        """When app_config is None, default limits apply (3 characters, 1 location, world included)."""
+        loader = ContextLoader(temp_context_dir)
+        selection = loader.load_context("run-default-001")
+
+        assert len(selection.selected_characters) == 3
+        assert selection.selected_location == "locations/city.md"
+        assert "lore_bible.md" in selection.always_loaded
 
 
 class TestContextSizeWarning:
