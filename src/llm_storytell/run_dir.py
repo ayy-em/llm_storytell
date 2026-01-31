@@ -69,17 +69,22 @@ def _create_inputs_json(
     return data
 
 
-def _create_initial_state(app_name: str, seed: str) -> dict[str, Any]:
+def _create_initial_state(
+    app_name: str,
+    seed: str,
+    resolved_tts_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Create the initial state.json structure.
 
     Args:
         app_name: Name of the app being run.
         seed: The story seed/description.
+        resolved_tts_config: Optional resolved TTS/audio config to persist for reproducibility.
 
     Returns:
         Dictionary representing initial state.json content.
     """
-    return {
+    state: dict[str, Any] = {
         "app": app_name,
         "seed": seed,
         "selected_context": {
@@ -93,6 +98,9 @@ def _create_initial_state(app_name: str, seed: str) -> dict[str, Any]:
         "continuity_ledger": {},
         "token_usage": [],
     }
+    if resolved_tts_config is not None:
+        state["tts_config"] = resolved_tts_config
+    return state
 
 
 def initialize_run(
@@ -104,6 +112,7 @@ def initialize_run(
     run_id: str | None = None,
     base_dir: Path | None = None,
     word_count: int | None = None,
+    resolved_tts_config: dict[str, Any] | None = None,
 ) -> Path:
     """Initialize a new run directory with all required files.
 
@@ -119,6 +128,7 @@ def initialize_run(
         run_id: Optional run ID override. If None, generates one.
         base_dir: Base directory for runs. If None, uses current working directory.
         word_count: Optional target total word count (when --word-count was used).
+        resolved_tts_config: Optional resolved TTS/audio config to persist in state.json.
 
     Returns:
         Path to the created run directory.
@@ -174,7 +184,11 @@ def initialize_run(
         _retry_fs(_write_inputs)
 
         # Write initial state.json
-        state_data = _create_initial_state(app_name=app_name, seed=seed)
+        state_data = _create_initial_state(
+            app_name=app_name,
+            seed=seed,
+            resolved_tts_config=resolved_tts_config,
+        )
         state_path = temp_dir / "state.json"
         with state_path.open("w", encoding="utf-8") as f:
             json.dump(state_data, f, indent=2)

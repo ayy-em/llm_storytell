@@ -77,46 +77,15 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 
 ## Tasks for v1.2 (including v1.1) release
-### [ ] T0120 – Extend app config to support TTS + audio settings
-
-Goal: Add first-class support for TTS and audio-related configuration in app_config.yaml, with deterministic loading and runtime overrides.
-
-Acceptance criteria
-- app_config.yaml supports the following optional keys:
-- tts-provider (default: openai)
-- tts-model (default: gpt-4o-mini-tts)
-- tts-voice (default: Onyx)
-- tts-arguments (dict, optional, passed verbatim to provider)
-- bg-music (string path, optional)
-- Missing keys do not fail the run.
-- Resolved values (after defaults) are persisted into state.json for reproducibility.
-- CLI overrides (later task) take precedence over config.
-- Tests cover:
-- full config
-- partial config
-- empty config
-
-Allowed files (Hard constraint)
-- src/llm_storytell/config/**
-- src/llm_storytell/run_dir.py
-- tests/test_config_loading.py
-
-Commands to run
-- uv run ruff format .
-- uv run ruff check .
-- uv run pytest -q
-
-Result: 
-
 ### [ ] T0121 – CLI flags for TTS control and overrides
 
 Goal: Expose TTS execution and override controls via CLI.
 
 Acceptance criteria
-- CLI supports:
-- --tts / --no-tts (default: --tts)
-- --tts-provider
-- --tts-voice
+- CLI supports the following flags:
+  - --tts / --no-tts (default: --tts)
+  - --tts-provider
+  - --tts-voice
 - Resolution order:
 	1.	CLI flags
 	2.	app_config.yaml
@@ -124,15 +93,18 @@ Acceptance criteria
 - If --no-tts is set, pipeline ends after critic step.
 - Pipeline step registration respects the flag.
 - Tests cover:
-- default behavior
-- override precedence
-- pipeline skipping logic
+  - default behavior
+  - override precedence
+  - pipeline skipping logic
+- All flags are documented in SPEC.md and README.md
 
 Allowed files (Hard constraint)
 - src/llm_storytell/cli.py
 - src/llm_storytell/pipeline/**
 - tests/test_cli.py
 - tests/test_e2e.py
+- SPEC.md 
+- README.md
 
 Commands to run
 - uv run ruff format .
@@ -168,36 +140,37 @@ Commands to run:
 - uv run ruff check .
 - uv run pytest -q
 
+Result:
 
 ### [ ] T0123 – Implement llm-tts pipeline step (chunking + synthesis)
 
 Goal: Add a pipeline step that converts the final story text into multiple narrated audio segments.
 
-Acceptance criteria
-- Input: final story artifact (.md, plain text).
-- Chunking logic:
-- target range: 700–1000 words
-- cut at first newline after 700 words
-- if none found by 1000:
-- succeed
-- log warning to run log + terminal
-- enforce 1 ≤ segments ≤ 22
-- Artifacts written:
-- runs/<run_id>/tts/prompts/segment_XX.txt
-- runs/<run_id>/tts/outputs/segment_XX.<audio_ext>
-- Segments sent sequentially to provider.
-- Logging includes:
-- segment progress
-- warnings on imperfect splits
-- cumulative token usage:
-    response_prompt_tokens
-    response_completion_tokens
-    tts_prompt_tokens
-    total_text_tokens
-    total_tts_tokens
-    total_tokens
-- State JSON records text vs TTS token usage separately.
+Input: final story artifact (.md, plain text).
 
+Acceptance criteria:
+- Chunking logic:
+  - target range: 700–1000 words
+  - cut at first newline after 700 words
+  - if none found by 1000:
+    - succeed
+    - log warning to run log + terminal
+    - enforce 1 ≤ segments ≤ 22
+- Artifacts written:
+  - runs/<run_id>/tts/prompts/segment_XX.txt
+  - runs/<run_id>/tts/outputs/segment_XX.<audio_ext>
+  - Segments sent sequentially to provider.
+- Logging includes:
+  - segment progress
+  - warnings on imperfect splits
+  - cumulative token usage:
+      response_prompt_tokens
+      response_completion_tokens
+      tts_prompt_tokens
+      total_text_tokens
+      total_tts_tokens
+      total_tokens
+  - State JSON records text vs TTS token usage separately.
 - Tests must cover:
   - chunking edge cases
   - warning path
@@ -215,30 +188,31 @@ Commands to run
 - uv run ruff check .
 - uv run pytest -q
 
+Result: 
 
 ### [ ] T0124 – Implement audio-prep step (stitching + background music)
 
 Goal: Produce a single narrated audio file with background music and volume automation.
 
+Inputs: 0 < N ≤ 22 audio segments from llm-tts.
+
 Acceptance criteria
-- Inputs: 0 < N ≤ 22 audio segments from llm-tts.
 - Steps:
 	1.	Stitch segments into one voiceover track.
 	2.	Calculate voiceover duration.
 	3.	Load background music:
-- apps/<app_name>/assets/bg-music.* if exists
-- else assets/default-bg-music.wav
+    - apps/<app_name>/assets/bg-music.* if exists
+    - else assets/default-bg-music.wav
 	4.	Loop bg music with 2s crossfade to duration + 6s.
 	5.	Apply bg volume envelope:
-- 0–1.5s: 75%
-- 1.5–3.0s: fade to 10%
-- stay at 10% during narration
-- after narration end: fade to 70% over 2s
+    - 0–1.5s: 75%
+    - 1.5–3.0s: fade to 10%
+    - stay at 10% during narration
+    - after narration end: fade to 70% over 2s
 	6.	Mix voiceover + bg music.
 - Output:
-- stitched voiceover saved to runs/<run_id>/voiceover/
-- final output saved to
-runs/<run_id>/artifacts/narration-<app_name>.<ext>
+  - stitched voiceover saved to runs/<run_id>/voiceover/
+  - final output saved to `runs/<run_id>/artifacts/narration-<app_name>.<ext>`
 - Implementation uses ffmpeg via subprocess (PATH assumed).
 - Tests mock subprocess calls and verify command construction and timing math.
 
@@ -260,14 +234,14 @@ Goal: Bring documentation in sync with reality so future-you doesn’t curse pre
 
 Acceptance criteria
 - README.md documents:
-- --tts / --no-tts
-- provider/voice overrides
-- ffmpeg requirement
-- where narration output lives
+  - --tts / --no-tts
+  - provider/voice overrides
+  - ffmpeg requirement
+  - where narration output lives
 - SPEC.md updated with:
-- new pipeline steps
-- artifact layout (tts/, voiceover/, final narration)
-- failure + warning behavior
+  - new pipeline steps
+  - artifact layout (tts/, voiceover/, final narration)
+  - failure + warning behavior
 - 0001-tech-stack.md mentions ffmpeg usage (no new deps added).
 
 Allowed files (Hard constraint)

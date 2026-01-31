@@ -1,8 +1,11 @@
 """App config loading and merging with pipeline defaults."""
 
+from __future__ import annotations
+
 import yaml
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 class AppConfigError(Exception):
@@ -23,6 +26,11 @@ class AppConfig:
         include_world: Whether to include world/*.md in lore.
         llm_provider: LLM provider identifier.
         model: Default model identifier.
+        tts_provider: TTS provider identifier (optional).
+        tts_model: TTS model identifier (optional).
+        tts_voice: TTS voice name (optional).
+        tts_arguments: Optional dict passed verbatim to TTS provider.
+        bg_music: Optional path to background music asset.
     """
 
     beats: int
@@ -32,6 +40,23 @@ class AppConfig:
     include_world: bool
     llm_provider: str
     model: str
+    tts_provider: str = "openai"
+    tts_model: str = "gpt-4o-mini-tts"
+    tts_voice: str = "Onyx"
+    tts_arguments: dict[str, Any] | None = None
+    bg_music: str | None = None
+
+    def resolved_tts_config(self) -> dict[str, Any]:
+        """Return resolved TTS/audio config as a JSON-serializable dict for state.json."""
+        return {
+            "tts_provider": self.tts_provider,
+            "tts_model": self.tts_model,
+            "tts_voice": self.tts_voice,
+            "tts_arguments": self.tts_arguments
+            if self.tts_arguments is not None
+            else {},
+            "bg_music": self.bg_music,
+        }
 
 
 def _load_yaml(path: Path) -> dict:
@@ -60,6 +85,11 @@ _BUILTIN_DEFAULTS: dict = {
     "include_world": True,
     "llm_provider": "openai",
     "model": "gpt-4.1-mini",
+    "tts-provider": "openai",
+    "tts-model": "gpt-4o-mini-tts",
+    "tts-voice": "Onyx",
+    "tts-arguments": None,
+    "bg-music": None,
 }
 
 
@@ -114,6 +144,26 @@ def load_app_config(
         if value is not None:
             merged[key] = value
 
+    # Resolve TTS/audio keys (YAML uses hyphens; support both hyphen and snake_case)
+    def _get(key: str, default: Any) -> Any:
+        return merged.get(key) if merged.get(key) is not None else default
+
+    tts_provider = str(
+        _get("tts-provider", _get("tts_provider", _BUILTIN_DEFAULTS["tts-provider"]))
+    )
+    tts_model = str(
+        _get("tts-model", _get("tts_model", _BUILTIN_DEFAULTS["tts-model"]))
+    )
+    tts_voice = str(
+        _get("tts-voice", _get("tts_voice", _BUILTIN_DEFAULTS["tts-voice"]))
+    )
+    raw_tts_args = _get("tts-arguments", _get("tts_arguments", None))
+    tts_arguments: dict[str, Any] | None = (
+        dict(raw_tts_args) if isinstance(raw_tts_args, dict) else None
+    )
+    raw_bg = _get("bg-music", _get("bg_music", None))
+    bg_music = str(raw_bg) if raw_bg is not None else None
+
     # Build AppConfig with safe defaults for missing keys
     return AppConfig(
         beats=int(merged.get("beats", 5)),
@@ -123,4 +173,9 @@ def load_app_config(
         include_world=bool(merged.get("include_world", True)),
         llm_provider=str(merged.get("llm_provider", "openai")),
         model=str(merged.get("model", "gpt-4.1-mini")),
+        tts_provider=tts_provider,
+        tts_model=tts_model,
+        tts_voice=tts_voice,
+        tts_arguments=tts_arguments,
+        bg_music=bg_music,
     )

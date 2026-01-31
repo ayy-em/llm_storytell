@@ -4,6 +4,28 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T0120 – Extend app config to support TTS + audio settings (2026-01-31)
+
+**Goal**
+Add first-class support for TTS and audio-related configuration in app_config.yaml, with deterministic loading and runtime overrides.
+
+**Acceptance criteria**
+* app_config.yaml supports the following optional keys: tts-provider (default: openai), tts-model (default: gpt-4o-mini-tts), tts-voice (default: Onyx), tts-arguments (dict, optional), bg-music (string path, optional).
+* Missing keys do not fail the run.
+* Resolved values (after defaults) are persisted into state.json for reproducibility.
+* CLI overrides (later task) take precedence over config.
+* Tests cover: full config, partial config, empty config.
+
+**Allowed files**
+* src/llm_storytell/config/**
+* src/llm_storytell/run_dir.py
+* tests/test_config_loading.py
+
+**Result**
+AppConfig extended with tts_provider, tts_model, tts_voice, tts_arguments, bg_music (optional, with built-in defaults). YAML keys supported as tts-provider, tts-model, tts-voice, tts-arguments, bg-music. AppConfig.resolved_tts_config() returns JSON-serializable dict for state. run_dir._create_initial_state and initialize_run accept optional resolved_tts_config and persist to state.json when provided. New tests in test_config_loading.py: full/partial/empty TTS config, state persistence, resolved_tts_config serializability. Commands run: uv run ruff format ., uv run ruff check ., uv run pytest -q (240 passed).
+
+---
+
 ### [x] T008 v1.0.3 Target word count CLI (2026-01-31)
 
 **Goal**
