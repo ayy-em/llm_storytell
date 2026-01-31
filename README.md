@@ -313,7 +313,9 @@ If something is unclear, stop.
 ## Roadmap (non-binding, directional)
 
 * **v1.0** – Local, text-only pipeline (multi-app capable)
-* **v1.0.1** - Add soft warnings when approaching context limits
+* **v1.0.1** – Add soft warnings when approaching context limits
+* **v1.0.2** – Apps directory structure and app-level config
+* **v1.0.3** – Target word count CLI flag
 * **v1.1** – Text-to-speech audiobook output
 * **v1.2** – Background music mixing and audio polish
 * **v1.3** – Cloud execution + scheduled delivery (Telegram / email)

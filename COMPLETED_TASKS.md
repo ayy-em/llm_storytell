@@ -4,6 +4,53 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] R0004 Milestone planning pre-v1.1 (2026-01-31)
+
+**Goal**
+Refine the roadmap for v1.0.1 + v1.0.2 + v1.0.3 and translate it into a series of individual tasks in a given format, ready to be worked on by a software developer AI agent.
+
+**Context**
+v1.0 scope is frozen. Future milestones must be planned using the task format found in `TASKS.md` file.
+
+**Inputs**
+- Current `SPEC.md`
+- Current `README.md`
+- Current `TASKS.md`
+
+**Deliverables**
+
+- Refined roadmap section for all items in scope of v1.0.1 + v1.0.2 + v1.0.3
+- New tasks added to `TASKS.md`:
+  - Using template format
+  - Clear acceptance criteria
+  - Explicit allowed files
+  - Tasks ordered for execution
+
+**Acceptance criteria**
+
+- Series of tasks is created. 
+- Tasks are small, explicitly scoped, and executable by an agent,
+- Tasks follow format rules
+- Combined, these tasks achieve all functionality defined for v1.0.1 + v1.0.2 + v1.0.3 in the roadmap
+- No v1.0 behavior is modified
+
+**Allowed files**
+
+* `README.md`
+* `TASKS.md`
+* `SPEC.md`
+
+**Notes**
+
+* Do not implement anything
+* This task is planning only
+* Keep milestone scope tight and explicit
+
+**Result**
+Refined roadmap in SPEC (subsection "Roadmap (v1.0.1 – v1.0.3) refined scope"); added v1.0.2 and v1.0.3 to README roadmap list; added tasks T001–T008 to TASKS.md in template format, ordered for execution. Planning only; no ruff/pytest required for doc-only edits.
+
+---
+
 ### [x] R0003 Test coverage confidence pass (2026-01-31)
 
 **Goal**
