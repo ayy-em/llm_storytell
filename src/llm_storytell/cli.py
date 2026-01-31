@@ -18,10 +18,14 @@ from .context import ContextLoader, ContextLoaderError
 from .llm import LLMProvider, LLMProviderError, OpenAIProvider
 from .llm.pricing import estimate_run_cost
 from .run_dir import RunInitializationError, get_run_logger, initialize_run
+from .steps.audio_prep import AudioPrepStepError, execute_audio_prep_step
 from .steps.critic import CriticStepError, execute_critic_step
+from .steps.llm_tts import LLMTTSStepError, execute_llm_tts_step
 from .steps.outline import OutlineStepError, execute_outline_step
 from .steps.section import SectionStepError, execute_section_step
 from .steps.summarize import SummarizeStepError, execute_summarize_step
+from .tts_providers import TTSProviderError
+from .tts_providers.openai_tts import OpenAITTSProvider
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -253,6 +257,90 @@ def _create_llm_provider_from_config(
         )
     except Exception as e:
         print(f"Error creating LLM provider: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _create_tts_provider_from_config(
+    config_path: Path, resolved_tts_config: dict[str, Any]
+):
+    """Create TTS provider from config and resolved TTS config.
+
+    Args:
+        config_path: Path to config directory (for creds.json).
+        resolved_tts_config: Dict with tts_provider, tts_model, tts_voice, tts_arguments.
+
+    Returns:
+        TTS provider instance (e.g. OpenAITTSProvider).
+
+    Exits:
+        With code 1 if provider cannot be created or is unsupported.
+    """
+    provider_id = (resolved_tts_config or {}).get("tts_provider") or "openai"
+    if provider_id != "openai":
+        print(
+            f"Error: Unsupported TTS provider '{provider_id}'. Only 'openai' is supported.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    creds_path = config_path / "creds.json"
+    api_key = None
+    if creds_path.exists():
+        try:
+            with creds_path.open(encoding="utf-8") as f:
+                creds = json.load(f)
+                api_key = (
+                    creds.get("openai_api_key")
+                    or creds.get("OPENAI_KEY")
+                    or creds.get("OPEN_AI")
+                    or creds.get("OPENAI_API_KEY")
+                )
+        except (OSError, json.JSONDecodeError, KeyError):
+            pass
+
+    if not api_key:
+        print(
+            "Error: No OpenAI API key found for TTS. "
+            "Create config/creds.json with one of: "
+            "'openai_api_key', 'OPENAI_KEY', 'OPEN_AI', or 'OPENAI_API_KEY'.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        print(
+            "Error: openai package not installed. Install with: pip install openai",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        client = OpenAI(api_key=api_key)
+        tts_model = (resolved_tts_config or {}).get("tts_model") or "gpt-4o-mini-tts"
+        tts_voice = (resolved_tts_config or {}).get("tts_voice") or "Onyx"
+        tts_arguments = (resolved_tts_config or {}).get("tts_arguments") or {}
+
+        def openai_tts_client(
+            text: str, model: str, voice: str, **kwargs: Any
+        ) -> bytes:
+            response = client.audio.speech.create(
+                model=model,
+                voice=voice,
+                input=text,
+                **{**tts_arguments, **kwargs},
+            )
+            return response.content
+
+        return OpenAITTSProvider(
+            client=openai_tts_client,
+            default_model=tts_model,
+            default_voice=tts_voice,
+            **tts_arguments,
+        )
+    except Exception as e:
+        print(f"Error creating TTS provider: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -496,10 +584,64 @@ def _run_pipeline(
             )
             return 1
 
-        # TTS step: run only when tts_enabled (TTS step implementation in T0123)
-        if tts_enabled:
-            # Future: run TTS step here (T0123)
-            pass
+        # TTS step: run only when tts_enabled
+        if tts_enabled and resolved_tts_config:
+            tts_provider = _create_tts_provider_from_config(
+                config_path, resolved_tts_config
+            )
+            tts_model = resolved_tts_config.get("tts_model")
+            tts_voice = resolved_tts_config.get("tts_voice")
+
+            print("[llm_storytell] Running TTS (text-to-speech)...", flush=True)
+            logger.log_stage_start("tts")
+            try:
+                execute_llm_tts_step(
+                    run_dir=run_dir,
+                    tts_provider=tts_provider,
+                    logger=logger,
+                    tts_model=tts_model,
+                    tts_voice=tts_voice,
+                )
+                logger.log_stage_end("tts", success=True)
+            except (LLMTTSStepError, TTSProviderError) as e:
+                logger.error(f"TTS step failed: {e}")
+                logger.log_stage_end("tts", success=False)
+                print(
+                    f"[llm_storytell] Error: TTS stage failed: {e}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                print(
+                    f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                return 1
+
+            print("[llm_storytell] Running audio prep (stitch + mix)...", flush=True)
+            logger.log_stage_start("audio_prep")
+            try:
+                execute_audio_prep_step(
+                    run_dir=run_dir,
+                    base_dir=base_dir,
+                    logger=logger,
+                    app_name=app_paths.app_name,
+                )
+                logger.log_stage_end("audio_prep", success=True)
+            except AudioPrepStepError as e:
+                logger.error(f"Audio-prep step failed: {e}")
+                logger.log_stage_end("audio_prep", success=False)
+                print(
+                    f"[llm_storytell] Error: audio-prep stage failed: {e}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                print(
+                    f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                return 1
 
         logger.info(f"Pipeline completed successfully. Run directory: {run_dir}")
         print("[llm_storytell] Run complete.", flush=True)

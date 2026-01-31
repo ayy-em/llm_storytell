@@ -238,6 +238,7 @@ def test_e2e_full_pipeline(
                     "3",
                     "--run-id",
                     "test-run-001",
+                    "--no-tts",
                 ]
             )
 
@@ -279,7 +280,7 @@ def test_e2e_full_pipeline(
         assert len(state["summaries"]) == 3
         assert "continuity_ledger" in state
         assert len(state["token_usage"]) > 0
-        assert "tts_config" in state
+        # With --no-tts, state has no tts_config (TTS step skipped).
 
         # Verify artifacts
         assert (run_dir / "artifacts" / "10_outline.json").exists()
@@ -342,6 +343,7 @@ def test_e2e_run_completion_prints_token_summary(
                 "2",
                 "--run-id",
                 "test-run-summary",
+                "--no-tts",
             ]
         )
 
@@ -379,6 +381,7 @@ def test_e2e_section_length_cli_override(
                 "test-section-length",
                 "--section-length",
                 "500",
+                "--no-tts",
             ]
         )
 
@@ -457,6 +460,7 @@ def test_e2e_without_beats_override(
                     "A simple story.",
                     "--run-id",
                     "test-run-002",
+                    "--no-tts",
                 ]
             )
 
@@ -508,6 +512,7 @@ def test_e2e_model_flag_passed_to_provider_and_used_for_all_calls(
                     "test-run-model-flag",
                     "--model",
                     "gpt-4.1-nano",
+                    "--no-tts",
                 ]
             )
 
@@ -552,6 +557,7 @@ def test_e2e_default_model_when_no_model_flag(
                     "test-run-default-model",
                     "--beats",
                     "1",
+                    "--no-tts",
                 ]
             )
 
@@ -768,6 +774,7 @@ def test_e2e_succeeds_when_optional_locations_missing(
                     "1",
                     "--run-id",
                     "test-optional-loc",
+                    "--no-tts",
                 ]
             )
         assert exit_code == 0
@@ -891,6 +898,7 @@ def test_e2e_word_count_derives_beats_and_persists_word_count(
                 "3000",
                 "--run-id",
                 "test-word-count-derive",
+                "--no-tts",
             ]
         )
 
@@ -932,6 +940,7 @@ def test_e2e_word_count_with_beats_valid_ratio(
                 "4",
                 "--run-id",
                 "test-word-count-beats",
+                "--no-tts",
             ]
         )
 
