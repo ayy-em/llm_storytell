@@ -58,6 +58,14 @@ class RunLogger:
         """
         self._write("ERROR", message)
 
+    def warning(self, message: str) -> None:
+        """Log a WARNING level message.
+
+        Args:
+            message: The message to log.
+        """
+        self._write("WARNING", message)
+
     def log_run_init(
         self,
         app_name: str,

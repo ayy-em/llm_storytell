@@ -4,6 +4,32 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T001 v1.0.1 Soft warnings when approaching context limits (2026-01-31)
+
+**Goal**
+Add soft warnings when combined context (lore, style, location, characters) approaches a defined token or character threshold. No change to selection or pipeline success/failure.
+
+**Acceptance criteria**
+* Threshold(s) for combined context are defined (token count and/or character count).
+* When combined context approaches threshold, a warning is logged to run.log.
+* Context selection and pipeline behavior are unchanged; run does not fail due to the warning.
+
+**Allowed files**
+* `SPEC.md`
+* `src/llm_storytell/context/loader.py`
+* `src/llm_storytell/logging.py`
+* `tests/**`
+
+**Commands to run**
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Result**
+Pipeline-level default character threshold set to 15 000; per-model overrides via `CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL` (dict model → threshold). Added `RunLogger.warning()`; context loader computes combined context size and logs one WARNING to run.log when ≥ threshold (optional `model` param for lookup). SPEC updated with "Context size warning (v1.0.1)" subsection. New tests: RunLogger.warning writes [WARNING]; no warning below threshold; warning at/above default threshold; no crash when logger is None; model-specific threshold used when model in dict; default used when model not in dict. Commands run: `uv run ruff format .`, `uv run ruff check .`, `PYTHONPATH=. uv run pytest -q` (210 passed).
+
+---
+
 ### [x] R0004 Milestone planning pre-v1.1 (2026-01-31)
 
 **Goal**

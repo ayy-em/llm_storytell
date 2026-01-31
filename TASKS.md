@@ -75,29 +75,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 7. README.md and SPEC.md are up-to-date and accurately reflect actual scope, technical solution design and other project information.
 8. No finished tasks are found in TASKS.md file.
 
-## [ ] T001 v1.0.1 Soft warnings when approaching context limits
-
-**Goal**
-Add soft warnings when combined context (lore, style, location, characters) approaches a defined token or character threshold. No change to selection or pipeline success/failure.
-
-**Acceptance criteria**
-* Threshold(s) for combined context are defined (token count and/or character count).
-* When combined context approaches threshold, a warning is logged to run.log.
-* Context selection and pipeline behavior are unchanged; run does not fail due to the warning.
-
-**Allowed files**
-* `SPEC.md`
-* `src/llm_storytell/context/loader.py`
-* `src/llm_storytell/logging.py`
-* `tests/**`
-
-**Commands to run**
-* `uv run ruff format .`
-* `uv run ruff check .`
-* `uv run pytest -q`
-
----
-
 ## [ ] T002 v1.0.2 Introduce apps directory structure and config
 
 **Goal**

@@ -81,6 +81,18 @@ class TestRunLoggerStructuredEvents:
         assert "[ERROR]" in content
         assert "Validation failure in outline: Missing required field: beats" in content
 
+    def test_warning_writes_warning_level(self, tmp_path: Path) -> None:
+        """warning() writes [WARNING] and message to run.log."""
+        log_path = tmp_path / "test.log"
+        log_path.touch()
+
+        logger = RunLogger(log_path)
+        logger.warning("Combined context approaches threshold.")
+
+        content = log_path.read_text()
+        assert "[WARNING]" in content
+        assert "Combined context approaches threshold." in content
+
     def test_log_token_usage(self, tmp_path: Path) -> None:
         """log_token_usage logs all token metrics."""
         log_path = tmp_path / "test.log"

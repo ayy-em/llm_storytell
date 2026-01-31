@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from importlib import import_module
 
 context_module = import_module("llm_storytell.context")
+loader_module = import_module("llm_storytell.context.loader")
 logging_module = import_module("llm_storytell.logging")
 
 ContextLoader = context_module.ContextLoader
@@ -19,6 +20,12 @@ ContextLoaderError = context_module.ContextLoaderError
 ContextSelection = context_module.ContextSelection
 RunLogger = logging_module.RunLogger
 build_prompt_context_vars = context_module.build_prompt_context_vars
+CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT = (
+    loader_module.CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT
+)
+CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL = (
+    loader_module.CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL
+)
 
 
 @pytest.fixture
@@ -390,3 +397,109 @@ class TestContextLoader:
         if selection.selected_location:
             assert len(vars_out["location_context"]) > 0
         assert len(vars_out["character_context"]) > 0
+
+
+class TestContextSizeWarning:
+    """Tests for v1.0.1 soft warning when combined context approaches threshold."""
+
+    def test_no_warning_when_below_threshold(
+        self, temp_context_dir: Path, tmp_path: Path
+    ) -> None:
+        """When combined context is below default threshold, no WARNING is logged."""
+        log_path = tmp_path / "test.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+        loader = ContextLoader(temp_context_dir, logger=logger)
+        selection = loader.load_context("run-below-001")
+
+        content = log_path.read_text()
+        assert (
+            "[WARNING]" not in content or "Combined context approaches" not in content
+        )
+        assert "lore_bible.md" in selection.always_loaded
+
+    def test_warning_when_at_or_above_default_threshold(self, tmp_path: Path) -> None:
+        """When combined context is >= default threshold and logger present, WARNING is logged."""
+        context_dir = tmp_path / "context" / "large-app"
+        context_dir.mkdir(parents=True)
+        # Create context that exceeds 15_000 chars (default threshold)
+        big_lore = "x" * (CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT - 100)
+        (context_dir / "lore_bible.md").write_text(big_lore)
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("a" * 200)
+
+        log_path = tmp_path / "test.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+        loader = ContextLoader(context_dir, logger=logger)
+        selection = loader.load_context("run-above-001")
+
+        content = log_path.read_text()
+        assert "[WARNING]" in content
+        assert "Combined context approaches or exceeds threshold" in content
+        assert str(CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT) in content
+        assert "lore_bible.md" in selection.always_loaded
+
+    def test_no_crash_when_above_threshold_and_no_logger(self, tmp_path: Path) -> None:
+        """When logger is None and context is above threshold, load_context still succeeds."""
+        context_dir = tmp_path / "context" / "large-app"
+        context_dir.mkdir(parents=True)
+        big_lore = "x" * (CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT + 1000)
+        (context_dir / "lore_bible.md").write_text(big_lore)
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("# One")
+
+        loader = ContextLoader(context_dir, logger=None)
+        selection = loader.load_context("run-nologger-001")
+
+        assert "lore_bible.md" in selection.always_loaded
+        assert selection.selected_characters == ["characters/one.md"]
+
+    def test_model_specific_threshold_used_when_model_in_dict(
+        self, tmp_path: Path
+    ) -> None:
+        """When model is in CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL, that threshold is used."""
+        context_dir = tmp_path / "context" / "app"
+        context_dir.mkdir(parents=True)
+        # Total ~60 chars: above 50 (model threshold) but below 15000 (default)
+        (context_dir / "lore_bible.md").write_text("x" * 30)
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("y" * 30)
+
+        log_path = tmp_path / "test.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+
+        original = dict(CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL)
+        try:
+            CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL["test-model"] = 50
+            loader = ContextLoader(context_dir, logger=logger)
+            loader.load_context("run-model-001", model="test-model")
+
+            content = log_path.read_text()
+            assert "[WARNING]" in content
+            assert "Combined context approaches or exceeds threshold" in content
+            assert "50" in content
+        finally:
+            CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL.clear()
+            CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL.update(original)
+
+    def test_default_threshold_used_when_model_not_in_dict(
+        self, tmp_path: Path
+    ) -> None:
+        """When model is not in dict, default threshold is used (no warning for small context)."""
+        context_dir = tmp_path / "context" / "app"
+        context_dir.mkdir(parents=True)
+        (context_dir / "lore_bible.md").write_text("x" * 100)
+        (context_dir / "characters").mkdir()
+        (context_dir / "characters" / "one.md").write_text("y" * 50)
+
+        log_path = tmp_path / "test.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+        loader = ContextLoader(context_dir, logger=logger)
+        selection = loader.load_context("run-other-model-001", model="other-model")
+
+        content = log_path.read_text()
+        assert "Combined context approaches or exceeds threshold" not in content
+        assert "lore_bible.md" in selection.always_loaded

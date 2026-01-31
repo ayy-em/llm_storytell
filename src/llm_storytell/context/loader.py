@@ -12,6 +12,31 @@ MAX_CHARACTERS = 3
 # Separator header when folding world/*.md into lore_bible (traceable in output/logs).
 WORLD_FOLD_SEPARATOR = "\n\n---\n## World context (from world/*.md)\n\n"
 
+# Context size warning (v1.0.1): pipeline-level default character threshold.
+# When combined context (lore + style + location + characters) reaches or exceeds
+# this value, a WARNING is logged to run.log; selection and pipeline success are unchanged.
+CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT = 15_000
+
+# Per-model overrides (model identifier -> character threshold). If the run's model
+# is in this dict, that threshold is used; otherwise CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT.
+CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL: dict[str, int] = {}
+
+
+def _context_warning_threshold(model: str | None) -> int:
+    """Return the character threshold for context-size warning for the given model."""
+    return CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL.get(
+        model or "", CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT
+    )
+
+
+def _combined_context_char_count(selection: "ContextSelection") -> int:
+    """Return total character count of combined context (lore + style + location + characters)."""
+    total = sum(len(v) for v in selection.always_loaded.values())
+    if selection.location_content:
+        total += len(selection.location_content)
+    total += sum(len(v) for v in selection.character_contents.values())
+    return total
+
 
 class ContextLoaderError(Exception):
     """Raised when context loading fails."""
@@ -68,7 +93,7 @@ class ContextLoader:
         """Normalize a path to use forward slashes (POSIX-style)."""
         return str(path).replace("\\", "/")
 
-    def load_context(self, run_id: str) -> ContextSelection:
+    def load_context(self, run_id: str, model: str | None = None) -> ContextSelection:
         """Load and select context files for a run.
 
         Required:
@@ -82,6 +107,9 @@ class ContextLoader:
 
         Args:
             run_id: Run identifier (used for logging only; selection is deterministic).
+            model: Optional model identifier for context-size warning threshold lookup.
+                If present in CONTEXT_CHAR_WARNING_THRESHOLD_BY_MODEL, that threshold
+                is used; otherwise CONTEXT_CHAR_WARNING_THRESHOLD_DEFAULT.
 
         Returns:
             ContextSelection with loaded files and selections.
@@ -109,7 +137,7 @@ class ContextLoader:
                 world_files=world_files,
             )
 
-        return ContextSelection(
+        selection = ContextSelection(
             always_loaded=always_loaded,
             selected_location=selected_location,
             selected_characters=selected_characters,
@@ -117,6 +145,17 @@ class ContextLoader:
             character_contents=character_contents,
             world_files=world_files,
         )
+
+        # Soft warning when combined context approaches or exceeds threshold (v1.0.1)
+        total_chars = _combined_context_char_count(selection)
+        threshold = _context_warning_threshold(model)
+        if total_chars >= threshold and self.logger:
+            self.logger.warning(
+                f"Combined context approaches or exceeds threshold: {total_chars} characters "
+                f"(threshold: {threshold}). Consider reducing context size for cost and quality."
+            )
+
+        return selection
 
     def _load_lore_and_style(self) -> dict[str, str]:
         """Load lore_bible (required), fold world/*.md if present, then style/*.md.

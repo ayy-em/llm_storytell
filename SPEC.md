@@ -458,6 +458,15 @@ These metrics must be:
 
 * Logged to `run.log`
 * Stored in `state.json` under a `token_usage[]` field
+
+### Context size warning (v1.0.1)
+
+When combined context (lore + style + location + characters) approaches or exceeds a defined character threshold, a **WARNING** is logged to `run.log`. Context selection and pipeline success/failure are unchanged; the run does not fail.
+
+* **Pipeline-level default:** A default character threshold (e.g. 15 000) is defined. When combined context length is at or above this value, one warning is logged.
+* **Per-model overrides:** A dictionary maps model identifiers to character thresholds. If the run's model is in this map, that threshold is used; otherwise the pipeline default is used.
+* **Message:** The log entry includes total character count and the threshold used.
+* **No failure:** Missing or excessive context does not change selection logic or cause the run to fail.
 ---
 
 ## State Management
