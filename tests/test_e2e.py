@@ -45,21 +45,21 @@ class MockLLMProvider(LLMProvider):
 
         # Return appropriate mock response based on step
         if step == "outline":
-            # Extract beats_count from prompt
-            # The prompt template uses {beats_count} variable
+            # Extract beats_count from prompt (app-defaults uses "Beats count:\nN")
             beats_count = 3  # default
             import re
 
-            # Try multiple patterns to find beats count
-            # Pattern 1: "Generate {beats_count} beats" or "Generate 5 beats"
-            match = re.search(r"Generate\s+(\d+)\s+beats", prompt)
+            match = re.search(r"Beats count:\s*(\d+)", prompt)
             if match:
                 beats_count = int(match.group(1))
             else:
-                # Pattern 2: Look for number followed by "beats" anywhere
-                match = re.search(r"(\d+)\s+beats", prompt)
+                match = re.search(r"Generate\s+(\d+)\s+beats", prompt)
                 if match:
                     beats_count = int(match.group(1))
+                else:
+                    match = re.search(r"(\d+)\s+beats", prompt)
+                    if match:
+                        beats_count = int(match.group(1))
             self._requested_beats = beats_count
 
             # Return outline with requested number of beats
@@ -157,30 +157,25 @@ More content follows, building on previous sections and maintaining continuity w
 
 @pytest.fixture
 def temp_app_structure(tmp_path: Path) -> Path:
-    """Create a temporary app structure for testing."""
+    """Create a temporary app structure for testing (apps/<app>/context/ + app-defaults)."""
+    import shutil
+
     base_dir = tmp_path
+    PROJECT_ROOT = Path(__file__).parent.parent
 
-    # Create context directory
-    context_dir = base_dir / "context" / "test-app"
+    # Create apps/test-app/context/
+    context_dir = base_dir / "apps" / "test-app" / "context"
     context_dir.mkdir(parents=True)
-
-    # Create lore_bible.md
     (context_dir / "lore_bible.md").write_text(
         "# Lore Bible\n\nThis is a test lore bible for E2E testing."
     )
-
-    # Create style directory
     style_dir = context_dir / "style"
     style_dir.mkdir()
     (style_dir / "tone.md").write_text("# Tone\n\nDark and moody tone.")
     (style_dir / "narration.md").write_text("# Narration\n\nThird person limited.")
-
-    # Create locations directory
     locations_dir = context_dir / "locations"
     locations_dir.mkdir()
     (locations_dir / "city.md").write_text("# City\n\nA decaying urban environment.")
-
-    # Create characters directory
     characters_dir = context_dir / "characters"
     characters_dir.mkdir()
     (characters_dir / "protagonist.md").write_text(
@@ -190,64 +185,19 @@ def temp_app_structure(tmp_path: Path) -> Path:
         "# Antagonist\n\nA mysterious figure."
     )
 
-    # Create prompts directory
-    prompts_dir = base_dir / "prompts" / "apps" / "test-app"
-    prompts_dir.mkdir(parents=True)
+    # Copy prompts/app-defaults so resolver uses them when app has no prompts/
+    app_defaults_src = PROJECT_ROOT / "prompts" / "app-defaults"
+    app_defaults_dest = base_dir / "prompts" / "app-defaults"
+    app_defaults_dest.mkdir(parents=True)
+    if app_defaults_src.exists():
+        for f in app_defaults_src.glob("*.md"):
+            shutil.copy2(f, app_defaults_dest / f.name)
 
-    # Create outline prompt
-    (prompts_dir / "10_outline.md").write_text(
-        """Generate outline for: {seed}
-
-Lore: {lore_bible}
-Style: {style_rules}
-Location: {location_context}
-Characters: {character_context}
-
-Generate {beats_count} beats.
-"""
-    )
-
-    # Create section prompt
-    (prompts_dir / "20_section.md").write_text(
-        """Generate section {section_id} for outline beat: {outline_beat}
-
-Rolling summary: {rolling_summary}
-Continuity: {continuity_context}
-
-Lore: {lore_bible}
-Style: {style_rules}
-Location: {location_context}
-Characters: {character_context}
-"""
-    )
-
-    # Create summarize prompt
-    (prompts_dir / "21_summarize.md").write_text(
-        """Summarize this section: {section_content}
-
-Extract continuity updates.
-"""
-    )
-
-    # Create critic prompt
-    (prompts_dir / "30_critic.md").write_text(
-        """Review and polish this draft: {full_draft}
-
-Lore: {lore_bible}
-Style: {style_rules}
-"""
-    )
-
-    # Create schemas directory (required for validation)
-    PROJECT_ROOT = Path(__file__).parent.parent
+    # Schemas (required for validation)
     SCHEMA_SOURCE = PROJECT_ROOT / "src" / "llm_storytell" / "schemas"
     SCHEMA_DEST = base_dir / "src" / "llm_storytell" / "schemas"
     SCHEMA_DEST.mkdir(parents=True)
-
-    # Copy all schema files
     if SCHEMA_SOURCE.exists():
-        import shutil
-
         for schema_file in SCHEMA_SOURCE.glob("*.json"):
             shutil.copy2(schema_file, SCHEMA_DEST / schema_file.name)
 
@@ -604,20 +554,24 @@ def test_e2e_fails_when_lore_bible_missing(
     original_cwd = Path.cwd()
     try:
         monkeypatch.chdir(temp_app_structure)
-        (temp_app_structure / "context" / "test-app" / "lore_bible.md").unlink()
+        (
+            temp_app_structure / "apps" / "test-app" / "context" / "lore_bible.md"
+        ).unlink()
 
-        exit_code = main(
-            [
-                "run",
-                "--app",
-                "test-app",
-                "--seed",
-                "A story.",
-                "--beats",
-                "2",
-            ]
-        )
-        assert exit_code == 1
+        # App resolution fails (sys.exit(1)), so main() does not return
+        with pytest.raises(SystemExit) as exc_info:
+            main(
+                [
+                    "run",
+                    "--app",
+                    "test-app",
+                    "--seed",
+                    "A story.",
+                    "--beats",
+                    "2",
+                ]
+            )
+        assert exc_info.value.code == 1
 
     finally:
         monkeypatch.chdir(original_cwd)
@@ -632,7 +586,9 @@ def test_e2e_fails_when_characters_missing(
         monkeypatch.chdir(temp_app_structure)
         import shutil
 
-        shutil.rmtree(temp_app_structure / "context" / "test-app" / "characters")
+        shutil.rmtree(
+            temp_app_structure / "apps" / "test-app" / "context" / "characters"
+        )
 
         exit_code = main(
             [
@@ -658,7 +614,9 @@ def test_e2e_fails_when_characters_empty(
     original_cwd = Path.cwd()
     try:
         monkeypatch.chdir(temp_app_structure)
-        for f in (temp_app_structure / "context" / "test-app" / "characters").glob("*"):
+        for f in (
+            temp_app_structure / "apps" / "test-app" / "context" / "characters"
+        ).glob("*"):
             f.unlink()
 
         exit_code = main(
@@ -682,45 +640,30 @@ def test_e2e_succeeds_when_optional_locations_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Run still succeeds when locations directory is missing (optional)."""
+    import shutil
+
     base_dir = tmp_path
-    context_dir = base_dir / "context" / "minimal-app"
+    project_root = Path(__file__).parent.parent
+
+    # apps/minimal-app/context/ (no locations/)
+    context_dir = base_dir / "apps" / "minimal-app" / "context"
     context_dir.mkdir(parents=True)
     (context_dir / "lore_bible.md").write_text("# Lore")
     (context_dir / "characters").mkdir()
     (context_dir / "characters" / "one.md").write_text("# One")
-    # No locations/ - optional
 
-    prompts_dir = base_dir / "prompts" / "apps" / "minimal-app"
-    prompts_dir.mkdir(parents=True)
-    for name, content in [
-        (
-            "10_outline.md",
-            "Seed: {seed}\nLore: {lore_bible}\nStyle: {style_rules}\n"
-            "Location: {location_context}\nChars: {character_context}\n"
-            "Generate {beats_count} beats.",
-        ),
-        (
-            "20_section.md",
-            "Section {section_id}\n{outline_beat}\n{rolling_summary}\n{continuity_context}\n"
-            "Lore: {lore_bible}\nStyle: {style_rules}\nLoc: {location_context}\n"
-            "Chars: {character_context}",
-        ),
-        ("21_summarize.md", "Summarize: {section_content}"),
-        (
-            "30_critic.md",
-            "Draft: {full_draft}\nLore: {lore_bible}\nStyle: {style_rules}\n"
-            "Outline: {outline}\nLoc: {location_context}\nChars: {character_context}",
-        ),
-    ]:
-        (prompts_dir / name).write_text(content)
+    # Copy prompts/app-defaults
+    app_defaults_src = project_root / "prompts" / "app-defaults"
+    app_defaults_dest = base_dir / "prompts" / "app-defaults"
+    app_defaults_dest.mkdir(parents=True)
+    if app_defaults_src.exists():
+        for f in app_defaults_src.glob("*.md"):
+            shutil.copy2(f, app_defaults_dest / f.name)
 
-    project_root = Path(__file__).parent.parent
     schema_src = project_root / "src" / "llm_storytell" / "schemas"
     schema_dest = base_dir / "src" / "llm_storytell" / "schemas"
     schema_dest.mkdir(parents=True)
     if schema_src.exists():
-        import shutil
-
         for f in schema_src.glob("*.json"):
             shutil.copy2(f, schema_dest / f.name)
 

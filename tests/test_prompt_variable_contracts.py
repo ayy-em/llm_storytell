@@ -65,9 +65,9 @@ CRITIC_ALLOWED = CRITIC_REQUIRED | CRITIC_OPTIONAL
 
 
 def _get_prompt_path(prompt_name: str) -> Path:
-    """Get path to a prompt template file."""
+    """Get path to a prompt template file (app-defaults)."""
     project_root = Path(__file__).parent.parent
-    return project_root / "prompts" / "apps" / "grim-narrator" / prompt_name
+    return project_root / "prompts" / "app-defaults" / prompt_name
 
 
 def _extract_variables_from_prompt(prompt_path: Path) -> set[str]:

@@ -1,8 +1,8 @@
 """App discovery and validation.
 
 Resolves app names to their corresponding context and prompt directories.
-Prefers apps/<app_name>/ (only lore_bible.md required); falls back to
-context/<app_name>/ + prompts/apps/<app_name>/ for backward compatibility.
+Only apps/<app_name>/ is used: context from apps/<app_name>/context/,
+prompts from apps/<app_name>/prompts/ if present, else prompts/app-defaults/.
 """
 
 from dataclasses import dataclass
@@ -23,8 +23,7 @@ class AppPaths:
         app_name: The name of the app.
         context_dir: Path to the app's context directory.
         prompts_dir: Path to the app's prompts directory.
-        app_root: When resolved from apps/<app_name>/; path to that directory.
-            None when resolved from legacy context/ + prompts/apps/.
+        app_root: Path to apps/<app_name>/.
     """
 
     app_name: str
@@ -36,11 +35,9 @@ class AppPaths:
 def resolve_app(app_name: str, base_dir: Path | None = None) -> AppPaths:
     """Resolve an app name to its context and prompt directories.
 
-    Resolution order:
-    1. apps/<app_name>/context/lore_bible.md exists -> use apps/<app_name>/context
-       and prompts from apps/<app_name>/prompts/ if present, else prompts/app-defaults/.
-    2. Else context/<app_name>/ and prompts/apps/<app_name>/ both exist -> legacy paths.
-    3. Else raise AppNotFoundError.
+    Resolution uses only apps/<app_name>/:
+    - apps/<app_name>/context/lore_bible.md must exist.
+    - Prompts from apps/<app_name>/prompts/ if present, else prompts/app-defaults/.
 
     Args:
         app_name: The name of the app to resolve.
@@ -48,10 +45,10 @@ def resolve_app(app_name: str, base_dir: Path | None = None) -> AppPaths:
             directory.
 
     Returns:
-        AppPaths containing the resolved paths and app_root when from apps/.
+        AppPaths containing the resolved paths and app_root.
 
     Raises:
-        AppNotFoundError: If the app cannot be found in either layout.
+        AppNotFoundError: If apps/<app_name>/context/lore_bible.md does not exist.
     """
     if not app_name or not app_name.strip():
         raise AppNotFoundError("App name cannot be empty.")
@@ -63,46 +60,25 @@ def resolve_app(app_name: str, base_dir: Path | None = None) -> AppPaths:
 
     base_dir = base_dir.resolve()
 
-    # Prefer apps/<app_name>/: valid if only context/lore_bible.md exists
     apps_context = base_dir / "apps" / app_name / "context"
     lore_bible = apps_context / "lore_bible.md"
-    if lore_bible.exists():
-        app_root = base_dir / "apps" / app_name
-        prompts_in_app = app_root / "prompts"
-        if prompts_in_app.is_dir():
-            prompts_dir = prompts_in_app
-        else:
-            prompts_dir = base_dir / "prompts" / "app-defaults"
-        return AppPaths(
-            app_name=app_name,
-            context_dir=apps_context,
-            prompts_dir=prompts_dir,
-            app_root=app_root,
-        )
-
-    # Legacy: context/<app_name>/ and prompts/apps/<app_name>/
-    context_dir = base_dir / "context" / app_name
-    prompts_dir = base_dir / "prompts" / "apps" / app_name
-
-    missing_paths: list[str] = []
-
-    if not context_dir.is_dir():
-        missing_paths.append(f"context/{app_name}/")
-
-    if not prompts_dir.is_dir():
-        missing_paths.append(f"prompts/apps/{app_name}/")
-
-    if missing_paths:
-        missing_str = ", ".join(missing_paths)
+    if not lore_bible.exists():
         raise AppNotFoundError(
-            f"App '{app_name}' not found. Missing: {missing_str}\n"
-            f"Either create apps/{app_name}/context/lore_bible.md "
-            f"or ensure both directories exist under: {base_dir}"
+            f"App '{app_name}' not found. Create apps/{app_name}/context/lore_bible.md "
+            f"(and at least one character file in apps/{app_name}/context/characters/) "
+            f"under: {base_dir}"
         )
+
+    app_root = base_dir / "apps" / app_name
+    prompts_in_app = app_root / "prompts"
+    if prompts_in_app.is_dir():
+        prompts_dir = prompts_in_app
+    else:
+        prompts_dir = base_dir / "prompts" / "app-defaults"
 
     return AppPaths(
         app_name=app_name,
-        context_dir=context_dir,
+        context_dir=apps_context,
         prompts_dir=prompts_dir,
-        app_root=None,
+        app_root=app_root,
     )

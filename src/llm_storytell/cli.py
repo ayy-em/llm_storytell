@@ -39,7 +39,7 @@ def create_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--app",
         required=True,
-        help="Name of the app to run (apps/<app>/ or context/ + prompts/apps/)",
+        help="Name of the app to run (requires apps/<app>/context/)",
     )
     run_parser.add_argument(
         "--seed",
@@ -494,7 +494,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         base_dir = Path.cwd()
-        # Resolve app paths (apps/<app>/ preferred; legacy context/ + prompts/apps/)
+        # Resolve app paths (apps/<app>/ only)
         app_paths = resolve_app_or_exit(args.app, base_dir)
 
         # Load app config (defaults + optional apps/<app>/app_config.yaml)

@@ -75,31 +75,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 7. README.md and SPEC.md are up-to-date and accurately reflect actual scope, technical solution design and other project information.
 8. No finished tasks are found in TASKS.md file.
 
-## [ ] T003 v1.0.2 Move app data under apps/<app_name>/, use app-defaults prompts
-
-**Goal**
-Move app context and prompts under `apps/<app_name>/`. Use `prompts/app-defaults/` when an app does not provide its own prompts. Remove or deprecate `prompts/apps/grim-narrator` in favor of app-defaults. Remove legacy resolution so only `apps/<app_name>/` is used.
-
-**Acceptance criteria**
-* Context is loaded from `apps/<app_name>/context/` (lore_bible, characters, locations, world, style).
-* Prompts are loaded from `apps/<app_name>/prompts/` if present, else `prompts/app-defaults/`.
-* `prompts/apps/grim-narrator/` is removed; grim-narrator (or example app) uses app-defaults.
-* App resolver no longer falls back to `context/<app>/` or `prompts/apps/<app>/`; resolution uses only `apps/<app_name>/` (T002 added apps-first resolution; this task removes the legacy fallback and migrates existing app data).
-
-**Allowed files**
-* `prompts/`
-* `src/llm_storytell/config/`
-* `src/llm_storytell/context/`
-* `src/llm_storytell/pipeline/`
-* `src/llm_storytell/prompt_render.py`
-* `src/llm_storytell/cli.py`
-* `tests/**`
-
-**Notes**
-* T002 already added apps-first resolution and app-defaults fallback; this task removes legacy paths and migrates grim-narrator under apps/.
-
----
-
 ## [ ] T004 v1.0.2 section_length from app config and CLI override
 
 **Goal**

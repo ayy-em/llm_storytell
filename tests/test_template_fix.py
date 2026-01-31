@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from llm_storytell.prompt_render import render_prompt
 
 _PROJECT_ROOT = Path(__file__).parent.parent
-template_path = _PROJECT_ROOT / "prompts/apps/grim-narrator/10_outline.md"
+template_path = _PROJECT_ROOT / "prompts/app-defaults/10_outline.md"
 variables = {
     "seed": "test seed",
     "beats_count": 5,

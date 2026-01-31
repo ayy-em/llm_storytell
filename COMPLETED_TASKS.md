@@ -4,6 +4,35 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T003 v1.0.2 Move app data under apps/<app_name>/, use app-defaults prompts (2026-01-31)
+
+**Goal**
+Move app context and prompts under `apps/<app_name>/`. Use `prompts/app-defaults/` when an app does not provide its own prompts. Remove or deprecate `prompts/apps/grim-narrator` in favor of app-defaults. Remove legacy resolution so only `apps/<app_name>/` is used.
+
+**Acceptance criteria**
+* Context is loaded from `apps/<app_name>/context/` (lore_bible, characters, locations, world, style).
+* Prompts are loaded from `apps/<app_name>/prompts/` if present, else `prompts/app-defaults/`.
+* `prompts/apps/grim-narrator/` is removed; grim-narrator (or example app) uses app-defaults.
+* App resolver no longer falls back to `context/<app>/` or `prompts/apps/<app>/`; resolution uses only `apps/<app_name>/` (T002 added apps-first resolution; this task removes the legacy fallback and migrates existing app data).
+
+**Allowed files**
+* `prompts/`
+* `src/llm_storytell/config/`
+* `src/llm_storytell/context/`
+* `src/llm_storytell/pipeline/`
+* `src/llm_storytell/prompt_render.py`
+* `src/llm_storytell/cli.py`
+* `tests/**`
+* `apps/**`
+
+**Notes**
+* T002 already added apps-first resolution and app-defaults fallback; this task removes legacy paths and migrates grim-narrator under apps/.
+
+**Result**
+App resolver now uses only `apps/<app_name>/`: context from `apps/<app_name>/context/`, prompts from `apps/<app_name>/prompts/` if present else `prompts/app-defaults/`. Removed legacy fallback to `context/<app>/` and `prompts/apps/<app>/`. Deleted `prompts/apps/grim-narrator/` (all prompt files). Created `apps/grim-narrator/context/lore_bible.md` and `apps/grim-narrator/context/characters/protagonist.md` so grim-narrator runs with app-defaults. Updated CLI `--app` help to require `apps/<app>/context/`. Tests: app resolution apps-only (removed legacy-only tests; nonexistent app raises with apps/ message); e2e fixtures use `apps/<app>/context/` and copied `prompts/app-defaults/`; failure tests use `apps/test-app/context/` paths; MockLLMProvider parses "Beats count:\s*N" for app-defaults outline prompt; lore_bible missing test expects SystemExit(1). Prompt variable and template-fix tests use `prompts/app-defaults/`. Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (217 passed).
+
+---
+
 ### [x] T002 v1.0.2 Introduce apps directory structure and config (2026-01-31)
 
 **Goal**
