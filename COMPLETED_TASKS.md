@@ -4,6 +4,38 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T002 v1.0.2 Introduce apps directory structure and config (2026-01-31)
+
+**Goal**
+Introduce `apps/` as the root for app data. Add `apps/default_config.yaml` with default values and support `app_config.yaml` per app. Pipeline resolves app from `apps/<app_name>/`; only required app file is `apps/<app_name>/context/lore_bible.md`.
+
+**Acceptance criteria**
+* `apps/default_config.yaml` exists with defaults for beats, section_length, context limits, LLM provider/model.
+* App config loader reads `apps/<app_name>/app_config.yaml` and merges with defaults.
+* App resolution uses `apps/<app_name>/` for context path; app is valid if only `apps/<app_name>/context/lore_bible.md` exists (no prompts/ required for default prompts).
+* Existing runs and CLI `--app` continue to work; migration of existing app data under `apps/` is a separate task.
+
+**Allowed files**
+* `config/`
+* `src/llm_storytell/config/`
+* `src/llm_storytell/context/`
+* `src/llm_storytell/cli.py`
+* `tests/**`
+* `docs/decisions/0001-tech-stack.md` (only if new dependency added)
+
+**Commands to run**
+* `uv run ruff format .`
+* `uv run ruff check .`
+* `uv run pytest -q`
+
+**Notes**
+* Do not move existing `context/` or `prompts/apps/` in this task; only add new apps layout and config loading. Migration is T003.
+
+**Result**
+Added `apps/default_config.yaml` with defaults (beats, section_length, max_characters, max_locations, include_world, llm_provider, model). Created `src/llm_storytell/config/app_config.py` with `AppConfig` dataclass and `load_app_config()` (defaults from apps/default_config.yaml, optional app overrides from apps/<app_name>/app_config.yaml; built-in defaults when file missing for legacy/e2e). Updated `app_resolver.py`: resolution prefers `apps/<app_name>/context/lore_bible.md` (prompts from apps/<app>/prompts/ or prompts/app-defaults/), falls back to legacy context/ + prompts/apps/; `AppPaths` now includes `app_root`. CLI loads app config after resolve and uses `app_config.beats` when `--beats` not provided. New tests: app resolution from apps/ (lore_bible only, with prompts dir, apps preferred over legacy); app config (defaults only, merge overrides, missing default uses builtin, invalid YAML raises, app_root, empty default raises, AppConfig frozen). Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (220 passed).
+
+---
+
 ### [x] T001 v1.0.1 Soft warnings when approaching context limits (2026-01-31)
 
 **Goal**

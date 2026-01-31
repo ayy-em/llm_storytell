@@ -6,7 +6,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .config import AppNotFoundError, AppPaths, resolve_app
+from .config import (
+    AppConfigError,
+    AppNotFoundError,
+    AppPaths,
+    load_app_config,
+    resolve_app,
+)
 from .context import ContextLoader, ContextLoaderError
 from .llm import LLMProvider, LLMProviderError, OpenAIProvider
 from .llm.pricing import estimate_run_cost
@@ -33,7 +39,7 @@ def create_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--app",
         required=True,
-        help="Name of the app to run (must exist under context/ and prompts/apps/)",
+        help="Name of the app to run (apps/<app>/ or context/ + prompts/apps/)",
     )
     run_parser.add_argument(
         "--seed",
@@ -487,8 +493,20 @@ def main(argv: list[str] | None = None) -> int:
             parser.print_help()
             return 1
 
-        # Resolve app paths
-        app_paths = resolve_app_or_exit(args.app)
+        base_dir = Path.cwd()
+        # Resolve app paths (apps/<app>/ preferred; legacy context/ + prompts/apps/)
+        app_paths = resolve_app_or_exit(args.app, base_dir)
+
+        # Load app config (defaults + optional apps/<app>/app_config.yaml)
+        try:
+            app_config = load_app_config(
+                app_paths.app_name,
+                base_dir=base_dir,
+                app_root=app_paths.app_root,
+            )
+        except AppConfigError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
 
         # Handle --beats vs --sections conflict (prefer --beats)
         beats = args.beats
@@ -509,10 +527,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 1
 
-        # Use default beats if not provided (app-defined default would go here in future)
-        # For v1.0, use 5 as a reasonable default
+        # Use app config default beats when not overridden by CLI
         if beats is None:
-            beats = 5
+            beats = app_config.beats
 
         # Model for all LLM calls: CLI override or default
         model = args.model if args.model is not None else "gpt-4.1-mini"

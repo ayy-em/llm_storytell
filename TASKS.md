@@ -75,45 +75,16 @@ Agent is to stop after reading task and request clarification if any of the non-
 7. README.md and SPEC.md are up-to-date and accurately reflect actual scope, technical solution design and other project information.
 8. No finished tasks are found in TASKS.md file.
 
-## [ ] T002 v1.0.2 Introduce apps directory structure and config
-
-**Goal**
-Introduce `apps/` as the root for app data. Add `apps/default_config.yaml` with default values and support `app_config.yaml` per app. Pipeline resolves app from `apps/<app_name>/`; only required app file is `apps/<app_name>/context/lore_bible.md`.
-
-**Acceptance criteria**
-* `apps/default_config.yaml` exists with defaults for beats, section_length, context limits, LLM provider/model.
-* App config loader reads `apps/<app_name>/app_config.yaml` and merges with defaults.
-* App resolution uses `apps/<app_name>/` for context path; app is valid if only `apps/<app_name>/context/lore_bible.md` exists (no prompts/ required for default prompts).
-* Existing runs and CLI `--app` continue to work; migration of existing app data under `apps/` is a separate task.
-
-**Allowed files**
-* `config/`
-* `src/llm_storytell/config/`
-* `src/llm_storytell/context/`
-* `src/llm_storytell/cli.py`
-* `tests/**`
-* `docs/decisions/0001-tech-stack.md` (only if new dependency added)
-
-**Commands to run**
-* `uv run ruff format .`
-* `uv run ruff check .`
-* `uv run pytest -q`
-
-**Notes**
-* Do not move existing `context/` or `prompts/apps/` in this task; only add new apps layout and config loading. Migration is T003.
-
----
-
 ## [ ] T003 v1.0.2 Move app data under apps/<app_name>/, use app-defaults prompts
 
 **Goal**
-Move app context and prompts under `apps/<app_name>/`. Use `prompts/app-defaults/` when an app does not provide its own prompts. Remove or deprecate `prompts/apps/grim-narrator` in favor of app-defaults.
+Move app context and prompts under `apps/<app_name>/`. Use `prompts/app-defaults/` when an app does not provide its own prompts. Remove or deprecate `prompts/apps/grim-narrator` in favor of app-defaults. Remove legacy resolution so only `apps/<app_name>/` is used.
 
 **Acceptance criteria**
 * Context is loaded from `apps/<app_name>/context/` (lore_bible, characters, locations, world, style).
 * Prompts are loaded from `apps/<app_name>/prompts/` if present, else `prompts/app-defaults/`.
 * `prompts/apps/grim-narrator/` is removed; grim-narrator (or example app) uses app-defaults.
-* Pipeline and CLI resolve app from `apps/<app_name>/`; old paths `context/<app>/` and `prompts/apps/<app>/` no longer used.
+* App resolver no longer falls back to `context/<app>/` or `prompts/apps/<app>/`; resolution uses only `apps/<app_name>/` (T002 added apps-first resolution; this task removes the legacy fallback and migrates existing app data).
 
 **Allowed files**
 * `prompts/`
@@ -124,23 +95,23 @@ Move app context and prompts under `apps/<app_name>/`. Use `prompts/app-defaults
 * `src/llm_storytell/cli.py`
 * `tests/**`
 
-**Commands to run**
-* `uv run ruff format .`
-* `uv run ruff check .`
-* `uv run pytest -q`
+**Notes**
+* T002 already added apps-first resolution and app-defaults fallback; this task removes legacy paths and migrates grim-narrator under apps/.
 
 ---
 
 ## [ ] T004 v1.0.2 section_length from app config and CLI override
 
 **Goal**
-Define `section_length` (words per section) in app config with pipeline default (e.g. "400-600"). Remove hardcoded word count from `20_section.md`. Add CLI `--section-length N` override; pipeline receives range `[N*0.8, N*1.2]` as section_length value.
+Use `section_length` from app config (already in `apps/default_config.yaml` and `AppConfig` per T002) in the section prompt. Remove hardcoded word count from `20_section.md`. Add CLI `--section-length N` override; pipeline receives range `[N*0.8, N*1.2]` as section_length value for that run.
 
 **Acceptance criteria**
 * `20_section.md` receives a `section_length` variable (e.g. range string); no hardcoded word count in the prompt body.
-* App config and default_config define `section_length`; pipeline default is "400-600" if not set.
-* CLI accepts `--section-length N` (integer); pipeline uses range `[N*0.8, N*1.2]` for that run.
-* Section step and prompt render pass `section_length` into the section prompt.
+* Section step and prompt render pass `section_length` from app config (or CLI-derived range when `--section-length N` is set) into the section prompt.
+* CLI accepts `--section-length N` (integer); when set, pipeline uses range `[N*0.8, N*1.2]` for that run instead of app config value.
+
+**Notes**
+* T002 already added `section_length` to `apps/default_config.yaml` and `AppConfig`; this task wires it into the section prompt and adds the CLI override.
 
 **Allowed files**
 * `config/`
@@ -161,12 +132,14 @@ Define `section_length` (words per section) in app config with pipeline default 
 ## [ ] T005 v1.0.2 Context selection limits from app config
 
 **Goal**
-Make the number of .md files selected per context subfolder (characters, locations, world, etc.) configurable via `app_config.yaml` with defaults in `apps/default_config.yaml`.
+Wire the context loader to use app config limits (already in `AppConfig`: `max_characters`, `max_locations`, `include_world` per T002) when selecting files, instead of hardcoded constants.
 
 **Acceptance criteria**
-* App config defines limits (e.g. max character files, max location files, whether to include world).
-* Context loader uses these limits when selecting files; defaults come from default_config.yaml.
+* Context loader receives and uses app config limits (max character files, max location files, whether to include world) when selecting files; defaults come from `apps/default_config.yaml` via existing `load_app_config()`.
 * Deterministic selection order (e.g. alphabetical) is unchanged; only counts/limits are configurable.
+
+**Notes**
+* T002 already added `max_characters`, `max_locations`, `include_world` to `apps/default_config.yaml` and `AppConfig`; this task wires the context loader to use them (e.g. pass `AppConfig` or limits into `ContextLoader` and replace hardcoded `MAX_CHARACTERS` etc.).
 
 **Allowed files**
 * `config/`
@@ -205,11 +178,11 @@ Update `.gitignore` so `apps/` is ignored except for a committed `apps/example_a
 ## [ ] T007 v1.0.2 Update README and SPEC for new app structure and CLI
 
 **Goal**
-Update README and SPEC to describe the new `apps/` layout, `app_config.yaml`, default_config, section_length, and `--section-length` CLI flag. Update "How to add a new app" to use apps/ and default_config.
+Update README and SPEC to describe the `apps/` layout (introduced in T002), `app_config.yaml`, `apps/default_config.yaml`, section_length (T004), and `--section-length` CLI flag. Update "How to add a new app" to use apps/ and default_config.
 
 **Acceptance criteria**
 * README and SPEC describe `apps/<app_name>/` structure (context, prompts, app_config.yaml).
-* CLI documentation includes `--section-length`.
+* CLI documentation includes `--section-length` (from T004).
 * "How to add a new app" reflects apps/ and that only lore_bible.md is required when using default_config.
 
 **Allowed files**

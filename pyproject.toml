@@ -18,3 +18,7 @@ dependencies = [
 
 [tool.hatchling.build.targets.wheel]
 packages = ["src/llm_storytell"]
+
+[tool.pytest.ini_options]
+# Add project root to sys.path so steps' "from src.llm_storytell..." resolve when running pytest.
+pythonpath = ["."]
