@@ -78,30 +78,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 ## Task Group: Bug Bash pre-v1.2 public release
 
-### [ ] T0128 – Codebase cleanup: remove unused code, resolve inconsistencies, de-duplicate logic
-
-**Goal**
-Review the codebase for unused code paths/files and eliminate inconsistencies and duplicate logic, especially in state IO and pipeline steps.
-
-**Acceptance criteria**
-- Remove or consolidate unused modules/functions; no orphaned code remains.
-- Duplicate logic (e.g., repeated state/inputs loading and atomic writes) is centralized.
-- Inconsistent behaviors across steps are resolved and covered by tests.
-- No change in external behavior unless documented in SPEC.
-
-**Allowed files**
-- src/llm_storytell/**
-- tests/**
-
-**Commands to run**
-- `uv run ruff format .`
-- `uv run ruff check .`
-- `uv run pytest -q`
-
-Result: 
-
----
-
 ### [ ] T0129 – Test coverage review + real E2E runs
 
 **Goal**

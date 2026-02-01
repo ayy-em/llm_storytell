@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 
-from ..logging import RunLogger
+from llm_storytell.logging import RunLogger
 
 # Segment limits (must match llm_tts step)
 MAX_SEGMENTS = 22
@@ -21,14 +20,12 @@ class AudioPrepStepError(Exception):
 
 def _get_app_name(run_dir: Path) -> str:
     """Read app name from run_dir/inputs.json."""
-    inputs_path = run_dir / "inputs.json"
-    if not inputs_path.exists():
-        raise AudioPrepStepError(f"inputs.json not found: {inputs_path}")
+    from llm_storytell.pipeline.state import StateIOError, load_inputs
+
     try:
-        with inputs_path.open(encoding="utf-8") as f:
-            data = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        raise AudioPrepStepError(f"Error reading inputs.json: {e}") from e
+        data = load_inputs(run_dir)
+    except StateIOError as e:
+        raise AudioPrepStepError(str(e)) from e
     app = data.get("app")
     if not app:
         raise AudioPrepStepError("inputs.json missing 'app'")

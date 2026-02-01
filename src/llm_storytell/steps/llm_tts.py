@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import re
-import tempfile
 from pathlib import Path
 from typing import Any
 
-from ..logging import RunLogger
-from ..tts_providers import TTSProvider, TTSProviderError
+from llm_storytell.logging import RunLogger
+from llm_storytell.tts_providers import TTSProvider, TTSProviderError
 
 
 class LLMTTSStepError(Exception):
@@ -87,15 +85,14 @@ def _chunk_text(
 
 def _load_final_script(run_dir: Path) -> str:
     """Load final script from run_dir (artifacts/final_script.md or state path)."""
-    state_path = run_dir / "state.json"
+    from llm_storytell.pipeline.state import StateIOError, load_state
+
     path_from_state: str | None = None
-    if state_path.exists():
-        try:
-            with state_path.open(encoding="utf-8") as f:
-                state = json.load(f)
-            path_from_state = state.get("final_script_path")
-        except (json.JSONDecodeError, OSError):
-            pass
+    try:
+        state = load_state(run_dir)
+        path_from_state = state.get("final_script_path")
+    except StateIOError:
+        pass
 
     if path_from_state:
         script_path = run_dir / path_from_state
@@ -109,46 +106,6 @@ def _load_final_script(run_dir: Path) -> str:
         return script_path.read_text(encoding="utf-8")
     except OSError as e:
         raise LLMTTSStepError(f"Error reading final script: {e}") from e
-
-
-def _load_state(run_dir: Path) -> dict[str, Any]:
-    """Load state.json."""
-    state_path = run_dir / "state.json"
-    if not state_path.exists():
-        raise LLMTTSStepError(f"State not found: {state_path}")
-    try:
-        with state_path.open(encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        raise LLMTTSStepError(f"Error reading state: {e}") from e
-
-
-def _update_state_tts(
-    run_dir: Path,
-    tts_usage_entries: list[dict[str, Any]],
-) -> None:
-    """Append TTS token usage to state.json (create tts_token_usage if missing)."""
-    state_path = run_dir / "state.json"
-    state = _load_state(run_dir)
-    state.setdefault("tts_token_usage", []).extend(tts_usage_entries)
-
-    temp_file = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=run_dir,
-            delete=False,
-            suffix=".tmp",
-        ) as f:
-            temp_file = Path(f.name)
-            json.dump(state, f, indent=2, ensure_ascii=False)
-        temp_file.replace(state_path)
-        temp_file = None
-    except OSError as e:
-        if temp_file is not None and temp_file.exists():
-            temp_file.unlink(missing_ok=True)
-        raise LLMTTSStepError(f"Error writing state: {e}") from e
 
 
 def execute_llm_tts_step(
@@ -197,19 +154,22 @@ def execute_llm_tts_step(
     prompts_dir.mkdir(parents=True, exist_ok=True)
     outputs_dir.mkdir(parents=True, exist_ok=True)
 
+    from llm_storytell.pipeline.state import (
+        StateIOError,
+        load_state,
+        update_state_atomic,
+    )
+
     total_text_prompt = 0
     total_text_completion = 0
-    state_path = run_dir / "state.json"
-    if state_path.exists():
-        try:
-            with state_path.open(encoding="utf-8") as f:
-                s = json.load(f)
-            for entry in s.get("token_usage") or []:
-                if isinstance(entry, dict):
-                    total_text_prompt += entry.get("prompt_tokens", 0) or 0
-                    total_text_completion += entry.get("completion_tokens", 0) or 0
-        except (OSError, json.JSONDecodeError):
-            pass
+    try:
+        s = load_state(run_dir)
+        for entry in s.get("token_usage") or []:
+            if isinstance(entry, dict):
+                total_text_prompt += entry.get("prompt_tokens", 0) or 0
+                total_text_completion += entry.get("completion_tokens", 0) or 0
+    except StateIOError:
+        pass
 
     tts_usage_entries: list[dict[str, Any]] = []
     tts_prompt_sum = 0
@@ -272,7 +232,13 @@ def execute_llm_tts_step(
             total_tokens=tt,
         )
 
-    _update_state_tts(run_dir, tts_usage_entries)
+    def updater(s: dict[str, Any]) -> None:
+        s.setdefault("tts_token_usage", []).extend(tts_usage_entries)
+
+    try:
+        update_state_atomic(run_dir, updater)
+    except StateIOError as e:
+        raise LLMTTSStepError(str(e)) from e
 
     total_text_tokens = total_text_prompt + total_text_completion
     total_tts_tokens = tts_prompt_sum + tts_completion_sum

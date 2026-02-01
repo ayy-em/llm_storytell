@@ -19,44 +19,23 @@ from typing import Any
 
 import yaml
 
-from ..context import ContextLoaderError, build_prompt_context_vars
-from ..llm import LLMProvider, LLMProviderError
-from ..llm.token_tracking import record_token_usage
-from ..logging import RunLogger
-from ..prompt_render import MissingVariableError, TemplateNotFoundError, render_prompt
-from ..schemas import SchemaValidationError, validate_json_schema
-from .llm_io import save_llm_io
+from llm_storytell.context import ContextLoaderError, build_prompt_context_vars
+from llm_storytell.llm import LLMProvider, LLMProviderError
+from llm_storytell.llm.token_tracking import record_token_usage
+from llm_storytell.logging import RunLogger
+from llm_storytell.prompt_render import (
+    MissingVariableError,
+    TemplateNotFoundError,
+    render_prompt,
+)
+from llm_storytell.schemas import SchemaValidationError, validate_json_schema
+from llm_storytell.steps.llm_io import save_llm_io
 
 
 class CriticStepError(Exception):
     """Raised when critic step execution fails."""
 
     pass
-
-
-def _load_state(run_dir: Path) -> dict[str, Any]:
-    """Load state.json from run directory.
-
-    Args:
-        run_dir: Path to the run directory.
-
-    Returns:
-        State dictionary.
-
-    Raises:
-        CriticStepError: If state.json cannot be loaded.
-    """
-    state_path = run_dir / "state.json"
-    if not state_path.exists():
-        raise CriticStepError(f"State file not found: {state_path}")
-
-    try:
-        with state_path.open(encoding="utf-8") as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        raise CriticStepError(f"Invalid JSON in state.json: {e}") from e
-    except OSError as e:
-        raise CriticStepError(f"Error reading state.json: {e}") from e
 
 
 def _strip_frontmatter(content: str) -> str:
@@ -304,61 +283,6 @@ def _parse_two_block_response(content: str) -> tuple[str, dict[str, Any]]:
     return final_script, editor_report
 
 
-def _update_state(
-    run_dir: Path,
-    final_script_path: str,
-    editor_report_path: str,
-    token_usage: dict[str, Any],
-) -> None:
-    """Update state.json with final script path, editor report path, and token usage.
-
-    Uses atomic write (temp file + rename) to avoid partial state.
-
-    Args:
-        run_dir: Path to the run directory.
-        final_script_path: Path to final_script.md (relative to run_dir, as string).
-        editor_report_path: Path to editor_report.json (relative to run_dir, as string).
-        token_usage: Token usage dictionary to append.
-
-    Raises:
-        CriticStepError: If state update fails.
-    """
-    state_path = run_dir / "state.json"
-
-    # Load current state
-    try:
-        with state_path.open(encoding="utf-8") as f:
-            state = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        raise CriticStepError(f"Error reading state for update: {e}") from e
-
-    # Update state: store paths and append token usage
-    state["final_script_path"] = final_script_path
-    state["editor_report_path"] = editor_report_path
-    state["token_usage"].append(token_usage)
-
-    # Atomic write
-    temp_file = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=run_dir,
-            delete=False,
-            suffix=".tmp",
-        ) as f:
-            temp_file = Path(f.name)
-            json.dump(state, f, indent=2, ensure_ascii=False)
-
-        # Atomic rename
-        temp_file.replace(state_path)
-        temp_file = None
-    except OSError as e:
-        if temp_file and temp_file.exists():
-            temp_file.unlink()
-        raise CriticStepError(f"Error writing updated state: {e}") from e
-
-
 def execute_critic_step(
     run_dir: Path,
     context_dir: Path,
@@ -386,7 +310,16 @@ def execute_critic_step(
     """
     try:
         # Load state
-        state = _load_state(run_dir)
+        from llm_storytell.pipeline.state import (
+            StateIOError,
+            load_state,
+            update_state_atomic,
+        )
+
+        try:
+            state = load_state(run_dir)
+        except StateIOError as e:
+            raise CriticStepError(str(e)) from e
 
         # Validate outline exists
         outline = state.get("outline", [])
@@ -613,12 +546,15 @@ def execute_critic_step(
         )
 
         # Update state with paths (relative to run_dir, normalized to forward slashes)
-        _update_state(
-            run_dir,
-            Path("artifacts/final_script.md").as_posix(),
-            Path("artifacts/editor_report.json").as_posix(),
-            token_usage_dict,
-        )
+        def updater(s: dict[str, Any]) -> None:
+            s["final_script_path"] = Path("artifacts/final_script.md").as_posix()
+            s["editor_report_path"] = Path("artifacts/editor_report.json").as_posix()
+            s["token_usage"].append(token_usage_dict)
+
+        try:
+            update_state_atomic(run_dir, updater)
+        except StateIOError as e:
+            raise CriticStepError(str(e)) from e
 
     except CriticStepError:
         raise

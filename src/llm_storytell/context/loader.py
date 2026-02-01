@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..config.app_config import AppConfig
-from ..logging import RunLogger
+from llm_storytell.config.app_config import AppConfig
+from llm_storytell.logging import RunLogger
 
 # Default max character files when no app config is provided (backward compatibility).
 MAX_CHARACTERS_DEFAULT = 3

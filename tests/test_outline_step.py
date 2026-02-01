@@ -16,8 +16,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 SCHEMA_BASE = PROJECT_ROOT / "src" / "llm_storytell" / "schemas"
 
 outline_module = import_module("llm_storytell.steps.outline")
-# Use same llm module as outline step (src.llm_storytell.llm) so LLMProviderError is caught
-llm_module = import_module("src.llm_storytell.llm")
+# Use same llm module as outline step so LLMProviderError is caught
+llm_module = import_module("llm_storytell.llm")
 logging_module = import_module("llm_storytell.logging")
 prompt_render_module = import_module("llm_storytell.prompt_render")
 
@@ -380,7 +380,7 @@ class TestExecuteOutlineStepErrors:
                 logger=logger,
             )
 
-        assert "Inputs file not found" in str(exc_info.value)
+        assert "inputs.json not found" in str(exc_info.value)
 
     def test_fails_on_missing_seed(
         self,

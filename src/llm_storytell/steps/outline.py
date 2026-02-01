@@ -10,124 +10,24 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.llm_storytell.context import ContextLoaderError, build_prompt_context_vars
-from src.llm_storytell.llm import LLMProvider, LLMProviderError
-from src.llm_storytell.llm.token_tracking import record_token_usage
-from src.llm_storytell.logging import RunLogger
-from src.llm_storytell.prompt_render import (
+from llm_storytell.context import ContextLoaderError, build_prompt_context_vars
+from llm_storytell.llm import LLMProvider, LLMProviderError
+from llm_storytell.llm.token_tracking import record_token_usage
+from llm_storytell.logging import RunLogger
+from llm_storytell.prompt_render import (
     MissingVariableError,
     TemplateNotFoundError,
     UnsupportedPlaceholderError,
     render_prompt,
 )
-from src.llm_storytell.schemas import SchemaValidationError, validate_json_schema
-from src.llm_storytell.steps.llm_io import save_llm_io
+from llm_storytell.schemas import SchemaValidationError, validate_json_schema
+from llm_storytell.steps.llm_io import save_llm_io
 
 
 class OutlineStepError(Exception):
     """Raised when outline step execution fails."""
 
     pass
-
-
-def _load_state(run_dir: Path) -> dict[str, Any]:
-    """Load state.json from run directory.
-
-    Args:
-        run_dir: Path to the run directory.
-
-    Returns:
-        State dictionary.
-
-    Raises:
-        OutlineStepError: If state.json cannot be loaded.
-    """
-    state_path = run_dir / "state.json"
-    if not state_path.exists():
-        raise OutlineStepError(f"State file not found: {state_path}")
-
-    try:
-        with state_path.open(encoding="utf-8") as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        raise OutlineStepError(f"Invalid JSON in state.json: {e}") from e
-    except OSError as e:
-        raise OutlineStepError(f"Error reading state.json: {e}") from e
-
-
-def _load_inputs(run_dir: Path) -> dict[str, Any]:
-    """Load inputs.json from run directory.
-
-    Args:
-        run_dir: Path to the run directory.
-
-    Returns:
-        Inputs dictionary.
-
-    Raises:
-        OutlineStepError: If inputs.json cannot be loaded.
-    """
-    inputs_path = run_dir / "inputs.json"
-    if not inputs_path.exists():
-        raise OutlineStepError(f"Inputs file not found: {inputs_path}")
-
-    try:
-        with inputs_path.open(encoding="utf-8") as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        raise OutlineStepError(f"Invalid JSON in inputs.json: {e}") from e
-    except OSError as e:
-        raise OutlineStepError(f"Error reading inputs.json: {e}") from e
-
-
-def _update_state(
-    run_dir: Path, outline_data: dict[str, Any], token_usage: dict[str, Any]
-) -> None:
-    """Update state.json with outline and token usage.
-
-    Uses atomic write (temp file + rename) to avoid partial state.
-
-    Args:
-        run_dir: Path to the run directory.
-        outline_data: The validated outline data to store.
-        token_usage: Token usage dictionary to append.
-
-    Raises:
-        OutlineStepError: If state update fails.
-    """
-    state_path = run_dir / "state.json"
-
-    # Load current state
-    try:
-        with state_path.open(encoding="utf-8") as f:
-            state = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        raise OutlineStepError(f"Error reading state for update: {e}") from e
-
-    # Update state
-    state["outline"] = outline_data.get("beats", [])
-    state["token_usage"].append(token_usage)
-
-    # Atomic write
-    temp_file = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=run_dir,
-            delete=False,
-            suffix=".tmp",
-        ) as f:
-            temp_file = Path(f.name)
-            json.dump(state, f, indent=2, ensure_ascii=False)
-
-        # Atomic rename
-        temp_file.replace(state_path)
-        temp_file = None
-    except OSError as e:
-        if temp_file and temp_file.exists():
-            temp_file.unlink()
-        raise OutlineStepError(f"Error writing updated state: {e}") from e
 
 
 def execute_outline_step(
@@ -157,8 +57,18 @@ def execute_outline_step(
     """
     try:
         # Load state and inputs
-        state = _load_state(run_dir)
-        inputs = _load_inputs(run_dir)
+        from llm_storytell.pipeline.state import (
+            StateIOError,
+            load_inputs,
+            load_state,
+            update_state_atomic,
+        )
+
+        try:
+            state = load_state(run_dir)
+            inputs = load_inputs(run_dir)
+        except StateIOError as e:
+            raise OutlineStepError(str(e)) from e
 
         seed = state.get("seed")
         if not seed:
@@ -410,7 +320,14 @@ def execute_outline_step(
         )
 
         # Update state
-        _update_state(run_dir, outline_data, token_usage_dict)
+        def updater(s: dict[str, Any]) -> None:
+            s["outline"] = outline_data.get("beats", [])
+            s["token_usage"].append(token_usage_dict)
+
+        try:
+            update_state_atomic(run_dir, updater)
+        except StateIOError as e:
+            raise OutlineStepError(str(e)) from e
 
     except OutlineStepError:
         raise

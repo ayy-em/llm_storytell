@@ -4,15 +4,15 @@ import argparse
 import sys
 from pathlib import Path
 
-from .config import (
+from llm_storytell.config import (
     AppConfigError,
     AppNotFoundError,
     AppPaths,
     load_app_config,
     resolve_app,
 )
-from .pipeline.resolve import resolve_run_settings
-from .pipeline.runner import run_pipeline
+from llm_storytell.pipeline.resolve import resolve_run_settings
+from llm_storytell.pipeline.runner import run_pipeline
 
 
 def create_parser() -> argparse.ArgumentParser:

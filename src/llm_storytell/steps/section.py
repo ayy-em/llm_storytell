@@ -13,49 +13,24 @@ from typing import Any
 
 import yaml
 
-from src.llm_storytell.continuity import build_rolling_summary, get_continuity_context
-from src.llm_storytell.context import ContextLoaderError, build_prompt_context_vars
-from src.llm_storytell.llm import LLMProvider, LLMProviderError
-from src.llm_storytell.llm.token_tracking import record_token_usage
-from src.llm_storytell.logging import RunLogger
-from src.llm_storytell.prompt_render import (
+from llm_storytell.continuity import build_rolling_summary, get_continuity_context
+from llm_storytell.context import ContextLoaderError, build_prompt_context_vars
+from llm_storytell.llm import LLMProvider, LLMProviderError
+from llm_storytell.llm.token_tracking import record_token_usage
+from llm_storytell.logging import RunLogger
+from llm_storytell.prompt_render import (
     MissingVariableError,
     TemplateNotFoundError,
     render_prompt,
 )
-from src.llm_storytell.schemas import SchemaValidationError, validate_json_schema
-from src.llm_storytell.steps.llm_io import save_llm_io
+from llm_storytell.schemas import SchemaValidationError, validate_json_schema
+from llm_storytell.steps.llm_io import save_llm_io
 
 
 class SectionStepError(Exception):
     """Raised when section step execution fails."""
 
     pass
-
-
-def _load_state(run_dir: Path) -> dict[str, Any]:
-    """Load state.json from run directory.
-
-    Args:
-        run_dir: Path to the run directory.
-
-    Returns:
-        State dictionary.
-
-    Raises:
-        SectionStepError: If state.json cannot be loaded.
-    """
-    state_path = run_dir / "state.json"
-    if not state_path.exists():
-        raise SectionStepError(f"State file not found: {state_path}")
-
-    try:
-        with state_path.open(encoding="utf-8") as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        raise SectionStepError(f"Invalid JSON in state.json: {e}") from e
-    except OSError as e:
-        raise SectionStepError(f"Error reading state.json: {e}") from e
 
 
 def _parse_markdown_with_frontmatter(content: str) -> tuple[dict[str, Any], str]:
@@ -94,60 +69,6 @@ def _parse_markdown_with_frontmatter(content: str) -> tuple[dict[str, Any], str]
         raise SectionStepError(f"Invalid YAML in frontmatter: {e}") from e
 
 
-def _update_state(
-    run_dir: Path,
-    section_metadata: dict[str, Any],
-    token_usage: dict[str, Any],
-) -> None:
-    """Update state.json with section metadata and token usage.
-
-    Uses atomic write (temp file + rename) to avoid partial state.
-
-    Args:
-        run_dir: Path to the run directory.
-        section_metadata: The validated section metadata to append.
-        token_usage: Token usage dictionary to append.
-
-    Raises:
-        SectionStepError: If state update fails.
-    """
-    state_path = run_dir / "state.json"
-
-    # Load current state
-    try:
-        with state_path.open(encoding="utf-8") as f:
-            state = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        raise SectionStepError(f"Error reading state for update: {e}") from e
-
-    # Update state: append section and token usage
-    if "sections" not in state:
-        state["sections"] = []
-    state["sections"].append(section_metadata)
-    state["token_usage"].append(token_usage)
-
-    # Atomic write
-    temp_file = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=run_dir,
-            delete=False,
-            suffix=".tmp",
-        ) as f:
-            temp_file = Path(f.name)
-            json.dump(state, f, indent=2, ensure_ascii=False)
-
-        # Atomic rename
-        temp_file.replace(state_path)
-        temp_file = None
-    except OSError as e:
-        if temp_file and temp_file.exists():
-            temp_file.unlink()
-        raise SectionStepError(f"Error writing updated state: {e}") from e
-
-
 def execute_section_step(
     run_dir: Path,
     context_dir: Path,
@@ -180,7 +101,16 @@ def execute_section_step(
     """
     try:
         # Load state
-        state = _load_state(run_dir)
+        from llm_storytell.pipeline.state import (
+            StateIOError,
+            load_state,
+            update_state_atomic,
+        )
+
+        try:
+            state = load_state(run_dir)
+        except StateIOError as e:
+            raise SectionStepError(str(e)) from e
 
         # Validate outline exists
         outline = state.get("outline", [])
@@ -414,7 +344,16 @@ def execute_section_step(
         )
 
         # Update state with section metadata
-        _update_state(run_dir, frontmatter, token_usage_dict)
+        def updater(s: dict[str, Any]) -> None:
+            if "sections" not in s:
+                s["sections"] = []
+            s["sections"].append(frontmatter)
+            s["token_usage"].append(token_usage_dict)
+
+        try:
+            update_state_atomic(run_dir, updater)
+        except StateIOError as e:
+            raise SectionStepError(str(e)) from e
 
     except SectionStepError:
         raise

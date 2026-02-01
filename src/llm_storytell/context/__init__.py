@@ -1,6 +1,6 @@
 """Context loading and selection for pipeline runs."""
 
-from .loader import (
+from llm_storytell.context.loader import (
     ContextLoader,
     ContextLoaderError,
     ContextSelection,

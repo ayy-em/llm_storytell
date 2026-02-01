@@ -5,7 +5,7 @@ from pathlib import Path
 
 import jsonschema
 
-from ..logging import RunLogger
+from llm_storytell.logging import RunLogger
 
 
 class SchemaValidationError(Exception):

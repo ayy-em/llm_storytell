@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 
-from .logging import RunLogger
+from llm_storytell.logging import RunLogger
 
 
 class RunInitializationError(Exception):

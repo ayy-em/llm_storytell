@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..config import AppConfig, AppPaths
+from llm_storytell.config import AppConfig, AppPaths
 
 
 def _section_length_midpoint(section_length_str: str) -> int:

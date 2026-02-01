@@ -4,6 +4,31 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T0128 – Codebase cleanup: remove unused code, resolve inconsistencies, de-duplicate logic (2026-02-01)
+
+**Goal**
+Review the codebase for unused code paths/files and eliminate inconsistencies and duplicate logic, especially in state IO and pipeline steps.
+
+**Acceptance criteria**
+- Remove or consolidate unused modules/functions; no orphaned code remains.
+- Duplicate logic (e.g., repeated state/inputs loading and atomic writes) is centralized.
+- Inconsistent behaviors across steps are resolved and covered by tests.
+- No change in external behavior unless documented in SPEC.
+
+**Allowed files**
+- src/llm_storytell/**
+- tests/**
+
+**Commands to run**
+- `uv run ruff format .`
+- `uv run ruff check .`
+- `uv run pytest -q`
+
+**Result**
+Centralized run-dir IO in `pipeline/state.py`: added `StateIOError`, `load_state(run_dir)`, `load_inputs(run_dir)`, and `update_state_atomic(run_dir, updater)`. Refactored `update_state_selected_context` to use `update_state_atomic`. Steps (outline, section, critic, summarize, llm_tts, audio_prep) now use these helpers via lazy imports to avoid circular import; each step re-raises `StateIOError` as its step-specific error. Removed duplicate `_load_state`, `_load_inputs`, and `_update_state` from steps. Runner uses `load_state(run_dir)` for outline-beats and token/cost summary. New tests in `tests/test_pipeline_state.py` for load_state, load_inputs, update_state_atomic, and StateIOError. Updated tests: test_audio_prep_step (message match), test_outline_step (inputs missing message), test_pipeline_state (inputs missing message). Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (313 passed).
+
+---
+
 ### [x] T0127 – Refactor pipeline structure (runner + providers + state IO) (2026-02-01)
 
 **Goal**

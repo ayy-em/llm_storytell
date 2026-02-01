@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..llm import LLMProvider, OpenAIProvider
-from ..tts_providers.openai_tts import OpenAITTSProvider
+from llm_storytell.llm import LLMProvider, OpenAIProvider
+from llm_storytell.tts_providers.openai_tts import OpenAITTSProvider
 
 
 class ProviderError(Exception):

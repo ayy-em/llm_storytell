@@ -1,24 +1,27 @@
 """Pipeline runner: orchestration of run init, context, steps, and providers."""
 
-import json
 import sys
 from pathlib import Path
 
-from ..context import ContextLoaderError
-from ..llm import LLMProvider, LLMProviderError
-from ..llm.pricing import estimate_run_cost
-from ..run_dir import RunInitializationError, get_run_logger, initialize_run
-from ..steps.audio_prep import AudioPrepStepError, execute_audio_prep_step
-from ..steps.critic import CriticStepError, execute_critic_step
-from ..steps.llm_tts import LLMTTSStepError, execute_llm_tts_step
-from ..steps.outline import OutlineStepError, execute_outline_step
-from ..steps.section import SectionStepError, execute_section_step
-from ..steps.summarize import SummarizeStepError, execute_summarize_step
-from ..tts_providers import TTSProviderError
-
-from .context import load_and_persist_context
-from .providers import ProviderError, create_llm_provider, create_tts_provider
-from .resolve import RunSettings
+from llm_storytell.context import ContextLoaderError
+from llm_storytell.llm import LLMProvider, LLMProviderError
+from llm_storytell.llm.pricing import estimate_run_cost
+from llm_storytell.pipeline.context import load_and_persist_context
+from llm_storytell.pipeline.providers import (
+    ProviderError,
+    create_llm_provider,
+    create_tts_provider,
+)
+from llm_storytell.pipeline.resolve import RunSettings
+from llm_storytell.pipeline.state import StateIOError, load_state
+from llm_storytell.run_dir import RunInitializationError, get_run_logger, initialize_run
+from llm_storytell.steps.audio_prep import AudioPrepStepError, execute_audio_prep_step
+from llm_storytell.steps.critic import CriticStepError, execute_critic_step
+from llm_storytell.steps.llm_tts import LLMTTSStepError, execute_llm_tts_step
+from llm_storytell.steps.outline import OutlineStepError, execute_outline_step
+from llm_storytell.steps.section import SectionStepError, execute_section_step
+from llm_storytell.steps.summarize import SummarizeStepError, execute_summarize_step
+from llm_storytell.tts_providers import TTSProviderError
 
 
 def run_pipeline(settings: RunSettings) -> int:
@@ -118,9 +121,16 @@ def run_pipeline(settings: RunSettings) -> int:
             )
             return 1
 
-        state_path = run_dir / "state.json"
-        with state_path.open(encoding="utf-8") as f:
-            state = json.load(f)
+        try:
+            state = load_state(run_dir)
+        except StateIOError as e:
+            logger.error(str(e))
+            print(
+                f"[llm_storytell] Error: {e}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
 
         outline_beats = state.get("outline", [])
         if not outline_beats:
@@ -299,8 +309,7 @@ def run_pipeline(settings: RunSettings) -> int:
         print("[llm_storytell] Run complete.", flush=True)
 
         try:
-            with (run_dir / "state.json").open(encoding="utf-8") as f:
-                state = json.load(f)
+            state = load_state(run_dir)
             usage = state.get("token_usage") or []
             model, prompt_total, completion_total, total_tokens, cost_usd = (
                 estimate_run_cost(usage)
@@ -323,7 +332,7 @@ def run_pipeline(settings: RunSettings) -> int:
                     "[llm_storytell] Estimated cost: N/A (model not in pricing table)",
                     flush=True,
                 )
-        except (OSError, json.JSONDecodeError, KeyError):
+        except (StateIOError, KeyError):
             pass
 
         print(

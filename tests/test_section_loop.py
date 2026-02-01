@@ -18,8 +18,8 @@ SCHEMA_BASE = PROJECT_ROOT / "src" / "llm_storytell" / "schemas"
 section_module = import_module("llm_storytell.steps.section")
 summarize_module = import_module("llm_storytell.steps.summarize")
 continuity_module = import_module("llm_storytell.continuity")
-# Use same llm module as steps (src.llm_storytell.llm) so LLMProviderError is caught
-llm_module = import_module("src.llm_storytell.llm")
+# Use same llm module as steps so LLMProviderError is caught
+llm_module = import_module("llm_storytell.llm")
 logging_module = import_module("llm_storytell.logging")
 
 execute_section_step = section_module.execute_section_step

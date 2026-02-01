@@ -5,53 +5,27 @@ maintaining narrative consistency across sections.
 """
 
 import json
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.llm_storytell.continuity import merge_continuity_updates
-from src.llm_storytell.llm import LLMProvider, LLMProviderError
-from src.llm_storytell.llm.token_tracking import record_token_usage
-from src.llm_storytell.logging import RunLogger
-from src.llm_storytell.prompt_render import (
+from llm_storytell.continuity import merge_continuity_updates
+from llm_storytell.llm import LLMProvider, LLMProviderError
+from llm_storytell.llm.token_tracking import record_token_usage
+from llm_storytell.logging import RunLogger
+from llm_storytell.prompt_render import (
     MissingVariableError,
     TemplateNotFoundError,
     render_prompt,
 )
-from src.llm_storytell.schemas import SchemaValidationError, validate_json_schema
-from src.llm_storytell.steps.llm_io import save_llm_io
+from llm_storytell.schemas import SchemaValidationError, validate_json_schema
+from llm_storytell.steps.llm_io import save_llm_io
 
 
 class SummarizeStepError(Exception):
     """Raised when summarize step execution fails."""
 
     pass
-
-
-def _load_state(run_dir: Path) -> dict[str, Any]:
-    """Load state.json from run directory.
-
-    Args:
-        run_dir: Path to the run directory.
-
-    Returns:
-        State dictionary.
-
-    Raises:
-        SummarizeStepError: If state.json cannot be loaded.
-    """
-    state_path = run_dir / "state.json"
-    if not state_path.exists():
-        raise SummarizeStepError(f"State file not found: {state_path}")
-
-    try:
-        with state_path.open(encoding="utf-8") as f:
-            return json.load(f)
-    except json.JSONDecodeError as e:
-        raise SummarizeStepError(f"Invalid JSON in state.json: {e}") from e
-    except OSError as e:
-        raise SummarizeStepError(f"Error reading state.json: {e}") from e
 
 
 def _load_section_artifact(run_dir: Path, section_index: int) -> str:
@@ -84,63 +58,6 @@ def _load_section_artifact(run_dir: Path, section_index: int) -> str:
         raise SummarizeStepError(f"Error reading section artifact: {e}") from e
 
 
-def _update_state(
-    run_dir: Path,
-    summary_data: dict[str, Any],
-    continuity_ledger: dict[str, str],
-    token_usage: dict[str, Any],
-) -> None:
-    """Update state.json with summary, continuity ledger, and token usage.
-
-    Uses atomic write (temp file + rename) to avoid partial state.
-
-    Args:
-        run_dir: Path to the run directory.
-        summary_data: The validated summary data to append.
-        continuity_ledger: Updated continuity ledger to merge.
-        token_usage: Token usage dictionary to append.
-
-    Raises:
-        SummarizeStepError: If state update fails.
-    """
-    state_path = run_dir / "state.json"
-
-    # Load current state
-    try:
-        with state_path.open(encoding="utf-8") as f:
-            state = json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        raise SummarizeStepError(f"Error reading state for update: {e}") from e
-
-    # Update state: append summary, merge continuity ledger, append token usage
-    if "summaries" not in state:
-        state["summaries"] = []
-    state["summaries"].append(summary_data)
-    state["continuity_ledger"] = continuity_ledger
-    state["token_usage"].append(token_usage)
-
-    # Atomic write
-    temp_file = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=run_dir,
-            delete=False,
-            suffix=".tmp",
-        ) as f:
-            temp_file = Path(f.name)
-            json.dump(state, f, indent=2, ensure_ascii=False)
-
-        # Atomic rename
-        temp_file.replace(state_path)
-        temp_file = None
-    except OSError as e:
-        if temp_file and temp_file.exists():
-            temp_file.unlink()
-        raise SummarizeStepError(f"Error writing updated state: {e}") from e
-
-
 def execute_summarize_step(
     run_dir: Path,
     prompts_dir: Path,
@@ -169,7 +86,16 @@ def execute_summarize_step(
     """
     try:
         # Load state
-        state = _load_state(run_dir)
+        from llm_storytell.pipeline.state import (
+            StateIOError,
+            load_state,
+            update_state_atomic,
+        )
+
+        try:
+            state = load_state(run_dir)
+        except StateIOError as e:
+            raise SummarizeStepError(str(e)) from e
 
         # Load section artifact directly
         section_content = _load_section_artifact(run_dir, section_index)
@@ -319,7 +245,17 @@ def execute_summarize_step(
         )
 
         # Update state
-        _update_state(run_dir, summary_data, updated_ledger, token_usage_dict)
+        def updater(s: dict[str, Any]) -> None:
+            if "summaries" not in s:
+                s["summaries"] = []
+            s["summaries"].append(summary_data)
+            s["continuity_ledger"] = updated_ledger
+            s["token_usage"].append(token_usage_dict)
+
+        try:
+            update_state_atomic(run_dir, updater)
+        except StateIOError as e:
+            raise SummarizeStepError(str(e)) from e
 
     except SummarizeStepError:
         raise

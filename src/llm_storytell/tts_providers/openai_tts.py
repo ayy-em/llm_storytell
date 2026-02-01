@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from . import TTSProvider, TTSProviderError, TTSResult
+from llm_storytell.tts_providers import TTSProvider, TTSProviderError, TTSResult
 
 
 def _extract_usage(
