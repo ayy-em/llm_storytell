@@ -3,6 +3,7 @@
 import argparse
 import json
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -160,6 +161,8 @@ def _update_state_selected_context(
 ) -> None:
     """Update state.json with selected context files.
 
+    Uses atomic write (temp file + rename) so partial state.json is never left.
+
     Args:
         run_dir: Path to the run directory.
         selected_context: Dictionary with 'location', 'characters', and
@@ -171,8 +174,23 @@ def _update_state_selected_context(
 
     state["selected_context"] = selected_context
 
-    with state_path.open("w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2)
+    temp_file = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=run_dir,
+            delete=False,
+            suffix=".tmp",
+        ) as f:
+            temp_file = Path(f.name)
+            json.dump(state, f, indent=2)
+        temp_file.replace(state_path)
+        temp_file = None
+    except OSError:
+        if temp_file is not None and temp_file.exists():
+            temp_file.unlink(missing_ok=True)
+        raise
 
 
 def _create_llm_provider_from_config(
@@ -348,7 +366,7 @@ def _run_pipeline(
     app_paths: AppPaths,
     app_config: AppConfig,
     seed: str,
-    beats: int | None,
+    beats: int,
     section_length: str,
     run_id: str | None,
     config_path: Path,
@@ -409,7 +427,7 @@ def _run_pipeline(
                 logger=logger,
                 app_config=app_config,
             )
-            selection = loader.load_context(run_dir.name)
+            selection = loader.load_context(run_dir.name, model=model)
         except ContextLoaderError as e:
             logger.error(str(e))
             print(
@@ -795,8 +813,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 section_length = app_config.section_length
 
-        # Model for all LLM calls: CLI override or default
-        model = args.model if args.model is not None else "gpt-4.1-mini"
+        # Model for all LLM calls: CLI → app_config default
+        model = args.model if args.model is not None else app_config.model
 
         # TTS: resolution order CLI → app_config → defaults. --no-tts wins over --tts if both set.
         tts_enabled = not getattr(args, "no_tts", False)

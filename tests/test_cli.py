@@ -1,11 +1,16 @@
 """Tests for CLI TTS flags and resolution (default, override precedence, pipeline skip)."""
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from llm_storytell.cli import create_parser, main
+from llm_storytell.cli import (
+    _update_state_selected_context,
+    create_parser,
+    main,
+)
 
 
 @pytest.fixture
@@ -180,3 +185,32 @@ def test_tts_and_no_tts_no_tts_wins(
     assert exit_code == 0
     assert captured.get("tts_enabled") is False
     assert captured.get("resolved_tts_config") is None
+
+
+def test_update_state_selected_context_atomic_write(tmp_path: Path) -> None:
+    """_update_state_selected_context uses atomic write (temp file + rename); no partial state.json."""
+    run_dir = tmp_path / "runs" / "run-001"
+    run_dir.mkdir(parents=True)
+    state_path = run_dir / "state.json"
+    initial_state = {
+        "app": "test-app",
+        "seed": "A seed.",
+        "selected_context": {"location": None, "characters": [], "world_files": []},
+        "outline": [],
+        "token_usage": [],
+    }
+    state_path.write_text(json.dumps(initial_state, indent=2), encoding="utf-8")
+
+    selected_context = {
+        "location": "city.md",
+        "characters": ["hero.md", "villain.md"],
+        "world_files": ["world.md"],
+    }
+    _update_state_selected_context(run_dir, selected_context)
+
+    with state_path.open(encoding="utf-8") as f:
+        state = json.load(f)
+    assert state["selected_context"] == selected_context
+    # No temp file left behind
+    tmp_files = list(run_dir.glob("*.tmp"))
+    assert len(tmp_files) == 0

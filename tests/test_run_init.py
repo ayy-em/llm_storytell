@@ -92,6 +92,7 @@ class TestInitializeRun:
             seed="A dark tale of mystery.",
             context_dir=context_dir,
             prompts_dir=prompts_dir,
+            beats=5,
             run_id="run-test-001",
             base_dir=temp_project,
         )
@@ -139,6 +140,7 @@ class TestInitializeRun:
             seed="A dark tale of mystery.",
             context_dir=context_dir,
             prompts_dir=prompts_dir,
+            beats=5,
             run_id="run-test-003",
             base_dir=temp_project,
         )
@@ -172,6 +174,7 @@ class TestInitializeRun:
             seed="A dark tale of mystery.",
             context_dir=context_dir,
             prompts_dir=prompts_dir,
+            beats=5,
             run_id="run-test-004",
             base_dir=temp_project,
         )
@@ -194,6 +197,7 @@ class TestInitializeRun:
             seed="A dark tale.",
             context_dir=context_dir,
             prompts_dir=prompts_dir,
+            beats=5,
             run_id="run-test-005",
             base_dir=temp_project,
         )
@@ -213,6 +217,7 @@ class TestInitializeRun:
             seed="First run.",
             context_dir=context_dir,
             prompts_dir=prompts_dir,
+            beats=5,
             run_id="run-duplicate",
             base_dir=temp_project,
         )
@@ -224,6 +229,7 @@ class TestInitializeRun:
                 seed="Second run.",
                 context_dir=context_dir,
                 prompts_dir=prompts_dir,
+                beats=5,
                 run_id="run-duplicate",
                 base_dir=temp_project,
             )
@@ -240,6 +246,7 @@ class TestInitializeRun:
             seed="Auto ID test.",
             context_dir=context_dir,
             prompts_dir=prompts_dir,
+            beats=5,
             base_dir=temp_project,
         )
 
@@ -262,6 +269,7 @@ class TestInitializeRun:
                     seed="Should fail.",
                     context_dir=context_dir,
                     prompts_dir=prompts_dir,
+                    beats=5,
                     run_id="run-should-not-exist",
                     base_dir=temp_project,
                 )
@@ -279,17 +287,18 @@ class TestInitializeRun:
         assert len(final_items) == len(initial_items)
         assert not (runs_dir / "run-should-not-exist").exists()
 
-    def test_beats_none_when_not_provided(self, temp_project: Path) -> None:
-        """beats is None in inputs.json when not provided."""
+    def test_beats_required_and_stored_as_int(self, temp_project: Path) -> None:
+        """beats is required; inputs.json always contains an integer beats."""
         context_dir = temp_project / "context" / "test-app"
         prompts_dir = temp_project / "prompts" / "apps" / "test-app"
 
         run_dir = initialize_run(
             app_name="test-app",
-            seed="No beats specified.",
+            seed="Story with five beats.",
             context_dir=context_dir,
             prompts_dir=prompts_dir,
-            run_id="run-no-beats",
+            beats=5,
+            run_id="run-beats-int",
             base_dir=temp_project,
         )
 
@@ -297,7 +306,25 @@ class TestInitializeRun:
         with inputs_path.open() as f:
             inputs = json.load(f)
 
-        assert inputs["beats"] is None
+        assert inputs["beats"] == 5
+        assert isinstance(inputs["beats"], int)
+
+    def test_beats_required_raises_when_omitted(self, temp_project: Path) -> None:
+        """initialize_run raises TypeError when beats is not provided."""
+        context_dir = temp_project / "context" / "test-app"
+        prompts_dir = temp_project / "prompts" / "apps" / "test-app"
+
+        with pytest.raises(TypeError) as exc_info:
+            initialize_run(
+                app_name="test-app",
+                seed="No beats.",
+                context_dir=context_dir,
+                prompts_dir=prompts_dir,
+                run_id="run-missing-beats",
+                base_dir=temp_project,
+            )
+
+        assert "beats" in str(exc_info.value).lower()
 
     def test_creates_inputs_json_includes_word_count_when_provided(
         self, temp_project: Path
@@ -404,6 +431,7 @@ class TestGetRunLogger:
             seed="Test.",
             context_dir=context_dir,
             prompts_dir=prompts_dir,
+            beats=5,
             run_id="run-logger-test",
             base_dir=temp_project,
         )

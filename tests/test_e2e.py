@@ -569,6 +569,53 @@ def test_e2e_default_model_when_no_model_flag(
         monkeypatch.chdir(original_cwd)
 
 
+def test_e2e_model_default_from_app_config_when_no_model_flag(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When --model is not set, model comes from app_config (CLI → app_config)."""
+    original_cwd = Path.cwd()
+    try:
+        monkeypatch.chdir(temp_app_structure)
+        # Override model in app config so we can assert it is used when --model is omitted
+        app_config_path = temp_app_structure / "apps" / "test-app" / "app_config.yaml"
+        app_config_path.parent.mkdir(parents=True, exist_ok=True)
+        app_config_path.write_text("model: gpt-4.1-nano\n")
+
+        mock_provider = MockLLMProvider()
+        provider_create_calls: list[tuple[Any, ...]] = []
+
+        def spy_create_provider(
+            config_path: Path, default_model: str = "gpt-4.1-mini"
+        ) -> Any:
+            provider_create_calls.append((config_path, default_model))
+            return mock_provider
+
+        with patch(
+            "llm_storytell.cli._create_llm_provider_from_config", spy_create_provider
+        ):
+            exit_code = main(
+                [
+                    "run",
+                    "--app",
+                    "test-app",
+                    "--seed",
+                    "A simple story.",
+                    "--run-id",
+                    "test-run-app-model",
+                    "--beats",
+                    "1",
+                    "--no-tts",
+                ]
+            )
+
+        assert exit_code == 0
+        assert len(provider_create_calls) == 1
+        _, default_model = provider_create_calls[0]
+        assert default_model == "gpt-4.1-nano"
+    finally:
+        monkeypatch.chdir(original_cwd)
+
+
 def test_e2e_validates_beats_range(
     temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

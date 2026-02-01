@@ -153,6 +153,7 @@ class TestTTSConfigStatePersistence:
             seed="test seed",
             context_dir=context_dir,
             prompts_dir=prompts_dir,
+            beats=5,
             base_dir=tmp_path,
             run_id="run-test-tts",
             resolved_tts_config=resolved,
@@ -184,6 +185,7 @@ class TestTTSConfigStatePersistence:
             seed="test seed",
             context_dir=context_dir,
             prompts_dir=prompts_dir,
+            beats=5,
             base_dir=tmp_path,
             run_id="run-no-tts",
         )

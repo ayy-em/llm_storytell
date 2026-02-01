@@ -4,6 +4,31 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T0126 – Fix pipeline/CLI bugs (model defaults, context warning, atomic state, beats consistency) (2026-02-01)
+
+**Goal**
+Resolve known pipeline/CLI bugs and align contracts across run init, prompt usage, and runtime behavior.
+
+**Acceptance criteria**
+- When CLI flags are absent, defaults resolve in this order: CLI → app_config defaults for `model`, `llm_provider`, `tts_provider`.
+- Context-size warning uses the resolved model (pass model into ContextLoader.load_context).
+- `_update_state_selected_context` uses atomic write (temp file + rename) and never leaves partial `state.json`.
+- `initialize_run`/inputs/outline/runner agree on beats being a required int (or consistently optional); no None leaks through.
+- Existing tests updated or added to cover the fixed paths.
+
+**Allowed files**
+- src/llm_storytell/cli.py
+- src/llm_storytell/run_dir.py
+- src/llm_storytell/context/loader.py
+- src/llm_storytell/steps/outline.py
+- src/llm_storytell/config/app_config.py
+- tests/**
+
+**Result**
+Model default: CLI now uses `app_config.model` when `--model` is omitted (CLI → app_config). Context-size warning: `loader.load_context(run_dir.name, model=model)` so the same resolved model used for the LLM provider is passed for the warning threshold. `_update_state_selected_context`: atomic write via temp file in run_dir + rename; no partial state.json. Beats: `initialize_run(..., beats: int)` and `_create_inputs_json(..., beats: int)`; CLI already sets `beats = app_config.beats` when None so beats is always int. Tests: default model from app_config (test_e2e_model_default_from_app_config_when_no_model_flag), atomic state (test_update_state_selected_context_atomic_write), beats required and stored as int (test_beats_required_and_stored_as_int, test_beats_required_raises_when_omitted); all `initialize_run` call sites updated to pass `beats`. Commands run: uv run ruff format ., uv run ruff check ., uv run pytest -q (294 passed).
+
+---
+
 ### [x] T0125 – Documentation updates for audio pipeline (2026-02-01)
 
 **Goal**

@@ -35,7 +35,7 @@ def generate_run_id() -> str:
 def _create_inputs_json(
     app_name: str,
     seed: str,
-    beats: int | None,
+    beats: int,
     run_id: str,
     context_dir: Path,
     prompts_dir: Path,
@@ -46,7 +46,7 @@ def _create_inputs_json(
     Args:
         app_name: Name of the app being run.
         seed: The story seed/description.
-        beats: Number of outline beats (None if app-defined).
+        beats: Number of outline beats (required).
         run_id: The unique run identifier.
         context_dir: Path to the app's context directory.
         prompts_dir: Path to the app's prompts directory.
@@ -108,7 +108,7 @@ def initialize_run(
     seed: str,
     context_dir: Path,
     prompts_dir: Path,
-    beats: int | None = None,
+    beats: int,
     run_id: str | None = None,
     base_dir: Path | None = None,
     word_count: int | None = None,
@@ -124,7 +124,7 @@ def initialize_run(
         seed: The story seed/description.
         context_dir: Path to the app's context directory.
         prompts_dir: Path to the app's prompts directory.
-        beats: Number of outline beats (None for app-defined default).
+        beats: Number of outline beats (required; from CLI or app config).
         run_id: Optional run ID override. If None, generates one.
         base_dir: Base directory for runs. If None, uses current working directory.
         word_count: Optional target total word count (when --word-count was used).
