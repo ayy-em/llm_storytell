@@ -1,6 +1,6 @@
 """Tests for CLI word-count flag and derivation helpers."""
 
-from llm_storytell.cli import _section_length_midpoint
+from llm_storytell.pipeline.resolve import _section_length_midpoint
 
 
 class TestSectionLengthMidpoint:

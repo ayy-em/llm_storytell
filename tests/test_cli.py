@@ -6,11 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from llm_storytell.cli import (
-    _update_state_selected_context,
-    create_parser,
-    main,
-)
+from llm_storytell.cli import create_parser, main
+from llm_storytell.pipeline.state import update_state_selected_context
 
 
 @pytest.fixture
@@ -51,14 +48,17 @@ def test_tts_default_enabled(
 ) -> None:
     """Default (no --no-tts) passes tts_enabled=True and non-None resolved_tts_config."""
     monkeypatch.chdir(temp_app_minimal)
-    captured: dict = {}
+    captured_settings = []
 
-    def capture_run_pipeline(**kwargs: object) -> int:
-        captured.clear()
-        captured.update(kwargs)
+    def capture_run_pipeline(settings: object) -> int:
+        captured_settings.clear()
+        captured_settings.append(settings)
         return 0
 
-    with patch("llm_storytell.cli._run_pipeline", side_effect=capture_run_pipeline):
+    with patch(
+        "llm_storytell.cli.run_pipeline",
+        side_effect=capture_run_pipeline,
+    ):
         exit_code = main(
             [
                 "run",
@@ -74,9 +74,11 @@ def test_tts_default_enabled(
         )
 
     assert exit_code == 0
-    assert captured.get("tts_enabled") is True
-    assert captured.get("resolved_tts_config") is not None
-    rtc = captured["resolved_tts_config"]
+    assert len(captured_settings) == 1
+    settings = captured_settings[0]
+    assert settings.tts_enabled is True
+    assert settings.resolved_tts_config is not None
+    rtc = settings.resolved_tts_config
     assert rtc.get("tts_provider") == "openai"
     assert rtc.get("tts_voice") == "Onyx"
 
@@ -86,14 +88,17 @@ def test_no_tts_disables(
 ) -> None:
     """--no-tts passes tts_enabled=False and resolved_tts_config=None."""
     monkeypatch.chdir(temp_app_minimal)
-    captured: dict = {}
+    captured_settings = []
 
-    def capture_run_pipeline(**kwargs: object) -> int:
-        captured.clear()
-        captured.update(kwargs)
+    def capture_run_pipeline(settings: object) -> int:
+        captured_settings.clear()
+        captured_settings.append(settings)
         return 0
 
-    with patch("llm_storytell.cli._run_pipeline", side_effect=capture_run_pipeline):
+    with patch(
+        "llm_storytell.cli.run_pipeline",
+        side_effect=capture_run_pipeline,
+    ):
         exit_code = main(
             [
                 "run",
@@ -110,8 +115,10 @@ def test_no_tts_disables(
         )
 
     assert exit_code == 0
-    assert captured.get("tts_enabled") is False
-    assert captured.get("resolved_tts_config") is None
+    assert len(captured_settings) == 1
+    settings = captured_settings[0]
+    assert settings.tts_enabled is False
+    assert settings.resolved_tts_config is None
 
 
 def test_tts_provider_voice_override(
@@ -119,14 +126,17 @@ def test_tts_provider_voice_override(
 ) -> None:
     """--tts-provider and --tts-voice override app config (CLI wins)."""
     monkeypatch.chdir(temp_app_minimal)
-    captured: dict = {}
+    captured_settings = []
 
-    def capture_run_pipeline(**kwargs: object) -> int:
-        captured.clear()
-        captured.update(kwargs)
+    def capture_run_pipeline(settings: object) -> int:
+        captured_settings.clear()
+        captured_settings.append(settings)
         return 0
 
-    with patch("llm_storytell.cli._run_pipeline", side_effect=capture_run_pipeline):
+    with patch(
+        "llm_storytell.cli.run_pipeline",
+        side_effect=capture_run_pipeline,
+    ):
         exit_code = main(
             [
                 "run",
@@ -146,8 +156,10 @@ def test_tts_provider_voice_override(
         )
 
     assert exit_code == 0
-    assert captured.get("tts_enabled") is True
-    rtc = captured.get("resolved_tts_config")
+    assert len(captured_settings) == 1
+    settings = captured_settings[0]
+    assert settings.tts_enabled is True
+    rtc = settings.resolved_tts_config
     assert rtc is not None
     assert rtc.get("tts_provider") == "custom-provider"
     assert rtc.get("tts_voice") == "CustomVoice"
@@ -158,14 +170,17 @@ def test_tts_and_no_tts_no_tts_wins(
 ) -> None:
     """When both --tts and --no-tts are given, --no-tts wins (pipeline ends after critic)."""
     monkeypatch.chdir(temp_app_minimal)
-    captured: dict = {}
+    captured_settings = []
 
-    def capture_run_pipeline(**kwargs: object) -> int:
-        captured.clear()
-        captured.update(kwargs)
+    def capture_run_pipeline(settings: object) -> int:
+        captured_settings.clear()
+        captured_settings.append(settings)
         return 0
 
-    with patch("llm_storytell.cli._run_pipeline", side_effect=capture_run_pipeline):
+    with patch(
+        "llm_storytell.cli.run_pipeline",
+        side_effect=capture_run_pipeline,
+    ):
         exit_code = main(
             [
                 "run",
@@ -183,12 +198,14 @@ def test_tts_and_no_tts_no_tts_wins(
         )
 
     assert exit_code == 0
-    assert captured.get("tts_enabled") is False
-    assert captured.get("resolved_tts_config") is None
+    assert len(captured_settings) == 1
+    settings = captured_settings[0]
+    assert settings.tts_enabled is False
+    assert settings.resolved_tts_config is None
 
 
 def test_update_state_selected_context_atomic_write(tmp_path: Path) -> None:
-    """_update_state_selected_context uses atomic write (temp file + rename); no partial state.json."""
+    """update_state_selected_context uses atomic write (temp file + rename); no partial state.json."""
     run_dir = tmp_path / "runs" / "run-001"
     run_dir.mkdir(parents=True)
     state_path = run_dir / "state.json"
@@ -206,7 +223,7 @@ def test_update_state_selected_context_atomic_write(tmp_path: Path) -> None:
         "characters": ["hero.md", "villain.md"],
         "world_files": ["world.md"],
     }
-    _update_state_selected_context(run_dir, selected_context)
+    update_state_selected_context(run_dir, selected_context)
 
     with state_path.open(encoding="utf-8") as f:
         state = json.load(f)

@@ -225,7 +225,7 @@ def test_e2e_full_pipeline(
         # Run the CLI command
         # Patch the function using string path (more reliable for imported modules)
         with patch(
-            "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+            "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
         ):
             exit_code = main(
                 [
@@ -330,7 +330,7 @@ def test_e2e_run_completion_prints_token_summary(
         return mock_provider
 
     with patch(
-        "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+        "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
     ):
         exit_code = main(
             [
@@ -366,7 +366,7 @@ def test_e2e_section_length_cli_override(
         return mock_provider
 
     with patch(
-        "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+        "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
     ):
         exit_code = main(
             [
@@ -405,7 +405,7 @@ def test_e2e_no_tts_pipeline_ends_after_critic(
         return mock_provider
 
     with patch(
-        "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+        "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
     ):
         exit_code = main(
             [
@@ -449,7 +449,7 @@ def test_e2e_without_beats_override(
 
         # Run without --beats (should use default or prompt-based)
         with patch(
-            "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+            "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
         ):
             exit_code = main(
                 [
@@ -497,7 +497,7 @@ def test_e2e_model_flag_passed_to_provider_and_used_for_all_calls(
             return mock_provider
 
         with patch(
-            "llm_storytell.cli._create_llm_provider_from_config", spy_create_provider
+            "llm_storytell.pipeline.runner.create_llm_provider", spy_create_provider
         ):
             exit_code = main(
                 [
@@ -544,7 +544,7 @@ def test_e2e_default_model_when_no_model_flag(
             return mock_provider
 
         with patch(
-            "llm_storytell.cli._create_llm_provider_from_config", spy_create_provider
+            "llm_storytell.pipeline.runner.create_llm_provider", spy_create_provider
         ):
             exit_code = main(
                 [
@@ -591,7 +591,7 @@ def test_e2e_model_default_from_app_config_when_no_model_flag(
             return mock_provider
 
         with patch(
-            "llm_storytell.cli._create_llm_provider_from_config", spy_create_provider
+            "llm_storytell.pipeline.runner.create_llm_provider", spy_create_provider
         ):
             exit_code = main(
                 [
@@ -808,7 +808,7 @@ def test_e2e_succeeds_when_optional_locations_missing(
             return mock_provider
 
         with patch(
-            "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+            "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
         ):
             exit_code = main(
                 [
@@ -932,7 +932,7 @@ def test_e2e_word_count_derives_beats_and_persists_word_count(
         return mock_provider
 
     with patch(
-        "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+        "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
     ):
         exit_code = main(
             [
@@ -972,7 +972,7 @@ def test_e2e_word_count_with_beats_valid_ratio(
         return mock_provider
 
     with patch(
-        "llm_storytell.cli._create_llm_provider_from_config", mock_create_provider
+        "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
     ):
         exit_code = main(
             [

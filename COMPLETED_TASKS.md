@@ -4,6 +4,38 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Tasks
 
+### [x] T0127 – Refactor pipeline structure (runner + providers + state IO) (2026-02-01)
+
+**Goal**
+Move orchestration and provider creation out of `cli.py` into the proposed pipeline modules, keeping behavior identical.
+
+**Acceptance criteria**
+- New pipeline modules exist in pipeline/ directory (`pipeline/runner.py`, `pipeline/resolve.py`, `pipeline/providers.py`, `pipeline/context.py`, `pipeline/state.py` and others, if necessary).
+- Each pipeline component is single-purpose and both app- and llm provider-agnostic
+- All flags, arguments and other data passed along with the CLI command are sent to the pipeline components
+- `cli.py` only parses args, resolves run settings, and calls the pipeline runner.
+- Pipeline steps continue to execute in the same order with identical outputs and logging.
+- All unit tests and E2E tests pass without changes to CLI behavior.
+
+**Allowed files**
+- src/llm_storytell/cli.py
+- src/llm_storytell/pipeline/**
+- src/llm_storytell/run_dir.py
+- src/llm_storytell/logging.py
+- src/llm_storytell/config/**
+- tests/**
+- You are allowed to create new files during this task
+
+**Commands to run**
+- `uv run ruff format .`
+- `uv run ruff check .`
+- `uv run pytest -q`
+
+**Result**
+New pipeline modules: `pipeline/state.py` (update_state_selected_context), `pipeline/providers.py` (create_llm_provider, create_tts_provider; raise ProviderError, no sys.exit), `pipeline/resolve.py` (RunSettings, resolve_run_settings, _section_length_midpoint), `pipeline/context.py` (load_and_persist_context), `pipeline/runner.py` (run_pipeline(settings)). cli.py slimmed to create_parser, resolve_app_or_exit, main (parse → validate → resolve app/config → resolve_run_settings → run_pipeline). pipeline/__init__.py exports RunSettings, resolve_run_settings, run_pipeline, update_state_selected_context. Tests: test_cli.py patches llm_storytell.cli.run_pipeline and asserts on settings; test_cli_word_count imports _section_length_midpoint from pipeline.resolve; test_e2e.py patches llm_storytell.pipeline.runner.create_llm_provider; test_pipeline_resolve.py added for resolve_run_settings. Commands run: uv run ruff format ., uv run ruff check ., uv run pytest -q (304 passed).
+
+---
+
 ### [x] T0126 – Fix pipeline/CLI bugs (model defaults, context warning, atomic state, beats consistency) (2026-02-01)
 
 **Goal**

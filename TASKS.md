@@ -78,34 +78,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 ## Task Group: Bug Bash pre-v1.2 public release
 
-### [ ] T0127 – Refactor pipeline structure (runner + providers + state IO)
-
-**Goal**
-Move orchestration and provider creation out of `cli.py` into the proposed pipeline modules, keeping behavior identical.
-
-**Acceptance criteria**
-- New pipeline modules exist as agreed (`pipeline/runner.py`, `pipeline/resolve.py`, `pipeline/providers.py`, `pipeline/context.py`, `pipeline/state.py` or equivalent).
-- `cli.py` only parses args, resolves run settings, and calls the pipeline runner.
-- Pipeline steps continue to execute in the same order with identical outputs and logging.
-- All unit tests and E2E tests pass without changes to CLI behavior.
-
-**Allowed files**
-- src/llm_storytell/cli.py
-- src/llm_storytell/pipeline/**
-- src/llm_storytell/run_dir.py
-- src/llm_storytell/logging.py
-- src/llm_storytell/config/**
-- tests/**
-
-**Commands to run**
-- `uv run ruff format .`
-- `uv run ruff check .`
-- `uv run pytest -q`
-
-Result: 
-
----
-
 ### [ ] T0128 – Codebase cleanup: remove unused code, resolve inconsistencies, de-duplicate logic
 
 **Goal**

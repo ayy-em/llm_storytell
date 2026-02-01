@@ -1,4 +1,4 @@
-"""Pipeline configuration loading and validation."""
+"""Pipeline configuration, runner, resolve, state, context, and providers."""
 
 from .loader import (
     LLMConfig,
@@ -11,6 +11,9 @@ from .loader import (
     StepValidate,
     load_pipeline_config,
 )
+from .resolve import RunSettings, resolve_run_settings
+from .runner import run_pipeline
+from .state import update_state_selected_context
 
 __all__ = [
     "LLMConfig",
@@ -22,4 +25,8 @@ __all__ = [
     "StepInput",
     "StepValidate",
     "load_pipeline_config",
+    "RunSettings",
+    "resolve_run_settings",
+    "run_pipeline",
+    "update_state_selected_context",
 ]
