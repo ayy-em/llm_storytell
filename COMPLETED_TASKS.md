@@ -2,7 +2,39 @@
 
 A new section under level 3 heading and completion datetime is added to this file each time a task is completed and the info about it is removed from `TASKS.md`.
 
-## Tasks
+## Post-v1.2
+
+### [x] T0129 – Test coverage review + real E2E runs (2026-02-01)
+
+**Goal**
+Assess test coverage for edge cases and run real (non-test) E2E executions to validate the full pipeline.
+
+**Acceptance criteria**
+- Documented list of missing edge-case coverage and added tests for critical gaps.
+- At least one real CLI run completes successfully end-to-end (no test mocks), with artifacts in `runs/<run_id>/`.
+- E2E run results recorded in task Result notes (command + run_id + outcome).
+
+**Notes**
+- Review existing code base, test coverage, code consistencies and prepare assessment, do not introduce changes and do not run the pipeline.
+- When ready, share results and suggest user manually runs the CLI command.
+- If command fails, iterate with changes till issue is fixed and prompt user to rerun the command
+
+**Allowed files**
+- src/llm_storytell/**
+- tests/**
+- TASKS.md
+
+**Commands to run**
+- `uv run ruff format .`
+- `uv run ruff check .`
+- `uv run pytest -q`
+
+**Result**
+Assessment documented missing edge-case coverage (run-id collision, llm_io layout, max 20 beats, real E2E). Added tests: `test_e2e_fails_when_run_id_already_exists`; llm_io layout assertions in `test_e2e_full_pipeline` (outline, section_00–02, summarize_00–02, critic have prompt.txt, meta.json, non-empty response.txt); `test_e2e_full_pipeline_twenty_beats` (pipeline with 20 beats); `test_e2e_with_tts_succeeds` (pipeline succeeds with --tts using mocked LLM, MockTTSProvider, and mocked ffmpeg/ffprobe). Pipeline now covered for both --no-tts and --tts modes. Added `MockTTSProvider`, `TTSResult`/`TTSProvider` imports; `temp_app_structure` fixture now includes `assets/default-bg-music.wav` for TTS E2E. Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (316 passed). Real E2E: user to run e.g. `python -m llm_storytell run --app example_app --seed "A short test." --beats 2 --no-tts` (and optionally with `--tts` if API/ffmpeg available) and record command + run_id + outcome in notes.
+
+---
+
+## v1.0 to v1.2
 
 ### [x] T0128 – Codebase cleanup: remove unused code, resolve inconsistencies, de-duplicate logic (2026-02-01)
 
@@ -505,6 +537,8 @@ v1.0 scope is frozen. Future milestones must be planned using the task format fo
 Refined roadmap in SPEC (subsection "Roadmap (v1.0.1 – v1.0.3) refined scope"); added v1.0.2 and v1.0.3 to README roadmap list; added tasks T001–T008 to TASKS.md in template format, ordered for execution. Planning only; no ruff/pytest required for doc-only edits.
 
 ---
+
+## Pre-v1.0
 
 ### [x] R0003 Test coverage confidence pass (2026-01-31)
 

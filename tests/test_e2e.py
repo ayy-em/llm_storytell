@@ -4,7 +4,7 @@ import json
 from importlib import import_module
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import sys
@@ -14,10 +14,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 cli_module = import_module("llm_storytell.cli")
 llm_module = import_module("llm_storytell.llm")
+tts_module = import_module("llm_storytell.tts_providers")
 
 main = cli_module.main
 LLMResult = llm_module.LLMResult
 LLMProvider = llm_module.LLMProvider
+TTSProvider = tts_module.TTSProvider
+TTSResult = tts_module.TTSResult
 
 # Get project root for schema resolution
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -155,6 +158,31 @@ More content follows, building on previous sections and maintaining continuity w
         )
 
 
+class MockTTSProvider(TTSProvider):
+    """Mock TTS provider that returns minimal audio bytes for E2E testing."""
+
+    def __init__(self) -> None:
+        super().__init__(provider_name="mock")
+
+    def synthesize(
+        self,
+        text: str,
+        *,
+        model: str | None = None,
+        voice: str | None = None,
+        **kwargs: Any,
+    ) -> TTSResult:
+        return TTSResult(
+            audio=b"x" * 256,
+            provider="mock",
+            model=model or "mock-tts",
+            voice=voice or "mock-voice",
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+        )
+
+
 @pytest.fixture
 def temp_app_structure(tmp_path: Path) -> Path:
     """Create a temporary app structure for testing (apps/<app>/context/ + app-defaults)."""
@@ -200,6 +228,11 @@ def temp_app_structure(tmp_path: Path) -> Path:
     if SCHEMA_SOURCE.exists():
         for schema_file in SCHEMA_SOURCE.glob("*.json"):
             shutil.copy2(schema_file, SCHEMA_DEST / schema_file.name)
+
+    # Default bg music for E2E with --tts (audio-prep step)
+    assets_dir = base_dir / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    (assets_dir / "default-bg-music.wav").write_bytes(b"x" * 1024)
 
     return base_dir
 
@@ -313,6 +346,25 @@ def test_e2e_full_pipeline(
         assert "section" in log_content
         assert "critic" in log_content
 
+        # Verify llm_io layout: each stage has prompt.txt and meta.json; response.txt when non-empty
+        llm_io = run_dir / "llm_io"
+        assert llm_io.exists()
+        for stage in ["outline", "critic"]:
+            stage_dir = llm_io / stage
+            assert stage_dir.exists(), f"llm_io/{stage} missing"
+            assert (stage_dir / "prompt.txt").exists()
+            assert (stage_dir / "meta.json").exists()
+            assert (stage_dir / "response.txt").exists()
+            assert (stage_dir / "response.txt").stat().st_size > 0
+        for i in range(3):
+            for stage_prefix in ("section", "summarize"):
+                stage_dir = llm_io / f"{stage_prefix}_{i:02d}"
+                assert stage_dir.exists(), f"llm_io/{stage_prefix}_{i:02d} missing"
+                assert (stage_dir / "prompt.txt").exists()
+                assert (stage_dir / "meta.json").exists()
+                assert (stage_dir / "response.txt").exists()
+                assert (stage_dir / "response.txt").stat().st_size > 0
+
     finally:
         monkeypatch.chdir(original_cwd)
 
@@ -353,6 +405,59 @@ def test_e2e_run_completion_prints_token_summary(
     assert "Model:" in out
     assert "Tokens:" in out
     assert "Artifacts are in:" in out
+
+
+def test_e2e_fails_when_run_id_already_exists(
+    temp_app_structure: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """When --run-id points at an existing run directory, second run exits 1."""
+    monkeypatch.chdir(temp_app_structure)
+    mock_provider = MockLLMProvider()
+
+    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+        return mock_provider
+
+    with patch(
+        "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
+    ):
+        first = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story.",
+                "--beats",
+                "1",
+                "--run-id",
+                "run-duplicate-e2e",
+                "--no-tts",
+            ]
+        )
+    assert first == 0
+
+    with patch(
+        "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
+    ):
+        second = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "Another story.",
+                "--beats",
+                "1",
+                "--run-id",
+                "run-duplicate-e2e",
+                "--no-tts",
+            ]
+        )
+    assert second == 1
+    err = capsys.readouterr().err
+    assert "already exists" in err or "Failed to initialize run" in err
 
 
 def test_e2e_section_length_cli_override(
@@ -430,6 +535,128 @@ def test_e2e_no_tts_pipeline_ends_after_critic(
     with state_path.open(encoding="utf-8") as f:
         state = json.load(f)
     assert "tts_config" not in state
+
+
+def test_e2e_full_pipeline_twenty_beats(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pipeline succeeds with max beats (20); state has 20 outline beats and 20 sections."""
+    monkeypatch.chdir(temp_app_structure)
+    mock_provider = MockLLMProvider()
+
+    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+        return mock_provider
+
+    with patch(
+        "llm_storytell.pipeline.runner.create_llm_provider", mock_create_provider
+    ):
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A long story in twenty beats.",
+                "--beats",
+                "20",
+                "--run-id",
+                "test-run-20-beats",
+                "--no-tts",
+            ]
+        )
+
+    assert exit_code == 0
+    run_dir = temp_app_structure / "runs" / "test-run-20-beats"
+    assert run_dir.exists()
+    state_path = run_dir / "state.json"
+    with state_path.open(encoding="utf-8") as f:
+        state = json.load(f)
+    assert len(state["outline"]) == 20
+    assert len(state["sections"]) == 20
+    assert len(state["summaries"]) == 20
+    for i in range(1, 21):
+        assert (run_dir / "artifacts" / f"20_section_{i:02d}.md").exists()
+    assert (run_dir / "artifacts" / "final_script.md").exists()
+    assert (run_dir / "artifacts" / "editor_report.json").exists()
+
+
+def test_e2e_with_tts_succeeds(
+    temp_app_structure: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pipeline succeeds with --tts (mocked LLM, TTS, and ffmpeg/ffprobe)."""
+    monkeypatch.chdir(temp_app_structure)
+    mock_llm = MockLLMProvider()
+    mock_tts = MockTTSProvider()
+
+    def mock_create_llm(config_path: Path, default_model: str = "gpt-4") -> Any:
+        return mock_llm
+
+    def mock_create_tts(
+        config_path: Path, resolved_tts_config: dict[str, Any]
+    ) -> TTSProvider:
+        return mock_tts
+
+    probe_returns = ["30.5", "10.0"]
+
+    subprocess_calls: list[list[str]] = []
+
+    def fake_subprocess_run(cmd: list[str], *args: object, **kwargs: object) -> Any:
+        subprocess_calls.append(cmd)
+        out = MagicMock()
+        out.returncode = 0
+        out.stderr = ""
+        if cmd[0] == "ffprobe":
+            idx = len([c for c in subprocess_calls if c[0] == "ffprobe"]) - 1
+            out.stdout = probe_returns[idx % len(probe_returns)]
+        else:
+            out.stdout = ""
+        if cmd[0] == "ffmpeg" and len(cmd) >= 2:
+            last = Path(cmd[-1])
+            if (
+                "voiceover" in str(last)
+                or "narration-" in str(last)
+                or "bg_" in str(last)
+            ):
+                last.parent.mkdir(parents=True, exist_ok=True)
+                last.write_bytes(b"x")
+        return out
+
+    with (
+        patch("llm_storytell.pipeline.runner.create_llm_provider", mock_create_llm),
+        patch("llm_storytell.pipeline.runner.create_tts_provider", mock_create_tts),
+        patch(
+            "llm_storytell.steps.audio_prep.subprocess.run",
+            side_effect=fake_subprocess_run,
+        ),
+    ):
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story for TTS.",
+                "--beats",
+                "2",
+                "--run-id",
+                "test-run-with-tts",
+                "--tts",
+            ]
+        )
+
+    assert exit_code == 0
+    run_dir = temp_app_structure / "runs" / "test-run-with-tts"
+    assert run_dir.exists()
+    state_path = run_dir / "state.json"
+    with state_path.open(encoding="utf-8") as f:
+        state = json.load(f)
+    assert "tts_config" in state
+    assert "tts_token_usage" in state
+    assert (run_dir / "tts" / "outputs").exists()
+    assert (run_dir / "artifacts" / "final_script.md").exists()
+    narration = list((run_dir / "artifacts").glob("narration-*.mp3"))
+    assert len(narration) == 1
+    assert narration[0].name == "narration-test-app.mp3"
 
 
 def test_e2e_without_beats_override(

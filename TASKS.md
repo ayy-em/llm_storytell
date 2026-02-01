@@ -78,30 +78,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 ## Task Group: Bug Bash pre-v1.2 public release
 
-### [ ] T0129 – Test coverage review + real E2E runs
-
-**Goal**
-Assess test coverage for edge cases and run real (non-test) E2E executions to validate the full pipeline.
-
-**Acceptance criteria**
-- Documented list of missing edge-case coverage and added tests for critical gaps.
-- At least one real CLI run completes successfully end-to-end (no test mocks), with artifacts in `runs/<run_id>/`.
-- E2E run results recorded in task Result notes (command + run_id + outcome).
-
-**Allowed files**
-- src/llm_storytell/**
-- tests/**
-- TASKS.md
-
-**Commands to run**
-- `uv run ruff format .`
-- `uv run ruff check .`
-- `uv run pytest -q`
-
-Result: 
-
----
-
 ### [ ] T0130 – Update docs after changes (README/SPEC/TASKS)
 
 **Goal**
@@ -111,6 +87,7 @@ Bring docs in sync after the bug fixes, refactor, and cleanup changes land.
 - README.md and SPEC.md reflect the final pipeline structure and behavior.
 - TASKS.md is updated to remove completed tasks and record results.
 - No doc drift remains for CLI flags, run layout, or pipeline steps.
+- Docs should claim v1.2 is the current version and a release that's already happened
 
 **Allowed files**
 - README.md

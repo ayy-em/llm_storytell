@@ -49,7 +49,7 @@ If you touch a file outside “Allowed files”:
 
 ## Task completion
 - In `TASKS.md`: mark completed task [x] and add "Result" note, then remove the task from `TASKS.md`
-- Append to `COMPLETED_TASKS.md`: paste the completed task (including Result note), ideally including completion date in task's header; optionally include commit hash
+- Append to `COMPLETED_TASKS.md`: paste the completed task (including date of fix in header, and resolution info added in Result note), ideally including completion date in task's header; optionally include commit hash
 
 ## Version control (per task)
 - After checks are green, prepare a **single commit** for this task only.
