@@ -285,18 +285,20 @@ def _apply_bg_volume_envelope(
     enveloped_path = voiceover_dir / "bg_enveloped.wav"
     v = voice_duration
     # ffmpeg volume expression: 0-1.5 -> 0.75, 1.5-3 -> linear to 0.1, 3-v -> 0.1, v to v+2 -> linear to 0.7, rest 0.7
+    # Commas inside -af separate filters; escape literal commas in the expression so ffmpeg parses one volume filter
     expr = (
         f"if(lt(t,1.5),0.75,"
         f"if(lt(t,3),0.75-(t-1.5)/1.5*0.65,"
         f"if(lt(t,{v}),0.1,"
         f"if(lt(t,{v + 2}),0.1+(t-{v})/2*0.6,0.7))))"
     )
+    expr_escaped = expr.replace(",", "\\,")
     _run_ffmpeg(
         [
             "-i",
             str(looped_bg_path),
             "-af",
-            f"volume={expr}",
+            f"volume={expr_escaped}",
             "-c:a",
             "pcm_s16le",
             str(enveloped_path),
@@ -314,7 +316,10 @@ def _mix_voiceover_and_bg(
     logger: RunLogger,
     ext: str,
 ) -> None:
-    """Mix voiceover and background; write to out_path."""
+    """Mix voiceover and background; write to out_path.
+
+    The voiceover track's volume is increased by 50% (factor 1.5).
+    """
     if ext.lower() == ".wav":
         codec_args = ["-c:a", "pcm_s16le"]
     else:
@@ -326,13 +331,14 @@ def _mix_voiceover_and_bg(
             "-i",
             str(bg_path),
             "-filter_complex",
-            "[0:a][1:a]amix=inputs=2:duration=first[aout]",
+            # 1.5x gain for [0:a], then amix with [1:a]:
+            "[0:a]volume=1.5[a1];[a1][1:a]amix=inputs=2:duration=first[aout]",
             "-map",
             "[aout]",
             *codec_args,
             str(out_path),
         ],
-        "mix voiceover and bg",
+        "mix voiceover and bg with boosted voiceover volume",
     )
     size = out_path.stat().st_size
     rel = out_path.relative_to(run_dir)

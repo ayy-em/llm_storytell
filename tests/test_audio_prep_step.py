@@ -257,7 +257,8 @@ class TestExecuteAudioPrepStep:
         def fake_run(cmd: list[str], *args: object, **kwargs: object) -> MagicMock:
             nonlocal envelope_cmd
             if cmd[0] == "ffmpeg":
-                if "volume=" in " ".join(cmd):
+                # Envelope step uses -af volume=...; mix step uses -filter_complex (also has volume=1.5)
+                if "volume=" in " ".join(cmd) and "-af" in cmd:
                     envelope_cmd = cmd
                 Path(cmd[-1]).parent.mkdir(parents=True, exist_ok=True)
                 Path(cmd[-1]).write_bytes(b"x")

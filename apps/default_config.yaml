@@ -7,4 +7,5 @@ max_locations: 1
 include_world: true
 # LLM
 llm_provider: openai
+tts_voice: onyx
 model: gpt-4.1-mini

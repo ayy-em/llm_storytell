@@ -157,7 +157,7 @@ python -m llm_storytell run \
 
 Defaults for beats and section_length come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits.
 
-**TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`. When TTS is enabled, the pipeline runs the TTS step then the audio-prep step; **ffmpeg** (and ffprobe) must be on PATH for the audio-prep step (stitching and mixing).
+**TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). The resolved voice name is **normalized to lowercase** before being sent to the TTS provider (e.g. OpenAI expects `onyx`, not `Onyx`); config and CLI may use either casing. When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`. When TTS is enabled, the pipeline runs the TTS step then the audio-prep step; **ffmpeg** (and ffprobe) must be on PATH for the audio-prep step (stitching and mixing).
 
 **Target word count (v1.0.3):** When `--word-count N` is used, the pipeline derives `beat_count` (round N / baseline section length, clamped to 1–20) and per-section length (N / beat_count), then passes the range `[per_section*0.8, per_section*1.2]` as section_length. Generated stories are intended to fall within approximately 10% of the target word count; this is best-effort and can be verified manually or via tests.
 
@@ -597,20 +597,24 @@ Runs are immutable once complete.
 ## Roadmap (Directional)
 
 * **v1.0** – Local, text-only pipeline (multi-app capable)
-* **v1.0.1** – Add soft warnings when approaching context limits
-* **v1.0.2** – Apps directory structure, app-level config, section_length and context limits from config
-* **v1.0.3** – Target word count CLI flag and derived beat_count / section_length
+* **v1.0.1** – Soft warnings when approaching context limits
+* **v1.0.2** – App-specific pipeline configurations
+* **v1.0.3** – Generating stories with target word count
 * **v1.1** – Text-to-speech audiobook output
-* **v1.2** – Background music mixing and audio polish — **current version**
-* **v1.3** – Cloud execution + scheduled delivery (Telegram / email)
-* **v1.4** – One-command video generation
-* **v1.4.1** – Burned-in subtitles
-* **v1.5** – Vector database for large-scale context retrieval and rotation
-* **v1.6** – Multi-LLM provider support, routing, and cost-aware selection
+* **v1.2** – Background music mixing & voiceover audio quality — **Current version**
+* **v1.3** – Increased pipeline flexibility, driven by app-specific configs
+* **v1.4** – Multi-LLM provider support
+* **v1.5** – Smart prompt routing and cost-aware provider selection
+* **v1.6** – Add a "Voiceover text preparation" and support for phonetic hints 
+* **v1.7** – Cloud execution + scheduled delivery via Telegram
+* **v2.0** – RAG Implementation + Vector db for universe's context
+* **v3.0** – Background music generation
+* **v3.0** – Video generation
+* **v3.1** – Videos now feature auto-generated subtitles
 
 ---
 
-## Non-goals (v1.x)
+## Non-goals (at this moment)
 
 * Interactive chat interfaces
 * Streaming generation
