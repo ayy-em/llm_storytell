@@ -174,10 +174,14 @@ def execute_llm_tts_step(
     tts_usage_entries: list[dict[str, Any]] = []
     tts_prompt_sum = 0
     tts_completion_sum = 0
+    cumulative_characters = 0
     num_segments = len(segments)
 
     for idx, (segment_text, is_imperfect) in enumerate(zip(segments, imperfect_flags)):
         seg_num = idx + 1
+        input_characters = len(segment_text)
+        cumulative_characters += input_characters
+
         logger.info(f"TTS segment {seg_num}/{num_segments}")
         if is_imperfect:
             logger.warning(
@@ -221,7 +225,20 @@ def execute_llm_tts_step(
                 "prompt_tokens": pt,
                 "completion_tokens": ct,
                 "total_tokens": tt,
+                "input_characters": input_characters,
             }
+        )
+        logger.log_tts_character_usage(
+            step=f"tts_{seg_num:02d}",
+            provider=result.provider,
+            model=result.model,
+            input_characters=input_characters,
+            cumulative_characters=cumulative_characters,
+        )
+        print(
+            f"[llm_storytell] TTS segment {seg_num}: {input_characters:,} characters "
+            f"(cumulative: {cumulative_characters:,})",
+            flush=True,
         )
         logger.log_token_usage(
             step=f"tts_{seg_num:02d}",

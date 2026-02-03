@@ -258,7 +258,9 @@ def _build_looped_bg_with_crossfade(
                 parts = []
                 parts.append(f"[0:a][1:a]acrossfade=d={d}:c1={d}:c2={d}[o1]")
                 for i in range(2, n):
-                    parts.append(f"[o{i - 1}][{i}:a]acrossfade=d={d}:c1={d}:c2={d}[o{i}]")
+                    parts.append(
+                        f"[o{i - 1}][{i}:a]acrossfade=d={d}:c1={d}:c2={d}[o{i}]"
+                    )
                 parts.append(
                     f"[o{n - 1}]atrim=0:{total_seconds},asetpts=PTS-STARTPTS[out]"
                 )

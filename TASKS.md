@@ -78,36 +78,6 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 ## Task Group: Bug Bash pre-v1.2 public release
 
-### [ ] T0130 – Tokens for TTS are not counted/logged
-
-**Goal**
-Fix the bug: token usage count maintained in run.log file does not include the amount of tokens spent on TTS calls, and the associated costs.
-
-**How to do it**
-Whenever a call to OpenAI's TTS API is made, the pipeline needs to record the number of characters sent in the prompt. That number is then recorded in run logs and output to CLI, along with the estimated cost of the request. The cost is calculated based on tts-provider and tts-model used, as per a static JSON mapping.
-
-**Cost calculation base**
-For OpenAI provider, cost for each model is:
-- tts-1: $15,00 per 1000000 characters
-- tts-1-hd: $30,00 per 1000000 characters
-- gpt-4o-mini-tts: $15,50 per 1000000 characters
-
-**Acceptance criteria**
-- Each TTS provider call gets its character count logged in run.log 
-- Each TTS provider call results in CLI print statement noting the total amount of billed characters, along with a cumulative total for TTS
-- Upon run completion, the run.log & CLI outputs give a total cost estimate split by service, e.g. "Chat Tokens: 56008 input, 14896 output, 70904 total. TTS: 1090123 characters requested", then on new line "Estimated cost: $0,219 Chat + $16,35 TTS = $16,569 total".
-
-**Allowed files**
-- ...
-
-**Commands to run**
-- `uv run ruff format .`
-- `uv run ruff check .`
-- `uv run pytest -q`
-
-Result: 
-
-
 ### [ ] T0131 – Update docs after changes (README/SPEC/TASKS)
 
 **Goal**

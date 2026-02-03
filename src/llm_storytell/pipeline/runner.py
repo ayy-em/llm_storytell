@@ -5,7 +5,7 @@ from pathlib import Path
 
 from llm_storytell.context import ContextLoaderError
 from llm_storytell.llm import LLMProvider, LLMProviderError
-from llm_storytell.llm.pricing import estimate_run_cost
+from llm_storytell.llm.pricing import estimate_run_cost, estimate_tts_cost
 from llm_storytell.pipeline.context import load_and_persist_context
 from llm_storytell.pipeline.providers import (
     ProviderError,
@@ -311,27 +311,60 @@ def run_pipeline(settings: RunSettings) -> int:
         try:
             state = load_state(run_dir)
             usage = state.get("token_usage") or []
-            model, prompt_total, completion_total, total_tokens, cost_usd = (
+            tts_usage = state.get("tts_token_usage") or []
+            model, prompt_total, completion_total, total_tokens, chat_cost = (
                 estimate_run_cost(usage)
             )
+            total_tts_chars, tts_cost = estimate_tts_cost(tts_usage)
+
             if model is not None:
                 print(f"[llm_storytell] Model: {model}", flush=True)
+
+            # One line: Chat tokens and optionally TTS characters
+            tokens_line_parts: list[str] = []
             if prompt_total or completion_total or total_tokens:
-                print(
-                    f"[llm_storytell] Tokens: {prompt_total:,} prompt, "
-                    f"{completion_total:,} completion ({total_tokens:,} total)",
-                    flush=True,
+                tokens_line_parts.append(
+                    f"Chat Tokens: {prompt_total:,} input, {completion_total:,} output, "
+                    f"{total_tokens:,} total"
                 )
-            if cost_usd is not None:
-                print(
-                    f"[llm_storytell] Estimated cost: ~${cost_usd:.4g} (Standard pricing)",
-                    flush=True,
+            if total_tts_chars:
+                tokens_line_parts.append(
+                    f"TTS: {total_tts_chars:,} characters requested"
                 )
-            elif model is not None:
+            if tokens_line_parts:
+                tokens_line = ". ".join(tokens_line_parts)
+                print(f"[llm_storytell] {tokens_line}", flush=True)
+                logger.info(tokens_line)
+
+            # Next line: estimated cost split by service
+            cost_parts: list[str] = []
+            if chat_cost is not None:
+                cost_parts.append(f"${chat_cost:.2f} Chat")
+            elif model is not None and (prompt_total or completion_total):
+                cost_parts.append("Chat N/A (model not in pricing table)")
+            if tts_cost is not None:
+                cost_parts.append(f"${tts_cost:.2f} TTS")
+            elif total_tts_chars:
+                cost_parts.append("TTS N/A (model not in pricing table)")
+            if cost_parts:
+                total_cost: float | None = None
+                if chat_cost is not None and tts_cost is not None:
+                    total_cost = chat_cost + tts_cost
+                elif chat_cost is not None:
+                    total_cost = chat_cost
+                elif tts_cost is not None:
+                    total_cost = tts_cost
+                cost_line = "Estimated cost: " + " + ".join(cost_parts)
+                if total_cost is not None:
+                    cost_line += f" = ${total_cost:.2f} total"
+                print(f"[llm_storytell] {cost_line}", flush=True)
+                logger.info(cost_line)
+            elif model is not None and not total_tts_chars:
                 print(
                     "[llm_storytell] Estimated cost: N/A (model not in pricing table)",
                     flush=True,
                 )
+                logger.info("Estimated cost: N/A (model not in pricing table)")
         except (StateIOError, KeyError):
             pass
 

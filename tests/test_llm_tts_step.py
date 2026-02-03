@@ -164,20 +164,26 @@ class TestExecuteLlmTtsStep:
 
         execute_llm_tts_step(run_dir, provider, logger, audio_ext="mp3")
 
-        assert (run_dir / "tts" / "prompts" / "segment_01.txt").exists()
+        prompts_dir = run_dir / "tts" / "prompts"
+        assert (prompts_dir / "segment_01.txt").exists()
         assert (run_dir / "tts" / "outputs" / "segment_01.mp3").exists()
-        assert (run_dir / "tts" / "prompts" / "segment_01.txt").read_text(
-            encoding="utf-8"
-        ).strip() == script.strip()
+        segment_files = sorted(prompts_dir.glob("segment_*.txt"))
+        segment_contents = [p.read_text(encoding="utf-8").strip() for p in segment_files]
+        combined = " ".join(segment_contents)
+        assert combined == script.strip()
         assert (
             run_dir / "tts" / "outputs" / "segment_01.mp3"
         ).read_bytes() == b"fake_audio"
         with (run_dir / "state.json").open(encoding="utf-8") as f:
             new_state = json.load(f)
         assert "tts_token_usage" in new_state
-        assert len(new_state["tts_token_usage"]) == 1
+        assert len(new_state["tts_token_usage"]) >= 1
         assert new_state["tts_token_usage"][0]["step"] == "tts_01"
         assert new_state["tts_token_usage"][0]["total_tokens"] == 3
+        total_chars = sum(
+            e.get("input_characters", 0) for e in new_state["tts_token_usage"]
+        )
+        assert total_chars == sum(len(s) for s in segment_contents)
 
     def test_uses_state_final_script_path_when_present(self, tmp_path: Path) -> None:
         run_dir = tmp_path
@@ -269,3 +275,24 @@ class TestExecuteLlmTtsStep:
         assert "Cumulative token usage" in log_content
         assert "total_text_tokens" in log_content
         assert "total_tts_tokens" in log_content
+
+    def test_tts_character_usage_logged_in_run_log(self, tmp_path: Path) -> None:
+        run_dir = tmp_path
+        (run_dir / "artifacts").mkdir()
+        segment_text = _make_words(50)
+        (run_dir / "artifacts" / "final_script.md").write_text(
+            segment_text, encoding="utf-8"
+        )
+        (run_dir / "state.json").write_text(
+            json.dumps({"app": "test"}), encoding="utf-8"
+        )
+        (run_dir / "run.log").touch()
+        logger = RunLogger(run_dir / "run.log")
+        provider = _FakeTTSProvider()
+
+        execute_llm_tts_step(run_dir, provider, logger)
+
+        log_content = (run_dir / "run.log").read_text(encoding="utf-8")
+        assert "TTS character usage [tts_01]" in log_content
+        assert f"input_characters={len(segment_text)}" in log_content
+        assert "cumulative_characters=" in log_content

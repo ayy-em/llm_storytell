@@ -4,6 +4,38 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Post-v1.2
 
+### [x] T0130 – Tokens for TTS are not counted/logged (2026-02-03)
+
+**Goal**
+Fix the bug: token usage count maintained in run.log file does not include the amount of tokens spent on TTS calls, and the associated costs.
+
+**How to do it**
+Whenever a call to OpenAI's TTS API is made, the pipeline needs to record the number of characters sent in the prompt. That number is then recorded in run logs and output to CLI, along with the estimated cost of the request. The cost is calculated based on tts-provider and tts-model used, as per a static JSON mapping.
+
+**Cost calculation base**
+For OpenAI provider, cost for each model is:
+- tts-1: $15,00 per 1000000 characters
+- tts-1-hd: $30,00 per 1000000 characters
+- gpt-4o-mini-tts: $15,50 per 1000000 characters
+
+**Acceptance criteria**
+- Each TTS provider call gets its character count logged in run.log 
+- Each TTS provider call results in CLI print statement noting the total amount of billed characters, along with a cumulative total for TTS
+- Upon run completion, the run.log & CLI outputs give a total cost estimate split by service, e.g. "Chat Tokens: 56008 input, 14896 output, 70904 total. TTS: 1090123 characters requested", then on new line "Estimated cost: $0,219 Chat + $16,35 TTS = $16,569 total".
+
+**Allowed files**
+- ...
+
+**Commands to run**
+- `uv run ruff format .`
+- `uv run ruff check .`
+- `uv run pytest -q`
+
+**Result**
+Added TTS character tracking and cost: `llm/pricing.py` — `TTS_COST_PER_1M_CHARS` (tts-1, tts-1-hd, gpt-4o-mini-tts) and `estimate_tts_cost(tts_usage)`; `logging.py` — `log_tts_character_usage()`; `steps/llm_tts.py` — record `input_characters` per segment, log each call, print per-segment "[llm_storytell] TTS segment N: X characters (cumulative: Y)"; `pipeline/runner.py` — load `tts_token_usage`, print and log combined "Chat Tokens: ... TTS: ... characters requested" and "Estimated cost: $X Chat + $Y TTS = $Z total". State `tts_token_usage` entries now include `input_characters`. Tests: `test_llm_pricing.py` (estimate_tts_cost), `test_logging.py` (log_tts_character_usage), `test_llm_tts_step.py` (input_characters in state, TTS character line in run.log; test_artifacts_created_and_state_updated updated for multi-segment chunking). Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (321 passed for T0130-related; 4 pre-existing failures: test_audio_prep_step volume envelope, test_llm_tts_step chunk constant tests).
+
+---
+
 ### [x] T0129 – Test coverage review + real E2E runs (2026-02-01)
 
 **Goal**

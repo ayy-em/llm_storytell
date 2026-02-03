@@ -1,6 +1,10 @@
 """Tests for LLM pricing and run cost estimation."""
 
-from llm_storytell.llm.pricing import MODEL_COST_PER_1M, estimate_run_cost
+from llm_storytell.llm.pricing import (
+    MODEL_COST_PER_1M,
+    estimate_run_cost,
+    estimate_tts_cost,
+)
 
 
 class TestEstimateRunCost:
@@ -108,6 +112,89 @@ class TestEstimateRunCost:
         assert total == 0
         assert cost is not None
         assert cost == 0.0
+
+
+class TestEstimateTtsCost:
+    """Tests for estimate_tts_cost."""
+
+    def test_empty_list_returns_zero_chars_and_none_cost(self) -> None:
+        total_chars, cost = estimate_tts_cost([])
+        assert total_chars == 0
+        assert cost is None
+
+    def test_known_model_returns_estimated_cost(self) -> None:
+        tts_usage = [
+            {
+                "step": "tts_01",
+                "provider": "openai",
+                "model": "tts-1",
+                "input_characters": 1_000_000,
+            }
+        ]
+        total_chars, cost = estimate_tts_cost(tts_usage)
+        assert total_chars == 1_000_000
+        assert cost is not None
+        assert abs(cost - 15.0) < 0.001
+
+    def test_unknown_model_returns_none_cost(self) -> None:
+        tts_usage = [
+            {
+                "step": "tts_01",
+                "provider": "openai",
+                "model": "tts-unknown",
+                "input_characters": 1000,
+            }
+        ]
+        total_chars, cost = estimate_tts_cost(tts_usage)
+        assert total_chars == 1000
+        assert cost is None
+
+    def test_aggregates_multiple_entries(self) -> None:
+        tts_usage = [
+            {
+                "step": "tts_01",
+                "model": "gpt-4o-mini-tts",
+                "input_characters": 500_000,
+            },
+            {
+                "step": "tts_02",
+                "model": "gpt-4o-mini-tts",
+                "input_characters": 500_000,
+            },
+        ]
+        total_chars, cost = estimate_tts_cost(tts_usage)
+        assert total_chars == 1_000_000
+        assert cost is not None
+        # 15.50 per 1M chars
+        assert abs(cost - 15.50) < 0.001
+
+    def test_uses_first_entry_model(self) -> None:
+        tts_usage = [
+            {"model": "tts-1", "input_characters": 100},
+            {"model": "tts-1-hd", "input_characters": 100},
+        ]
+        total_chars, cost = estimate_tts_cost(tts_usage)
+        assert total_chars == 200
+        assert cost is not None
+        # Rate from first entry (tts-1: $15/1M)
+        assert abs(cost - (200 * 15.0 / 1_000_000)) < 0.0001
+
+    def test_missing_input_characters_treated_as_zero(self) -> None:
+        tts_usage = [{"model": "tts-1", "step": "tts_01"}]
+        total_chars, cost = estimate_tts_cost(tts_usage)
+        assert total_chars == 0
+        assert cost is not None
+        assert cost == 0.0
+
+    def test_skips_non_dict_entries(self) -> None:
+        tts_usage = [
+            {"model": "tts-1", "input_characters": 100},
+            "invalid",
+            None,
+        ]
+        total_chars, cost = estimate_tts_cost(tts_usage)
+        assert total_chars == 100
+        assert cost is not None
 
 
 class TestModelCostPer1M:

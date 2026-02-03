@@ -93,6 +93,28 @@ class TestRunLoggerStructuredEvents:
         assert "[WARNING]" in content
         assert "Combined context approaches threshold." in content
 
+    def test_log_tts_character_usage(self, tmp_path: Path) -> None:
+        """log_tts_character_usage logs step, provider, model, and character counts."""
+        log_path = tmp_path / "test.log"
+        log_path.touch()
+
+        logger = RunLogger(log_path)
+        logger.log_tts_character_usage(
+            step="tts_01",
+            provider="openai",
+            model="tts-1",
+            input_characters=1234,
+            cumulative_characters=5678,
+        )
+
+        content = log_path.read_text()
+        assert "[INFO]" in content
+        assert "TTS character usage [tts_01]" in content
+        assert "provider=openai" in content
+        assert "model=tts-1" in content
+        assert "input_characters=1234" in content
+        assert "cumulative_characters=5678" in content
+
     def test_log_token_usage(self, tmp_path: Path) -> None:
         """log_token_usage logs all token metrics."""
         log_path = tmp_path / "test.log"

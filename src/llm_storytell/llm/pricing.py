@@ -30,6 +30,14 @@ MODEL_COST_PER_1M: dict[str, tuple[float, float]] = {
     "gpt-4o-2024-05-13": (5.00, 15.00),
 }
 
+# TTS: USD per 1M characters (input). OpenAI TTS pricing.
+# Source: OpenAI platform pricing.
+TTS_COST_PER_1M_CHARS: dict[str, float] = {
+    "tts-1": 15.00,
+    "tts-1-hd": 30.00,
+    "gpt-4o-mini-tts": 15.50,
+}
+
 
 def estimate_run_cost(
     token_usage: list[dict],
@@ -72,3 +80,36 @@ def estimate_run_cost(
         cost_usd = round(cost_usd, 4)
 
     return (model, prompt_total, completion_total, total_tokens, cost_usd)
+
+
+def estimate_tts_cost(
+    tts_usage: list[dict],
+) -> tuple[int, float | None]:
+    """Aggregate TTS character usage and estimate cost for a run.
+
+    Args:
+        tts_usage: List of entries from state.json tts_token_usage (each
+            may have input_characters, model).
+
+    Returns:
+        (total_input_characters, cost_usd).
+        cost_usd is None if the model (from first entry) is not in
+        TTS_COST_PER_1M_CHARS.
+    """
+    total_chars = 0
+    model: str | None = None
+
+    for entry in tts_usage:
+        if not isinstance(entry, dict):
+            continue
+        total_chars += entry.get("input_characters", 0) or 0
+        if model is None and entry.get("model"):
+            model = str(entry["model"]).strip() or None
+
+    cost_usd: float | None = None
+    if model and model in TTS_COST_PER_1M_CHARS:
+        rate = TTS_COST_PER_1M_CHARS[model]
+        cost_usd = (total_chars * rate) / 1_000_000.0
+        cost_usd = round(cost_usd, 4)
+
+    return (total_chars, cost_usd)

@@ -147,6 +147,28 @@ class RunLogger:
             f"total_tokens={total_tokens}"
         )
 
+    def log_tts_character_usage(
+        self,
+        step: str,
+        provider: str,
+        model: str,
+        input_characters: int,
+        cumulative_characters: int,
+    ) -> None:
+        """Log TTS character usage for a single call.
+
+        Args:
+            step: Name of the TTS step (e.g. tts_01).
+            provider: TTS provider name (e.g. openai).
+            model: TTS model name.
+            input_characters: Character count for this call.
+            cumulative_characters: Running total of TTS characters so far.
+        """
+        self.info(
+            f"TTS character usage [{step}]: provider={provider}, model={model}, "
+            f"input_characters={input_characters}, cumulative_characters={cumulative_characters}"
+        )
+
     def log_tts_cumulative(
         self,
         response_prompt_tokens: int,
