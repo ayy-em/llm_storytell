@@ -78,28 +78,7 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 ## Task Group: Bug Bash pre-v1.2 public release
 
-### [ ] T0131 – Update docs after changes (README/SPEC/TASKS)
-
-**Goal**
-Bring docs in sync after the bug fixes, refactor, and cleanup changes land.
-
-**Acceptance criteria**
-- README.md and SPEC.md reflect the final pipeline structure and behavior.
-- TASKS.md is updated to remove completed tasks and record results.
-- No doc drift remains for CLI flags, run layout, or pipeline steps.
-- Docs should claim v1.2 is the current version and a release that's already happened
-
-**Allowed files**
-- README.md
-- SPEC.md
-- TASKS.md
-
-**Commands to run**
-- `uv run ruff format .`
-- `uv run ruff check .`
-- `uv run pytest -q`
-
-Result: 
+(No open tasks; completed tasks moved to COMPLETED_TASKS.md.)
 
 ---
 

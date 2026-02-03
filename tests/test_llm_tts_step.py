@@ -168,7 +168,9 @@ class TestExecuteLlmTtsStep:
         assert (prompts_dir / "segment_01.txt").exists()
         assert (run_dir / "tts" / "outputs" / "segment_01.mp3").exists()
         segment_files = sorted(prompts_dir.glob("segment_*.txt"))
-        segment_contents = [p.read_text(encoding="utf-8").strip() for p in segment_files]
+        segment_contents = [
+            p.read_text(encoding="utf-8").strip() for p in segment_files
+        ]
         combined = " ".join(segment_contents)
         assert combined == script.strip()
         assert (

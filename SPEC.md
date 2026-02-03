@@ -451,6 +451,13 @@ These metrics must be:
 * Logged to `run.log`
 * Stored in `state.json` under a `token_usage[]` field
 
+### TTS usage and cost (v1.2)
+
+When the TTS step runs, the pipeline records TTS usage and estimates cost:
+
+* **Per segment:** Each TTS call logs the number of characters sent; `state.json` `tts_token_usage[]` entries include `input_characters` per segment.
+* **Run completion:** The pipeline logs and prints a combined summary: Chat token counts (input, output, total) and TTS characters requested, then a line such as `Estimated cost: $X Chat + $Y TTS = $Z total`. Cost is derived from provider/model pricing (e.g. per 1M characters for TTS).
+
 ### Context size warning (v1.0.1)
 
 When combined context (lore + style + location + characters) approaches or exceeds a defined character threshold, a **WARNING** is logged to `run.log`. Context selection and pipeline success/failure are unchanged; the run does not fail.
@@ -486,7 +493,7 @@ When combined context (lore + style + location + characters) approaches or excee
 }
 ```
 
-When `--no-tts` is set, `tts_config` is omitted. `tts_token_usage` is present only after the TTS step has run successfully. `final_script_path` and `editor_report_path` are set after the critic step.
+When `--no-tts` is set, `tts_config` is omitted. `tts_token_usage` is present only after the TTS step has run successfully; each entry includes `input_characters` (characters sent to the TTS API for that segment). `final_script_path` and `editor_report_path` are set after the critic step.
 
 ### Rules
 
@@ -533,7 +540,7 @@ Enables future support for:
 
 ## Pipeline Configuration
 
-Step order is fixed and implemented in the orchestrator (e.g. `cli.py`). The file `config/pipeline.yaml` exists but may be empty or used for reference only; the pipeline does not load step order from YAML in v1.0.
+Step order is fixed and implemented in the pipeline runner (`pipeline/runner.py`), invoked from `cli.py`. The file `config/pipeline.yaml` exists but may be empty or used for reference only; the pipeline does not load step order from YAML in v1.0.
 
 The orchestrator executes strictly in order:
 
@@ -601,7 +608,7 @@ Runs are immutable once complete.
 * **v1.0.2** – App-specific pipeline configurations
 * **v1.0.3** – Generating stories with target word count
 * **v1.1** – Text-to-speech audiobook output
-* **v1.2** – Background music mixing & voiceover audio quality — **Current version**
+* **v1.2** – Background music mixing & voiceover audio quality — **Current version (released)**
 * **v1.3** – Increased pipeline flexibility, driven by app-specific configs
 * **v1.4** – Multi-LLM provider support
 * **v1.5** – Smart prompt routing and cost-aware provider selection

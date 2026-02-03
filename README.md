@@ -270,7 +270,7 @@ When TTS is enabled (default), the pipeline also runs a TTS step and an audio-pr
 * `voiceover/` — stitched voiceover track and intermediate bg-music files
 * `artifacts/narration-<app>.<ext>` — final narration (voice + background music)
 
-Runs are immutable once completed.
+On completion, the CLI and `run.log` show combined Chat token and TTS character usage and an estimated cost (Chat + TTS). Runs are immutable once completed.
 
 ---
 
@@ -338,7 +338,7 @@ If something is unclear, stop.
 * **v1.0.2** – Apps directory structure and app-level config
 * **v1.0.3** – Target word count CLI flag
 * **v1.1** – Text-to-speech audiobook output
-* **v1.2** – Background music mixing and audio polish — **current version**
+* **v1.2** – Background music mixing and audio polish — **current version (released)**
 * **v1.3** – Cloud execution + scheduled delivery (Telegram / email)
 * **v1.4** – One-command video generation
 * **v1.4.1** – Burned-in subtitles

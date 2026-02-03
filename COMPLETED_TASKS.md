@@ -4,6 +4,32 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Post-v1.2
 
+### [x] T0131 – Update docs after changes (README/SPEC/TASKS) (2026-02-03)
+
+**Goal**
+Bring docs in sync after the bug fixes, refactor, and cleanup changes land.
+
+**Acceptance criteria**
+- README.md and SPEC.md reflect the final pipeline structure and behavior.
+- TASKS.md is updated to remove completed tasks and record results.
+- No doc drift remains for CLI flags, run layout, or pipeline steps.
+- Docs should claim v1.2 is the current version and a release that's already happened
+
+**Allowed files**
+- README.md
+- SPEC.md
+- TASKS.md
+
+**Commands to run**
+- `uv run ruff format .`
+- `uv run ruff check .`
+- `uv run pytest -q`
+
+**Result**
+SPEC.md: Pipeline Configuration now states step order is implemented in the pipeline runner (`pipeline/runner.py`), invoked from cli.py. Added "TTS usage and cost (v1.2)" under Logging (per-segment input_characters in state, run completion summary and estimated cost in run.log/CLI). state.json section notes that tts_token_usage entries include input_characters. Roadmap v1.2 marked "(released)". README.md: Added sentence that run completion shows combined Chat + TTS usage and estimated cost in CLI and run.log; roadmap v1.2 marked "(released)". TASKS.md: T0131 marked [x], Result added, task section moved to COMPLETED_TASKS.md. Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q`.
+
+---
+
 ### [x] T0130 – Tokens for TTS are not counted/logged (2026-02-03)
 
 **Goal**
