@@ -275,11 +275,10 @@ class TestExecuteAudioPrepStep:
 
         assert envelope_cmd is not None
         full = " ".join(envelope_cmd)
-        # Envelope uses voice_duration (12.0) and voice_duration+2 (14.0)
-        assert "12" in full and "14" in full
+        # Envelope: 0-3s fade, 3 to 3+voice_duration flat, then 3s fade. For voice_duration=12: 3, 15, 18.
+        assert "3" in full and "15" in full and "18" in full
         assert "0.75" in full
         assert "0.1" in full or "0.10" in full
-        assert "0.7" in full or "0.70" in full
 
     def test_loop_target_duration_voice_plus_six(self, tmp_path: Path) -> None:
         """Step runs and produces narration artifact when voice duration is 10s (loop target 16s)."""

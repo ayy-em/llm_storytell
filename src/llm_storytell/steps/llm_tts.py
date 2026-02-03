@@ -17,9 +17,9 @@ class LLMTTSStepError(Exception):
 
 
 # Chunking constants
-MIN_WORDS = 700
-MAX_WORDS = 1000
-MAX_SEGMENTS = 22
+MIN_WORDS = 300
+MAX_WORDS = 500
+MAX_SEGMENTS = 45
 
 
 def _word_spans(text: str) -> list[re.Match[str]]:

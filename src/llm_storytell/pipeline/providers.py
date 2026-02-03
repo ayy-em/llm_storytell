@@ -113,6 +113,7 @@ def create_tts_provider(
         ProviderError: If provider unsupported, openai not installed, key missing, or creation fails.
     """
     cfg = resolved_tts_config or {}
+
     # Support both snake_case (from AppConfig/resolved_tts_config) and hyphenated keys (from raw YAML)
     def _get_cfg(key: str, hyphen_key: str, default: Any) -> Any:
         return cfg.get(key) or cfg.get(hyphen_key) or default
@@ -139,7 +140,8 @@ def create_tts_provider(
         ) from e
 
     try:
-        client = OpenAI(api_key=api_key)
+        # Always use official OpenAI API for TTS; audio/speech is not supported by most proxies (OpenRouter, etc.)
+        client = OpenAI(api_key=api_key, base_url="https://api.openai.com/v1")
         tts_model = _get_cfg("tts_model", "tts-model", "gpt-4o-mini-tts")
         tts_voice_raw = _get_cfg("tts_voice", "tts-voice", "onyx")
         # OpenAI TTS API requires lowercase voice (e.g. "onyx"); normalize so config can use "Onyx"

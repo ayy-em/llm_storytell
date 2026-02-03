@@ -34,8 +34,9 @@ assets/
 config/secrets.yaml
 config/creds.json
 
-# Prompts for testing
+# Local QA & Testing
 tests/test_critic_prompt.txt
+manual_tts_run.py
 
 # random IDE extensions
 .VSCodeCounter/

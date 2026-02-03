@@ -179,13 +179,17 @@ def _resolve_bg_music(base_dir: Path, app_name: str) -> Path:
     )
 
 
+# Crossfade duration (seconds) at loop points when building looped bg track
+BG_LOOP_CROSSFADE = 5
+
+
 def _build_looped_bg_with_crossfade(
     bg_path: Path,
     total_seconds: float,
     run_dir: Path,
     logger: RunLogger,
 ) -> Path:
-    """Create a looped bg track of length total_seconds with 2s crossfade at loop points."""
+    """Create a looped bg track of length total_seconds with crossfade at loop points."""
     duration_out = _run_ffprobe(
         [
             "-v",
@@ -206,8 +210,9 @@ def _build_looped_bg_with_crossfade(
     voiceover_dir = run_dir / "voiceover"
     voiceover_dir.mkdir(parents=True, exist_ok=True)
     looped_path = voiceover_dir / "bg_looped.wav"
+    d = BG_LOOP_CROSSFADE
 
-    if bg_duration <= 2:
+    if bg_duration <= d:
         # No crossfade: just loop and trim
         n = max(1, int(total_seconds / bg_duration) + 1)
         _run_ffmpeg(
@@ -225,9 +230,9 @@ def _build_looped_bg_with_crossfade(
             "loop bg (no crossfade)",
         )
     else:
-        # N copies with 2s crossfade between them
-        # n copies give length n*bg_duration - (n-1)*2 >= total_seconds
-        n = max(1, int((total_seconds - 2) / (bg_duration - 2)) + 1)
+        # N copies with d-second crossfade between them
+        # n copies give length n*bg_duration - (n-1)*d >= total_seconds
+        n = max(1, int((total_seconds - d) / (bg_duration - d)) + 1)
         if n == 1:
             _run_ffmpeg(
                 [
@@ -246,14 +251,14 @@ def _build_looped_bg_with_crossfade(
             inputs = ["-i", str(bg_path)] * n
             if n == 2:
                 filter_complex = (
-                    f"[0:a][1:a]acrossfade=d=2:c1=2:c2=2[o1];"
+                    f"[0:a][1:a]acrossfade=d={d}:c1={d}:c2={d}[o1];"
                     f"[o1]atrim=0:{total_seconds},asetpts=PTS-STARTPTS[out]"
                 )
             else:
                 parts = []
-                parts.append("[0:a][1:a]acrossfade=d=2:c1=2:c2=2[o1]")
+                parts.append(f"[0:a][1:a]acrossfade=d={d}:c1={d}:c2={d}[o1]")
                 for i in range(2, n):
-                    parts.append(f"[o{i - 1}][{i}:a]acrossfade=d=2:c1=2:c2=2[o{i}]")
+                    parts.append(f"[o{i - 1}][{i}:a]acrossfade=d={d}:c1={d}:c2={d}[o{i}]")
                 parts.append(
                     f"[o{n - 1}]atrim=0:{total_seconds},asetpts=PTS-STARTPTS[out]"
                 )
@@ -275,22 +280,28 @@ def _build_looped_bg_with_crossfade(
     return looped_path
 
 
+# Intro/outro padding (seconds): voiceover sits from PAD_START to PAD_START+voice_duration on the track.
+PAD_START = 3
+PAD_END = 3
+
+
 def _apply_bg_volume_envelope(
     looped_bg_path: Path,
     voice_duration: float,
     run_dir: Path,
 ) -> Path:
-    """Apply volume envelope to bg: 0-1.5s 75%, 1.5-3s fade to 10%, 10% during narration, after fade to 70% over 2s."""
+    """Apply volume envelope to bg: 0-3s 65%→5%, 3s to (3+voice) at 5%, last 3s 5%→65%."""
     voiceover_dir = run_dir / "voiceover"
     enveloped_path = voiceover_dir / "bg_enveloped.wav"
     v = voice_duration
-    # ffmpeg volume expression: 0-1.5 -> 0.75, 1.5-3 -> linear to 0.1, 3-v -> 0.1, v to v+2 -> linear to 0.7, rest 0.7
-    # Commas inside -af separate filters; escape literal commas in the expression so ffmpeg parses one volume filter
+    flat_end = PAD_START + v
+    end_fade_end = PAD_START + PAD_END + v
+    # 0-3s: 65%→5%; 3 to 3+v: 5%; 3+v to 3+v+3: 5%→65%
+    # Commas inside -af separate filters; escape literal commas so ffmpeg parses one volume filter
     expr = (
-        f"if(lt(t,1.5),0.75,"
-        f"if(lt(t,3),0.75-(t-1.5)/1.5*0.65,"
-        f"if(lt(t,{v}),0.1,"
-        f"if(lt(t,{v + 2}),0.1+(t-{v})/2*0.6,0.7))))"
+        f"if(lt(t,{PAD_START}),0.65-t/{PAD_START}*0.35,"
+        f"if(lt(t,{flat_end}),0.05,"
+        f"if(lt(t,{end_fade_end}),0.05+(t-{flat_end})/{PAD_END}*0.65,0.75)))"
     )
     expr_escaped = expr.replace(",", "\\,")
     _run_ffmpeg(
@@ -315,15 +326,24 @@ def _mix_voiceover_and_bg(
     run_dir: Path,
     logger: RunLogger,
     ext: str,
+    voice_duration: float,
 ) -> None:
     """Mix voiceover and background; write to out_path.
 
-    The voiceover track's volume is increased by 50% (factor 1.5).
+    Voiceover is placed from PAD_START to PAD_START+voice_duration on the track
+    (3s intro of music only, then voice+music, then PAD_END s of music only).
+    Voice track gets 1.75x gain.
     """
     if ext.lower() == ".wav":
         codec_args = ["-c:a", "pcm_s16le"]
     else:
         codec_args = ["-c:a", "libmp3lame", "-q:a", "2"]
+    delay_ms = int(PAD_START * 1000)
+    # Delay voice by PAD_START so it starts at 3s; pad end by PAD_END so total = bg length
+    filter_complex = (
+        f"[0:a]volume=1.75,adelay={delay_ms}|{delay_ms},apad=pad_dur={PAD_END}[vo];"
+        "[vo][1:a]amix=inputs=2:duration=first[aout]"
+    )
     _run_ffmpeg(
         [
             "-i",
@@ -331,8 +351,7 @@ def _mix_voiceover_and_bg(
             "-i",
             str(bg_path),
             "-filter_complex",
-            # 1.5x gain for [0:a], then amix with [1:a]:
-            "[0:a]volume=1.5[a1];[a1][1:a]amix=inputs=2:duration=first[aout]",
+            filter_complex,
             "-map",
             "[aout]",
             *codec_args,
@@ -358,9 +377,9 @@ def execute_audio_prep_step(
     1. Stitch segments from run_dir/tts/outputs/ into one voiceover track.
     2. Get voiceover duration.
     3. Load bg music: apps/<app_name>/assets/bg-music.* if exists, else assets/default-bg-music.wav.
-    4. Loop bg with 2s crossfade to duration + 6s.
-    5. Apply bg volume envelope (0-1.5s 75%, 1.5-3s fade to 10%, 10% during narration, after fade to 70% over 2s).
-    6. Mix voiceover + bg; write to run_dir/artifacts/narration-<app_name>.<ext>.
+    4. Loop bg with 2s crossfade to voice_duration + 6s (3s intro + voice + 3s outro).
+    5. Apply bg volume envelope: 0-3s 75%→10%, 3s to (3+voice_duration) at 10%, last 3s 10%→75%.
+    6. Mix: voiceover placed from 00m03s to (3+voice_duration)s on the track; write to run_dir/artifacts/narration-<app_name>.<ext>.
 
     Args:
         run_dir: Run directory (runs/<run_id>/).
@@ -397,5 +416,7 @@ def execute_audio_prep_step(
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     out_path = artifacts_dir / f"narration-{app_name}{ext}"
 
-    _mix_voiceover_and_bg(voiceover_path, enveloped_bg, out_path, run_dir, logger, ext)
+    _mix_voiceover_and_bg(
+        voiceover_path, enveloped_bg, out_path, run_dir, logger, ext, voice_duration
+    )
     logger.info(f"Audio-prep complete: {out_path}")

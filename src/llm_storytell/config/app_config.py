@@ -172,7 +172,7 @@ def load_app_config(
         max_locations=int(merged.get("max_locations", 1)),
         include_world=bool(merged.get("include_world", True)),
         llm_provider=str(merged.get("llm_provider", "openai")),
-        model=str(merged.get("model", "gpt-4.1-mini")),
+        model=str(merged.get("model", "gpt-5-mini")),
         tts_provider=tts_provider,
         tts_model=tts_model,
         tts_voice=tts_voice,
