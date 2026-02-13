@@ -40,6 +40,7 @@ def _create_inputs_json(
     context_dir: Path,
     prompts_dir: Path,
     word_count: int | None = None,
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Create the inputs.json structure.
 
@@ -51,6 +52,7 @@ def _create_inputs_json(
         context_dir: Path to the app's context directory.
         prompts_dir: Path to the app's prompts directory.
         word_count: Optional target total word count (when --word-count was used).
+        model: Optional LLM model identifier (for artifact naming).
 
     Returns:
         Dictionary representing inputs.json content.
@@ -66,6 +68,8 @@ def _create_inputs_json(
     }
     if word_count is not None:
         data["word_count"] = word_count
+    if model is not None:
+        data["model"] = model
     return data
 
 
@@ -113,6 +117,7 @@ def initialize_run(
     base_dir: Path | None = None,
     word_count: int | None = None,
     resolved_tts_config: dict[str, Any] | None = None,
+    model: str | None = None,
 ) -> Path:
     """Initialize a new run directory with all required files.
 
@@ -129,6 +134,7 @@ def initialize_run(
         base_dir: Base directory for runs. If None, uses current working directory.
         word_count: Optional target total word count (when --word-count was used).
         resolved_tts_config: Optional resolved TTS/audio config to persist in state.json.
+        model: Optional LLM model identifier (persisted in inputs.json for artifact naming).
 
     Returns:
         Path to the created run directory.
@@ -174,6 +180,7 @@ def initialize_run(
             context_dir=context_dir,
             prompts_dir=prompts_dir,
             word_count=word_count,
+            model=model,
         )
         inputs_path = temp_dir / "inputs.json"
 

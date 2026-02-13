@@ -614,7 +614,7 @@ def test_e2e_with_tts_succeeds(
             last = Path(cmd[-1])
             if (
                 "voiceover" in str(last)
-                or "narration-" in str(last)
+                or "story-" in str(last)
                 or "bg_" in str(last)
             ):
                 last.parent.mkdir(parents=True, exist_ok=True)
@@ -654,9 +654,10 @@ def test_e2e_with_tts_succeeds(
     assert "tts_token_usage" in state
     assert (run_dir / "tts" / "outputs").exists()
     assert (run_dir / "artifacts" / "final_script.md").exists()
-    narration = list((run_dir / "artifacts").glob("narration-*.mp3"))
-    assert len(narration) == 1
-    assert narration[0].name == "narration-test-app.mp3"
+    story_artifacts = list((run_dir / "artifacts").glob("story-*.mp3"))
+    assert len(story_artifacts) == 1
+    assert story_artifacts[0].name.startswith("story-test-app-")
+    assert story_artifacts[0].name.endswith(".mp3")
 
 
 def test_e2e_without_beats_override(

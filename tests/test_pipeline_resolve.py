@@ -162,7 +162,7 @@ class TestResolveRunSettings:
     def test_tts_enabled_resolved_tts_config_has_provider_voice(
         self, tmp_path: Path
     ) -> None:
-        """When tts_enabled is True, resolved_tts_config has tts_provider and tts_voice."""
+        """When tts_enabled is True and CLI passes provider and voice, resolved_tts_config uses them."""
         app_paths = _minimal_app_paths(tmp_path)
         app_config = _minimal_app_config(tts_provider="openai", tts_voice="Onyx")
         settings = resolve_run_settings(
@@ -172,6 +172,7 @@ class TestResolveRunSettings:
             beats_arg=1,
             tts_enabled=True,
             tts_provider="custom",
+            tts_provider_cli="custom",
             tts_voice="Nova",
             config_path=tmp_path / "config",
         )
@@ -179,6 +180,96 @@ class TestResolveRunSettings:
         assert settings.resolved_tts_config is not None
         assert settings.resolved_tts_config.get("tts_provider") == "custom"
         assert settings.resolved_tts_config.get("tts_voice") == "Nova"
+
+    def test_tts_provider_elevenlabs_uses_provider_defaults_when_voice_model_not_passed(
+        self, tmp_path: Path
+    ) -> None:
+        """With --tts-provider elevenlabs only, model and voice get ElevenLabs defaults."""
+        from llm_storytell.tts_providers.elevenlabs_tts import (
+            DEFAULT_MODEL_ID,
+            DEFAULT_VOICE_ID,
+        )
+
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = _minimal_app_config(tts_provider="elevenlabs")
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            tts_enabled=True,
+            tts_provider="elevenlabs",
+            tts_provider_cli="elevenlabs",
+            tts_voice=None,
+            tts_model=None,
+            config_path=tmp_path / "config",
+        )
+        assert settings.resolved_tts_config is not None
+        assert settings.resolved_tts_config["tts_provider"] == "elevenlabs"
+        assert settings.resolved_tts_config["tts_model"] == DEFAULT_MODEL_ID
+        assert settings.resolved_tts_config["tts_voice"] == DEFAULT_VOICE_ID
+
+    def test_tts_no_cli_provider_uses_app_config_voice_model(self, tmp_path: Path) -> None:
+        """When user does not pass --tts-provider, app config supplies provider, model, and voice."""
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = _minimal_app_config(
+            tts_provider="elevenlabs",
+            tts_voice="CustomVoiceId",
+        )
+        # _minimal_app_config uses tts_model="gpt-4o-mini-tts"; for this test we need an elevenlabs model in app
+        app_config = AppConfig(
+            beats=app_config.beats,
+            section_length=app_config.section_length,
+            max_characters=app_config.max_characters,
+            max_locations=app_config.max_locations,
+            include_world=app_config.include_world,
+            llm_provider=app_config.llm_provider,
+            model=app_config.model,
+            tts_provider="elevenlabs",
+            tts_model="eleven_turbo_v2",
+            tts_voice="CustomVoiceId",
+            tts_arguments=app_config.tts_arguments,
+            bg_music=app_config.bg_music,
+        )
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            tts_enabled=True,
+            tts_provider="elevenlabs",
+            tts_provider_cli=None,
+            tts_voice=None,
+            tts_model=None,
+            config_path=tmp_path / "config",
+        )
+        assert settings.resolved_tts_config is not None
+        assert settings.resolved_tts_config["tts_provider"] == "elevenlabs"
+        assert settings.resolved_tts_config["tts_model"] == "eleven_turbo_v2"
+        assert settings.resolved_tts_config["tts_voice"] == "CustomVoiceId"
+
+    def test_tts_provider_openai_uses_provider_defaults_when_voice_model_not_passed(
+        self, tmp_path: Path
+    ) -> None:
+        """With --tts-provider openai and no CLI voice/model, use OpenAI provider defaults."""
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = _minimal_app_config(tts_voice="Onyx")
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            tts_enabled=True,
+            tts_provider="openai",
+            tts_provider_cli="openai",
+            tts_voice=None,
+            tts_model=None,
+            config_path=tmp_path / "config",
+        )
+        assert settings.resolved_tts_config is not None
+        assert settings.resolved_tts_config["tts_provider"] == "openai"
+        assert settings.resolved_tts_config["tts_model"] == "gpt-4o-mini-tts"
+        assert settings.resolved_tts_config["tts_voice"] == "onyx"
 
     def test_run_settings_has_all_expected_attrs(self, tmp_path: Path) -> None:
         """RunSettings has app_paths, app_config, seed, beats, section_length, run_id, config_path, model, word_count, tts_enabled, resolved_tts_config."""

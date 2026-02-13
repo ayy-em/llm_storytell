@@ -568,7 +568,7 @@ runs/<run_id>/
     30_critic_raw_response.txt
     final_script.md
     editor_report.json
-    narration-<app_name>.<ext>   (when TTS/audio ran)
+    story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>   (when TTS/audio ran)
   llm_io/
     <stage_name>/
       prompt.txt

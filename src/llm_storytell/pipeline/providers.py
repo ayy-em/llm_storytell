@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from llm_storytell.llm import LLMProvider, OpenAIProvider
+from llm_storytell.tts_providers import TTSProvider
+from llm_storytell.tts_providers.elevenlabs_tts import (
+    DEFAULT_VOICE_ID,
+    ElevenLabsTTSProvider,
+    _elevenlabs_model_from_config,
+)
 from llm_storytell.tts_providers.openai_tts import OpenAITTSProvider
 
 
@@ -32,6 +38,19 @@ def _load_creds_api_key(config_path: Path) -> str | None:
             or creds.get("OPEN_AI")
             or creds.get("OPENAI_API_KEY")
         )
+    except (OSError, json.JSONDecodeError, KeyError):
+        return None
+
+
+def _load_elevenlabs_api_key(config_path: Path) -> str | None:
+    """Load ElevenLabs API key from config_path/creds.json. Returns None if missing/invalid."""
+    creds_path = config_path / "creds.json"
+    if not creds_path.exists():
+        return None
+    try:
+        with creds_path.open(encoding="utf-8") as f:
+            creds = json.load(f)
+        return creds.get("ELEVENLABS_API_KEY") or creds.get("elevenlabs_api_key")
     except (OSError, json.JSONDecodeError, KeyError):
         return None
 
@@ -99,7 +118,7 @@ def create_llm_provider(
 
 def create_tts_provider(
     config_path: Path, resolved_tts_config: dict[str, Any]
-) -> OpenAITTSProvider:
+) -> TTSProvider:
     """Create TTS provider from config and resolved TTS config.
 
     Args:
@@ -107,10 +126,10 @@ def create_tts_provider(
         resolved_tts_config: Dict with tts_provider, tts_model, tts_voice, tts_arguments.
 
     Returns:
-        TTS provider instance (e.g. OpenAITTSProvider).
+        TTS provider instance (e.g. OpenAITTSProvider, ElevenLabsTTSProvider).
 
     Raises:
-        ProviderError: If provider unsupported, openai not installed, key missing, or creation fails.
+        ProviderError: If provider unsupported, SDK not installed, key missing, or creation fails.
     """
     cfg = resolved_tts_config or {}
 
@@ -119,9 +138,11 @@ def create_tts_provider(
         return cfg.get(key) or cfg.get(hyphen_key) or default
 
     provider_id = _get_cfg("tts_provider", "tts-provider", "openai")
+    if provider_id == "elevenlabs":
+        return _create_elevenlabs_tts_provider(config_path, _get_cfg)
     if provider_id != "openai":
         raise ProviderError(
-            f"Unsupported TTS provider '{provider_id}'. Only 'openai' is supported."
+            f"Unsupported TTS provider '{provider_id}'. Supported: 'openai', 'elevenlabs'."
         )
 
     api_key = _load_creds_api_key(config_path)
@@ -167,3 +188,42 @@ def create_tts_provider(
         )
     except Exception as e:
         raise ProviderError(f"Error creating TTS provider: {e}") from e
+
+
+def _create_elevenlabs_tts_provider(
+    config_path: Path,
+    get_cfg: Any,
+) -> ElevenLabsTTSProvider:
+    """Create ElevenLabs TTS provider. Uses ELEVENLABS_API_KEY from config/creds.json."""
+    try:
+        from elevenlabs.client import ElevenLabs
+    except ImportError as e:
+        raise ProviderError(
+            "elevenlabs package not installed. Install with: pip install elevenlabs"
+        ) from e
+
+    api_key = _load_elevenlabs_api_key(config_path)
+    if not api_key:
+        raise ProviderError(
+            "No ElevenLabs API key found. Add ELEVENLABS_API_KEY to config/creds.json."
+        )
+
+    try:
+        client = ElevenLabs(api_key=api_key)
+        # Ignore OpenAI model names from app config (e.g. tts-1, gpt-4o-mini-tts)
+        configured_model = get_cfg("tts_model", "tts-model", None)
+        tts_model = _elevenlabs_model_from_config(configured_model)
+        tts_voice = get_cfg("tts_voice", "tts-voice", DEFAULT_VOICE_ID)
+        tts_voice = str(tts_voice).strip() if tts_voice else DEFAULT_VOICE_ID
+        raw_args = get_cfg("tts_arguments", "tts-arguments", {}) or {}
+        tts_arguments = dict(raw_args)
+        output_format = tts_arguments.pop("output_format", "mp3_44100_128")
+        return ElevenLabsTTSProvider(
+            client=client,
+            default_model=tts_model,
+            default_voice=tts_voice,
+            output_format=output_format,
+            **tts_arguments,
+        )
+    except Exception as e:
+        raise ProviderError(f"Error creating ElevenLabs TTS provider: {e}") from e

@@ -14,7 +14,9 @@ from llm_storytell.steps.audio_prep import (
     AudioPrepStepError,
     _discover_segments,
     _get_app_name,
+    _parse_run_id_dd_mm,
     _resolve_bg_music,
+    _voiceover_artifact_filename,
     execute_audio_prep_step,
 )
 
@@ -34,6 +36,39 @@ def _run_dir(
     for name in segments:
         (outputs / name).write_bytes(b"fake_audio")
     return run_dir
+
+
+class TestVoiceoverArtifactFilename:
+    """Final artifact filename: story-{app}-{llm_model}-{tts_model}-{tts_voice}-{dd}-{mm}.ext."""
+
+    def test_parse_run_id_dd_mm(self) -> None:
+        assert _parse_run_id_dd_mm("run-20260209-234638") == ("09", "02")
+        assert _parse_run_id_dd_mm("run-20251201-120000") == ("01", "12")
+        assert _parse_run_id_dd_mm("run-001") == ("00", "00")
+        assert _parse_run_id_dd_mm("") == ("00", "00")
+
+    def test_voiceover_artifact_filename_from_inputs_and_state(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "run-20260209-120000"
+        run_dir.mkdir()
+        (run_dir / "inputs.json").write_text(
+            json.dumps({"app": "my_app", "run_id": "run-20260209-120000", "model": "gpt-4.1-mini"}),
+            encoding="utf-8",
+        )
+        (run_dir / "state.json").write_text(
+            json.dumps({
+                "tts_config": {"tts_model": "eleven_multilingual_v2", "tts_voice": "6FiCmD8eY5VyjOdG5Zjk"},
+            }),
+            encoding="utf-8",
+        )
+        name = _voiceover_artifact_filename(run_dir, "my_app", ".mp3")
+        assert name == "story-my_app-gpt-4.1-mini-eleven_multilingual_v2-6FiCmD8eY5VyjOdG5Zjk-09-02.mp3"
+
+    def test_voiceover_artifact_filename_fallback_when_missing_inputs_state(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "run-001"
+        run_dir.mkdir()
+        (run_dir / "inputs.json").write_text(json.dumps({"app": "example_app", "run_id": "run-001"}), encoding="utf-8")
+        name = _voiceover_artifact_filename(run_dir, "example_app", ".mp3")
+        assert name == "story-example_app-unknown-unknown-unknown-00-00.mp3"
 
 
 class TestGetAppName:
@@ -195,7 +230,7 @@ class TestExecuteAudioPrepStep:
                 last = Path(cmd[-1])
                 if (
                     "voiceover" in str(last)
-                    or "narration-" in str(last)
+                    or "story-" in str(last)
                     or "bg_" in str(last)
                 ):
                     last.parent.mkdir(parents=True, exist_ok=True)
@@ -238,9 +273,9 @@ class TestExecuteAudioPrepStep:
         voiceover_dir = run_dir / "voiceover"
         assert voiceover_dir.is_dir()
         artifacts_dir = run_dir / "artifacts"
-        narration = list(artifacts_dir.glob("narration-*.mp3"))
-        assert len(narration) == 1
-        assert narration[0].name == "narration-example_app.mp3"
+        story = list(artifacts_dir.glob("story-*.mp3"))
+        assert len(story) == 1
+        assert story[0].name == "story-example_app-unknown-unknown-unknown-00-00.mp3"
 
     def test_volume_envelope_uses_voice_duration(self, tmp_path: Path) -> None:
         run_dir = _run_dir(tmp_path, ["segment_01.mp3"])
@@ -278,7 +313,8 @@ class TestExecuteAudioPrepStep:
         # Envelope: 0-3s fade, 3 to 3+voice_duration flat, then 3s fade. For voice_duration=12: 3, 15, 18.
         assert "3" in full and "15" in full and "18" in full
         assert "0.75" in full
-        assert "0.1" in full or "0.10" in full
+        # Flat ducking level is 5% (0.05), not 10%
+        assert "0.05" in full
 
     def test_loop_target_duration_voice_plus_six(self, tmp_path: Path) -> None:
         """Step runs and produces narration artifact when voice duration is 10s (loop target 16s)."""
@@ -313,7 +349,7 @@ class TestExecuteAudioPrepStep:
         ):
             execute_audio_prep_step(run_dir, base, logger, app_name="example_app")
 
-        assert (run_dir / "artifacts" / "narration-example_app.mp3").exists()
+        assert (run_dir / "artifacts" / "story-example_app-unknown-unknown-unknown-00-00.mp3").exists()
         assert (run_dir / "voiceover" / "voiceover.mp3").exists()
 
     def test_app_name_from_inputs_when_not_passed(self, tmp_path: Path) -> None:
@@ -341,7 +377,7 @@ class TestExecuteAudioPrepStep:
         ):
             execute_audio_prep_step(run_dir, base, logger)
 
-        out = run_dir / "artifacts" / "narration-from_inputs.mp3"
+        out = run_dir / "artifacts" / "story-from_inputs-unknown-unknown-unknown-00-00.mp3"
         assert out.exists()
 
     def test_ffprobe_failure_raises(self, tmp_path: Path) -> None:

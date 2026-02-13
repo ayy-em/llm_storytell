@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -16,6 +17,56 @@ class AudioPrepStepError(Exception):
     """Raised when the audio-prep step fails."""
 
     pass
+
+
+def _sanitize_filename_part(s: str) -> str:
+    """Replace characters unsafe in filenames with underscore."""
+    if not s or not isinstance(s, str):
+        return "unknown"
+    return re.sub(r'[^\w\-.]', "_", s.strip()).strip(".") or "unknown"
+
+
+def _parse_run_id_dd_mm(run_id: str) -> tuple[str, str]:
+    """Parse run-YYYYMMDD-HHMMSS to (dd, mm) as two-digit strings. Returns ('00','00') if not matching."""
+    if not run_id or not isinstance(run_id, str):
+        return "00", "00"
+    m = re.match(r"run-(\d{4})(\d{2})(\d{2})", run_id.strip())
+    if not m:
+        return "00", "00"
+    _yyyy, mm, dd = m.group(1), m.group(2), m.group(3)
+    return dd, mm
+
+
+def _voiceover_artifact_filename(run_dir: Path, app_name: str, ext: str) -> str:
+    """Build story-{app}-{llm_model}-{tts_model}-{tts_voice}-{dd}-{mm}{ext} from run_dir state/inputs."""
+    from llm_storytell.pipeline.state import StateIOError, load_inputs, load_state
+
+    llm_model = "unknown"
+    tts_model = "unknown"
+    tts_voice = "unknown"
+    dd, mm = "00", "00"
+
+    try:
+        inputs_data = load_inputs(run_dir)
+        llm_model = str(inputs_data.get("model") or "unknown").strip()
+        run_id = inputs_data.get("run_id") or run_dir.name
+        dd, mm = _parse_run_id_dd_mm(str(run_id))
+    except StateIOError:
+        pass
+
+    try:
+        state = load_state(run_dir)
+        tts_cfg = state.get("tts_config") or {}
+        tts_model = str(tts_cfg.get("tts_model") or "unknown").strip()
+        tts_voice = str(tts_cfg.get("tts_voice") or "unknown").strip()
+    except StateIOError:
+        pass
+
+    app = _sanitize_filename_part(app_name)
+    llm = _sanitize_filename_part(llm_model)
+    tts_m = _sanitize_filename_part(tts_model)
+    tts_v = _sanitize_filename_part(tts_voice)
+    return f"story-{app}-{llm}-{tts_m}-{tts_v}-{dd}-{mm}{ext}"
 
 
 def _get_app_name(run_dir: Path) -> str:
@@ -381,7 +432,7 @@ def execute_audio_prep_step(
     3. Load bg music: apps/<app_name>/assets/bg-music.* if exists, else assets/default-bg-music.wav.
     4. Loop bg with 2s crossfade to voice_duration + 6s (3s intro + voice + 3s outro).
     5. Apply bg volume envelope: 0-3s 75%→10%, 3s to (3+voice_duration) at 10%, last 3s 10%→75%.
-    6. Mix: voiceover placed from 00m03s to (3+voice_duration)s on the track; write to run_dir/artifacts/narration-<app_name>.<ext>.
+    6. Mix: voiceover placed from 00m03s to (3+voice_duration)s on the track; write to run_dir/artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>.
 
     Args:
         run_dir: Run directory (runs/<run_id>/).
@@ -416,7 +467,8 @@ def execute_audio_prep_step(
 
     artifacts_dir = run_dir / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    out_path = artifacts_dir / f"narration-{app_name}{ext}"
+    out_name = _voiceover_artifact_filename(run_dir, app_name, ext)
+    out_path = artifacts_dir / out_name
 
     _mix_voiceover_and_bg(
         voiceover_path, enveloped_bg, out_path, run_dir, logger, ext, voice_duration

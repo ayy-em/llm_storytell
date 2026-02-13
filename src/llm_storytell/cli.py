@@ -93,12 +93,17 @@ def create_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--tts-provider",
         required=False,
-        help="TTS provider (e.g. openai). Overrides app config. Resolution: CLI → app_config → default.",
+        help="TTS provider (e.g. openai, elevenlabs). Overrides app config.",
+    )
+    run_parser.add_argument(
+        "--tts-model",
+        required=False,
+        help="TTS model (e.g. gpt-4o-mini-tts, eleven_multilingual_v2). Default depends on provider.",
     )
     run_parser.add_argument(
         "--tts-voice",
         required=False,
-        help="TTS voice name (e.g. Onyx). Overrides app config. Resolution: CLI → app_config → default.",
+        help="TTS voice (e.g. Onyx for OpenAI, or voice_id for ElevenLabs). Default depends on provider.",
     )
 
     return parser
@@ -203,8 +208,10 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         tts_enabled = not getattr(args, "no_tts", False)
-        tts_provider = getattr(args, "tts_provider", None) or app_config.tts_provider
-        tts_voice = getattr(args, "tts_voice", None) or app_config.tts_voice
+        tts_provider_cli = getattr(args, "tts_provider", None)
+        tts_provider = tts_provider_cli or app_config.tts_provider
+        tts_voice = getattr(args, "tts_voice", None)
+        tts_model = getattr(args, "tts_model", None)
 
         settings = resolve_run_settings(
             app_paths,
@@ -217,7 +224,9 @@ def main(argv: list[str] | None = None) -> int:
             model_arg=args.model,
             tts_enabled=tts_enabled,
             tts_provider=tts_provider,
+            tts_provider_cli=tts_provider_cli,
             tts_voice=tts_voice,
+            tts_model=tts_model,
             run_id=args.run_id,
             config_path=args.config_path,
         )

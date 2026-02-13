@@ -30,7 +30,7 @@ def _make_words(n: int, with_newline_every: int | None = None) -> str:
 
 
 class TestChunkText:
-    """Chunking logic: 700–1000 words, cut at newline after 700; enforce 1–22 segments."""
+    """Chunking logic: MIN_WORDS–MAX_WORDS per segment, cut at newline when possible; enforce 1–MAX_SEGMENTS."""
 
     def test_empty_returns_empty(self) -> None:
         segments, imperfect = _chunk_text("")
@@ -60,23 +60,26 @@ class TestChunkText:
         assert imperfect[0] is False or imperfect[0] is True
 
     def test_no_newline_by_1000_imperfect_flag(self) -> None:
+        """1000 words with no newline → 2 segments (500 words each), both imperfect."""
         text = _make_words(1000)
         segments, imperfect = _chunk_text(text)
-        assert len(segments) == 1
-        assert imperfect[0] is True
+        assert len(segments) == 2
+        assert imperfect[0] is True and imperfect[1] is True
 
     def test_many_segments_merged_to_max_22(self) -> None:
+        """Many segments are merged so result is at most MAX_SEGMENTS (45)."""
         text = _make_words(25000, with_newline_every=500)
         segments, imperfect = _chunk_text(text)
-        assert 1 <= len(segments) <= 22
+        assert 1 <= len(segments) <= 45
         assert len(imperfect) == len(segments)
 
     def test_exactly_22_segments_allowed(self) -> None:
-        parts = [_make_words(800, with_newline_every=400) for _ in range(22)]
-        text = "\n\n".join(parts)
+        """Exactly 22 segments when input is 11000 words with no newlines (500 words per segment)."""
+        text = _make_words(22 * 500)
         segments, imperfect = _chunk_text(text)
-        assert len(segments) <= 22
+        assert len(segments) == 22
         assert len(imperfect) == len(segments)
+        assert all(imperfect)
 
 
 class _FakeTTSProvider(TTSProvider):

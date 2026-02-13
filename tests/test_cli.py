@@ -22,7 +22,7 @@ def temp_app_minimal(tmp_path: Path) -> Path:
 
 
 def test_tts_parser_accepts_flags() -> None:
-    """Parser accepts --tts, --no-tts, --tts-provider, --tts-voice."""
+    """Parser accepts --tts, --no-tts, --tts-provider, --tts-model, --tts-voice."""
     parser = create_parser()
     args = parser.parse_args(
         [
@@ -34,12 +34,15 @@ def test_tts_parser_accepts_flags() -> None:
             "--no-tts",
             "--tts-provider",
             "custom",
+            "--tts-model",
+            "eleven_multilingual_v2",
             "--tts-voice",
             "Nova",
         ]
     )
     assert getattr(args, "no_tts", None) is True
     assert getattr(args, "tts_provider", None) == "custom"
+    assert getattr(args, "tts_model", None) == "eleven_multilingual_v2"
     assert getattr(args, "tts_voice", None) == "Nova"
 
 
@@ -80,7 +83,9 @@ def test_tts_default_enabled(
     assert settings.resolved_tts_config is not None
     rtc = settings.resolved_tts_config
     assert rtc.get("tts_provider") == "openai"
+    # No --tts-provider passed: use app config for model and voice
     assert rtc.get("tts_voice") == "Onyx"
+    assert rtc.get("tts_model") == "gpt-4o-mini-tts"
 
 
 def test_no_tts_disables(

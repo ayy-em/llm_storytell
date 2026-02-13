@@ -5,6 +5,17 @@ from pathlib import Path
 from typing import Any
 
 from llm_storytell.config import AppConfig, AppPaths
+from llm_storytell.tts_providers.elevenlabs_tts import (
+    DEFAULT_VOICE_ID,
+    DEFAULT_MODEL_ID,
+)
+
+# Per-provider default tts_model and tts_voice when CLI does not set them.
+# Used so e.g. --tts-provider elevenlabs works without --tts-voice/--tts-model.
+TTS_PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
+    "openai": {"tts_model": "gpt-4o-mini-tts", "tts_voice": "onyx"},
+    "elevenlabs": {"tts_model": DEFAULT_MODEL_ID, "tts_voice": DEFAULT_VOICE_ID},
+}
 
 
 def _section_length_midpoint(section_length_str: str) -> int:
@@ -58,7 +69,9 @@ def resolve_run_settings(
     model_arg: str | None = None,
     tts_enabled: bool = True,
     tts_provider: str | None = None,
+    tts_provider_cli: str | None = None,
     tts_voice: str | None = None,
+    tts_model: str | None = None,
     run_id: str | None = None,
     config_path: Path | None = None,
 ) -> RunSettings:
@@ -78,8 +91,10 @@ def resolve_run_settings(
         section_length_arg: --section-length N value (optional).
         model_arg: --model value (optional).
         tts_enabled: Whether TTS is enabled (not --no-tts).
-        tts_provider: --tts-provider or app default.
-        tts_voice: --tts-voice or app default.
+        tts_provider: Resolved provider (CLI or app).
+        tts_provider_cli: Raw --tts-provider value (None if not passed). When set, missing voice/model use provider defaults; when None, use app config.
+        tts_voice: --tts-voice (optional).
+        tts_model: --tts-model (optional).
         run_id: --run-id override (optional).
         config_path: --config-path (default config/).
 
@@ -121,8 +136,26 @@ def resolve_run_settings(
     resolved_tts_config: dict[str, Any] | None = None
     if tts_enabled:
         resolved_tts_config = dict(app_config.resolved_tts_config())
-        resolved_tts_config["tts_provider"] = tts_provider or app_config.tts_provider
-        resolved_tts_config["tts_voice"] = tts_voice or app_config.tts_voice
+        provider = tts_provider or app_config.tts_provider
+        resolved_tts_config["tts_provider"] = provider
+        defaults = TTS_PROVIDER_DEFAULTS.get(provider, TTS_PROVIDER_DEFAULTS["openai"])
+        # User passed --tts-provider → use provider defaults for any missing model/voice.
+        # User did not pass provider → use app config for model/voice (app is expected to set provider when it sets model/voice).
+        use_provider_defaults = tts_provider_cli is not None
+        resolved_tts_config["tts_model"] = (
+            tts_model
+            if tts_model is not None
+            else (defaults["tts_model"] if use_provider_defaults else app_config.tts_model)
+        )
+        resolved_tts_config["tts_voice"] = (
+            tts_voice
+            if tts_voice is not None
+            else (
+                defaults["tts_voice"]
+                if use_provider_defaults
+                else app_config.tts_voice
+            )
+        )
 
     return RunSettings(
         app_paths=app_paths,

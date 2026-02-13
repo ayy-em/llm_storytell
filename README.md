@@ -261,14 +261,14 @@ On success, a new directory `runs/<run_id>/` is created containing:
 * `run.log` — timestamped run and stage log
 * `inputs.json` — run inputs (app, seed, beats, paths)
 * `state.json` — pipeline state (outline, sections, summaries, token usage; when TTS enabled: `tts_config`, and after TTS step: `tts_token_usage`)
-* `artifacts/` — `10_outline.json`, `20_section_01.md` … `20_section_NN.md`, `final_script.md`, `editor_report.json`; when TTS/audio runs: `narration-<app>.<ext>` (final narrated audio)
+* `artifacts/` — `10_outline.json`, `20_section_01.md` … `20_section_NN.md`, `final_script.md`, `editor_report.json`; when TTS/audio runs: `story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>` (final narrated audio)
 * `llm_io/` — per-stage prompt/response debug files
 
 When TTS is enabled (default), the pipeline also runs a TTS step and an audio-prep step after the critic. In that case the run directory additionally contains:
 
 * `tts/` — `prompts/` (chunked text per segment), `outputs/` (audio segments)
 * `voiceover/` — stitched voiceover track and intermediate bg-music files
-* `artifacts/narration-<app>.<ext>` — final narration (voice + background music)
+* `artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>` — final narration (voice + background music); dd/mm from run ID date
 
 On completion, the CLI and `run.log` show combined Chat token and TTS character usage and an estimated cost (Chat + TTS). Runs are immutable once completed.
 
@@ -287,7 +287,7 @@ On completion, the CLI and `run.log` show combined Chat token and TTS character 
 | `--model` | model identifier | Model for all LLM calls. Default: `gpt-4.1-mini`. Run fails immediately if the provider does not recognize the model. |
 | `--section-length` | integer N | Target words per section; pipeline uses range `[N*0.8, N*1.2]`. Overrides app config when set. |
 | `--word-count` | integer N (100 < N < 15000) | Target total word count. Pipeline derives beat count and section length; see SPEC. |
-| `--tts` | flag | Enable TTS after critic (default). Pipeline runs TTS step then audio-prep; produces `tts/`, `voiceover/`, and `artifacts/narration-<app>.<ext>`. Requires ffmpeg on PATH. |
+| `--tts` | flag | Enable TTS after critic (default). Pipeline runs TTS step then audio-prep; produces `tts/`, `voiceover/`, and `artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>`. Requires ffmpeg on PATH. |
 | `--no-tts` | flag | Disable TTS; pipeline ends after critic step. No `tts_config` in state. |
 | `--tts-provider` | string | TTS provider (e.g. openai). Overrides app config. Resolution: CLI → app_config → default. |
 | `--tts-voice` | string | TTS voice (e.g. Onyx). Overrides app config. Resolution: CLI → app_config → default. |
