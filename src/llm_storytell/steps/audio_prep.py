@@ -23,7 +23,7 @@ def _sanitize_filename_part(s: str) -> str:
     """Replace characters unsafe in filenames with underscore."""
     if not s or not isinstance(s, str):
         return "unknown"
-    return re.sub(r'[^\w\-.]', "_", s.strip()).strip(".") or "unknown"
+    return re.sub(r"[^\w\-.]", "_", s.strip()).strip(".") or "unknown"
 
 
 def _parse_run_id_dd_mm(run_id: str) -> tuple[str, str]:
