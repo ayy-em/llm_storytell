@@ -209,7 +209,9 @@ class TestResolveRunSettings:
         assert settings.resolved_tts_config["tts_model"] == DEFAULT_MODEL_ID
         assert settings.resolved_tts_config["tts_voice"] == DEFAULT_VOICE_ID
 
-    def test_tts_no_cli_provider_uses_app_config_voice_model(self, tmp_path: Path) -> None:
+    def test_tts_no_cli_provider_uses_app_config_voice_model(
+        self, tmp_path: Path
+    ) -> None:
         """When user does not pass --tts-provider, app config supplies provider, model, and voice."""
         app_paths = _minimal_app_paths(tmp_path)
         app_config = _minimal_app_config(

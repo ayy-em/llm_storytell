@@ -47,26 +47,46 @@ class TestVoiceoverArtifactFilename:
         assert _parse_run_id_dd_mm("run-001") == ("00", "00")
         assert _parse_run_id_dd_mm("") == ("00", "00")
 
-    def test_voiceover_artifact_filename_from_inputs_and_state(self, tmp_path: Path) -> None:
+    def test_voiceover_artifact_filename_from_inputs_and_state(
+        self, tmp_path: Path
+    ) -> None:
         run_dir = tmp_path / "run-20260209-120000"
         run_dir.mkdir()
         (run_dir / "inputs.json").write_text(
-            json.dumps({"app": "my_app", "run_id": "run-20260209-120000", "model": "gpt-4.1-mini"}),
+            json.dumps(
+                {
+                    "app": "my_app",
+                    "run_id": "run-20260209-120000",
+                    "model": "gpt-4.1-mini",
+                }
+            ),
             encoding="utf-8",
         )
         (run_dir / "state.json").write_text(
-            json.dumps({
-                "tts_config": {"tts_model": "eleven_multilingual_v2", "tts_voice": "6FiCmD8eY5VyjOdG5Zjk"},
-            }),
+            json.dumps(
+                {
+                    "tts_config": {
+                        "tts_model": "eleven_multilingual_v2",
+                        "tts_voice": "6FiCmD8eY5VyjOdG5Zjk",
+                    },
+                }
+            ),
             encoding="utf-8",
         )
         name = _voiceover_artifact_filename(run_dir, "my_app", ".mp3")
-        assert name == "story-my_app-gpt-4.1-mini-eleven_multilingual_v2-6FiCmD8eY5VyjOdG5Zjk-09-02.mp3"
+        assert (
+            name
+            == "story-my_app-gpt-4.1-mini-eleven_multilingual_v2-6FiCmD8eY5VyjOdG5Zjk-09-02.mp3"
+        )
 
-    def test_voiceover_artifact_filename_fallback_when_missing_inputs_state(self, tmp_path: Path) -> None:
+    def test_voiceover_artifact_filename_fallback_when_missing_inputs_state(
+        self, tmp_path: Path
+    ) -> None:
         run_dir = tmp_path / "run-001"
         run_dir.mkdir()
-        (run_dir / "inputs.json").write_text(json.dumps({"app": "example_app", "run_id": "run-001"}), encoding="utf-8")
+        (run_dir / "inputs.json").write_text(
+            json.dumps({"app": "example_app", "run_id": "run-001"}), encoding="utf-8"
+        )
         name = _voiceover_artifact_filename(run_dir, "example_app", ".mp3")
         assert name == "story-example_app-unknown-unknown-unknown-00-00.mp3"
 
@@ -349,7 +369,11 @@ class TestExecuteAudioPrepStep:
         ):
             execute_audio_prep_step(run_dir, base, logger, app_name="example_app")
 
-        assert (run_dir / "artifacts" / "story-example_app-unknown-unknown-unknown-00-00.mp3").exists()
+        assert (
+            run_dir
+            / "artifacts"
+            / "story-example_app-unknown-unknown-unknown-00-00.mp3"
+        ).exists()
         assert (run_dir / "voiceover" / "voiceover.mp3").exists()
 
     def test_app_name_from_inputs_when_not_passed(self, tmp_path: Path) -> None:
@@ -377,7 +401,11 @@ class TestExecuteAudioPrepStep:
         ):
             execute_audio_prep_step(run_dir, base, logger)
 
-        out = run_dir / "artifacts" / "story-from_inputs-unknown-unknown-unknown-00-00.mp3"
+        out = (
+            run_dir
+            / "artifacts"
+            / "story-from_inputs-unknown-unknown-unknown-00-00.mp3"
+        )
         assert out.exists()
 
     def test_ffprobe_failure_raises(self, tmp_path: Path) -> None:

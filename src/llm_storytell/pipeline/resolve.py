@@ -145,15 +145,15 @@ def resolve_run_settings(
         resolved_tts_config["tts_model"] = (
             tts_model
             if tts_model is not None
-            else (defaults["tts_model"] if use_provider_defaults else app_config.tts_model)
+            else (
+                defaults["tts_model"] if use_provider_defaults else app_config.tts_model
+            )
         )
         resolved_tts_config["tts_voice"] = (
             tts_voice
             if tts_voice is not None
             else (
-                defaults["tts_voice"]
-                if use_provider_defaults
-                else app_config.tts_voice
+                defaults["tts_voice"] if use_provider_defaults else app_config.tts_voice
             )
         )
 

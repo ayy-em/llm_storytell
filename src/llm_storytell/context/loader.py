@@ -55,7 +55,8 @@ class ContextSelection:
             all style/*.md files.
         selected_location: Relative path to selected location file, or None.
         selected_characters: List of relative paths to selected character files
-            (deterministic subset, up to max_characters from app config or default).
+            (deterministic: up to max_characters from app config or default;
+            max_characters=0 means all files).
         location_content: Content of selected location file, or None.
         character_contents: Dictionary mapping relative paths to file contents.
         world_files: List of relative paths to world/*.md files folded into
@@ -76,7 +77,8 @@ class ContextLoader:
     Handles:
     - Always-loaded files (lore_bible.md, optionally world/*.md folded in, style/*.md)
     - Deterministic selection: location and character counts/limits from app config
-      (or defaults when app_config is None); selection order remains alphabetical.
+      (or defaults when app_config is None); max_characters=0 means all characters;
+      selection order remains alphabetical.
     - Required: lore_bible.md must exist; at least one character file must exist.
     """
 
@@ -93,7 +95,8 @@ class ContextLoader:
             logger: Optional logger for recording selections.
             app_config: Optional app config for max_characters, max_locations,
                 include_world. When None, uses built-in defaults (3 characters,
-                1 location, world included).
+                1 location, world included). When max_characters is 0, all
+                character files are selected.
         """
         self.context_dir = context_dir.resolve()
         self.logger = logger
@@ -240,10 +243,11 @@ class ContextLoader:
         return (normalized, self._read_file(selected))
 
     def _select_characters(self) -> tuple[list[str], dict[str, str]]:
-        """Select up to _max_characters character files deterministically (first alphabetically).
+        """Select character files deterministically (first alphabetically).
 
-        At least one character file is required; raises if characters dir
-        is missing or empty.
+        When _max_characters is 0, all character files are selected; otherwise
+        up to _max_characters. At least one character file is required; raises
+        if characters dir is missing or empty.
 
         Returns:
             Tuple of (list of relative paths, dict path -> content).
@@ -260,7 +264,10 @@ class ContextLoader:
                 "No character files found in context/<app>/characters/ "
                 "(at least one .md file is required)"
             )
-        selected = character_files[: self._max_characters]
+        if self._max_characters == 0:
+            selected = character_files
+        else:
+            selected = character_files[: self._max_characters]
         selected_paths: list[str] = []
         contents: dict[str, str] = {}
         for char_file in selected:

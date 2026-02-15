@@ -437,6 +437,23 @@ class TestContextLoaderAppConfigLimits:
         ]
         assert len(selection.character_contents) == 2
 
+    def test_app_config_max_characters_zero_selects_all(
+        self, temp_context_dir: Path
+    ) -> None:
+        """When app_config has max_characters=0, all character files are selected."""
+        app_config = _make_app_config(max_characters=0)
+        loader = ContextLoader(temp_context_dir, app_config=app_config)
+        selection = loader.load_context("run-all-chars-001")
+
+        assert len(selection.selected_characters) == 4
+        assert selection.selected_characters == [
+            "characters/hero.md",
+            "characters/mentor.md",
+            "characters/sidekick.md",
+            "characters/villain.md",
+        ]
+        assert len(selection.character_contents) == 4
+
     def test_app_config_max_locations_zero_omits_location(
         self, temp_context_dir: Path
     ) -> None:

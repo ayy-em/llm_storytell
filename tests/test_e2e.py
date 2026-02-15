@@ -612,11 +612,7 @@ def test_e2e_with_tts_succeeds(
             out.stdout = ""
         if cmd[0] == "ffmpeg" and len(cmd) >= 2:
             last = Path(cmd[-1])
-            if (
-                "voiceover" in str(last)
-                or "story-" in str(last)
-                or "bg_" in str(last)
-            ):
+            if "voiceover" in str(last) or "story-" in str(last) or "bg_" in str(last):
                 last.parent.mkdir(parents=True, exist_ok=True)
                 last.write_bytes(b"x")
         return out
