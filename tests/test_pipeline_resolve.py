@@ -25,6 +25,7 @@ def _minimal_app_config(
     model: str = "gpt-4.1-mini",
     tts_provider: str = "openai",
     tts_voice: str = "Onyx",
+    language: str = "en",
 ) -> AppConfig:
     return AppConfig(
         beats=beats,
@@ -39,6 +40,7 @@ def _minimal_app_config(
         tts_voice=tts_voice,
         tts_arguments=None,
         bg_music=None,
+        language=language,
     )
 
 
@@ -143,6 +145,50 @@ class TestResolveRunSettings:
             config_path=tmp_path / "config",
         )
         assert settings.model == "gpt-4o"
+
+    def test_language_from_app_config_when_arg_none(self, tmp_path: Path) -> None:
+        """When language_arg is None, app_config.language is used."""
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = _minimal_app_config(language="fr")
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            config_path=tmp_path / "config",
+        )
+        assert settings.language == "fr"
+
+    def test_language_arg_overrides_app_config(self, tmp_path: Path) -> None:
+        """language_arg overrides app_config.language."""
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = _minimal_app_config(language="en")
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            config_path=tmp_path / "config",
+            language_arg="es",
+        )
+        assert settings.language == "es"
+
+    def test_tts_enabled_resolved_tts_config_includes_language(
+        self, tmp_path: Path
+    ) -> None:
+        """When tts_enabled, resolved_tts_config includes language."""
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = _minimal_app_config(language="de")
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            tts_enabled=True,
+            config_path=tmp_path / "config",
+        )
+        assert settings.resolved_tts_config is not None
+        assert settings.resolved_tts_config.get("language") == "de"
 
     def test_tts_disabled_resolved_tts_config_none(self, tmp_path: Path) -> None:
         """When tts_enabled is False, resolved_tts_config is None."""

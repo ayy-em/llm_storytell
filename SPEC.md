@@ -154,8 +154,9 @@ python -m llm_storytell run \
 | `--no-tts` | flag | Disable TTS; pipeline ends after critic step. If both `--tts` and `--no-tts` are given, `--no-tts` wins. |
 | `--tts-provider` | string | TTS provider (e.g. `openai`). Overrides app config. Resolution order: CLI → `app_config.yaml` → default (OpenAI). |
 | `--tts-voice` | string | TTS voice name (e.g. `Onyx`). Overrides app config. Resolution order: CLI → `app_config.yaml` → default (Onyx). |
+| `--language` | ISO 639-1 code (e.g. `en`, `es`) | Language for story output. Overrides app config. Resolution order: CLI → `apps/<app_name>/app_config.yaml` → `apps/default_config.yaml` (default `en`). Must be a valid ISO 639-1 two-letter code; otherwise the pipeline fails immediately with a verbose exception. |
 
-Defaults for beats and section_length come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits.
+Defaults for beats and section_length come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits. The same merge applies to `language`: it may be set in `default_config.yaml` or in an app’s `app_config.yaml`; `--language` overrides when provided. Invalid language (non–ISO 639-1) in config or CLI causes startup failure with a clear error message.
 
 **TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). The resolved voice name is **normalized to lowercase** before being sent to the TTS provider (e.g. OpenAI expects `onyx`, not `Onyx`); config and CLI may use either casing. When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`. When TTS is enabled, the pipeline runs the TTS step then the audio-prep step; **ffmpeg** (and ffprobe) must be on PATH for the audio-prep step (stitching and mixing).
 
@@ -184,6 +185,17 @@ Context loading is **app-defined but platform-executed**. A single `ContextLoade
 * **Persisted:** `state.json.selected_context` records `characters` (list of basenames), `location` (basename or null), and `world_files` (list of basenames) for reproducibility.
 
 No pipeline logic may assume a fixed number of context files. Missing optional folders must not stop output.
+
+### Language (multi-language stories)
+
+The pipeline can generate stories in any language specified by an **ISO 639-1** two-letter code (e.g. `en`, `es`, `fr`).
+
+* **Config:** The key `language` may be set in `apps/default_config.yaml` or in `apps/<app_name>/app_config.yaml`. If absent, the default is `en`. App overrides default; CLI overrides both.
+* **CLI:** The optional flag `--language <code>` overrides the config value. Resolution order: CLI → app `app_config.yaml` → `default_config.yaml` → built-in default (`en`).
+* **Validation:** Any value provided (in config or via `--language`) must be a valid ISO 639-1 two-letter code. A non-ISO 639-1 string causes the pipeline to fail immediately with a verbose exception (no partial run).
+* **Persistence:** The resolved language is stored in `inputs.json` and `state.json` at run initialization so all steps and reproducibility use the same value. When TTS is enabled, `tts_config` in state also includes `language` for reproducibility.
+* **Prompts:** The outline, section, and critic steps receive a `language` variable and the prompt templates instruct the LLM to produce the story in that language.
+* **TTS:** The text-to-speech step receives the final script, which is already in the chosen language. No language parameter is passed to the TTS provider API; the provider uses the language of the input text. The resolved language is recorded in `tts_config` for logging and reproducibility.
 
 ---
 
@@ -331,6 +343,7 @@ Variables come from three sources:
 - `style_rules` (string): Combined style/*.md files
 - `location_context` (string): Selected location file content (may be empty)
 - `character_context` (string): Combined selected character files (may be empty)
+- `language` (string): ISO 639-1 code for story language (e.g. `en`, `es`)
 
 **Optional variables:** None
 
@@ -351,6 +364,7 @@ Variables come from three sources:
 - `continuity_context` (string): Continuity ledger context (may be empty)
 - `location_context` (string): Selected location file content (may be empty)
 - `character_context` (string): Combined selected character files (may be empty)
+- `language` (string): ISO 639-1 code for story language (e.g. `en`, `es`)
 
 **Validation:** Required variables must be provided. Optional variables are provided but may be empty strings.
 
@@ -377,6 +391,7 @@ Variables come from three sources:
 **Optional variables:**
 - `location_context` (string): Selected location file content (may be empty)
 - `character_context` (string): Combined selected character files (may be empty)
+- `language` (string): ISO 639-1 code for story language (e.g. `en`, `es`)
 
 **Validation:** Required variables must be provided. Optional variables are provided but may be empty strings.
 
@@ -476,6 +491,7 @@ When combined context (lore + style + location + characters) approaches or excee
 {
   "app": "example_app",
   "seed": "...",
+  "language": "en",
   "selected_context": {
     "location": "<basename or null>",
     "characters": ["<basename>", ...],
@@ -486,14 +502,14 @@ When combined context (lore + style + location + characters) approaches or excee
   "summaries": [...],
   "continuity_ledger": {...},
   "token_usage": [...],
-  "tts_config": { "tts_provider": "...", "tts_model": "...", "tts_voice": "...", ... },
+  "tts_config": { "tts_provider": "...", "tts_model": "...", "tts_voice": "...", "language": "...", ... },
   "tts_token_usage": [...],
   "final_script_path": "artifacts/final_script.md",
   "editor_report_path": "artifacts/editor_report.json"
 }
 ```
 
-When `--no-tts` is set, `tts_config` is omitted. `tts_token_usage` is present only after the TTS step has run successfully; each entry includes `input_characters` (characters sent to the TTS API for that segment). `final_script_path` and `editor_report_path` are set after the critic step.
+When `--no-tts` is set, `tts_config` is omitted. `tts_token_usage` is present only after the TTS step has run successfully; each entry includes `input_characters` (characters sent to the TTS API for that segment). `final_script_path` and `editor_report_path` are set after the critic step. `language` is set at run initialization from the resolved value (CLI or app/default config).
 
 ### Rules
 

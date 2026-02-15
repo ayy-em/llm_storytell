@@ -16,6 +16,7 @@ variables = {
     "style_rules": "test style",
     "location_context": "",
     "character_context": "",
+    "language": "en",
 }
 
 try:

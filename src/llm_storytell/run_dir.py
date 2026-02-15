@@ -41,6 +41,7 @@ def _create_inputs_json(
     prompts_dir: Path,
     word_count: int | None = None,
     model: str | None = None,
+    language: str = "en",
 ) -> dict[str, Any]:
     """Create the inputs.json structure.
 
@@ -62,6 +63,7 @@ def _create_inputs_json(
         "app": app_name,
         "seed": seed,
         "beats": beats,
+        "language": language,
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "context_dir": str(context_dir),
         "prompts_dir": str(prompts_dir),
@@ -77,6 +79,7 @@ def _create_initial_state(
     app_name: str,
     seed: str,
     resolved_tts_config: dict[str, Any] | None = None,
+    language: str = "en",
 ) -> dict[str, Any]:
     """Create the initial state.json structure.
 
@@ -91,6 +94,7 @@ def _create_initial_state(
     state: dict[str, Any] = {
         "app": app_name,
         "seed": seed,
+        "language": language,
         "selected_context": {
             "location": None,
             "characters": [],
@@ -118,6 +122,7 @@ def initialize_run(
     word_count: int | None = None,
     resolved_tts_config: dict[str, Any] | None = None,
     model: str | None = None,
+    language: str = "en",
 ) -> Path:
     """Initialize a new run directory with all required files.
 
@@ -135,6 +140,7 @@ def initialize_run(
         word_count: Optional target total word count (when --word-count was used).
         resolved_tts_config: Optional resolved TTS/audio config to persist in state.json.
         model: Optional LLM model identifier (persisted in inputs.json for artifact naming).
+        language: ISO 639-1 language code for story output (persisted in inputs and state).
 
     Returns:
         Path to the created run directory.
@@ -181,6 +187,7 @@ def initialize_run(
             prompts_dir=prompts_dir,
             word_count=word_count,
             model=model,
+            language=language,
         )
         inputs_path = temp_dir / "inputs.json"
 
@@ -195,6 +202,7 @@ def initialize_run(
             app_name=app_name,
             seed=seed,
             resolved_tts_config=resolved_tts_config,
+            language=language,
         )
         state_path = temp_dir / "state.json"
         with state_path.open("w", encoding="utf-8") as f:

@@ -49,6 +49,7 @@ def run_pipeline(settings: RunSettings) -> int:
             word_count=settings.word_count,
             resolved_tts_config=settings.resolved_tts_config,
             model=settings.model,
+            language=settings.language,
         )
 
         logger = get_run_logger(run_dir)

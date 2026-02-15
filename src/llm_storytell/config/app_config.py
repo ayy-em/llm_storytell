@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from llm_storytell.iso639 import InvalidLanguageError, validate_iso639
+
 
 class AppConfigError(Exception):
     """Raised when app config cannot be loaded or is invalid."""
@@ -31,6 +33,7 @@ class AppConfig:
         tts_voice: TTS voice name (optional).
         tts_arguments: Optional dict passed verbatim to TTS provider.
         bg_music: Optional path to background music asset.
+        language: ISO 639-1 language code for story output (e.g. en, es).
     """
 
     beats: int
@@ -45,6 +48,7 @@ class AppConfig:
     tts_voice: str = "Onyx"
     tts_arguments: dict[str, Any] | None = None
     bg_music: str | None = None
+    language: str = "en"
 
     def resolved_tts_config(self) -> dict[str, Any]:
         """Return resolved TTS/audio config as a JSON-serializable dict for state.json."""
@@ -90,6 +94,7 @@ _BUILTIN_DEFAULTS: dict = {
     "tts-voice": "Onyx",
     "tts-arguments": None,
     "bg-music": None,
+    "language": "en",
 }
 
 
@@ -164,6 +169,17 @@ def load_app_config(
     raw_bg = _get("bg-music", _get("bg_music", None))
     bg_music = str(raw_bg) if raw_bg is not None else None
 
+    # Language: validate if present (default "en")
+    raw_language = merged.get("language", "en")
+    language_str = str(raw_language).strip() if raw_language is not None else "en"
+    try:
+        language = validate_iso639(language_str)
+    except InvalidLanguageError as e:
+        raise AppConfigError(
+            f"Invalid language in app config: {e}. "
+            "Set 'language' to a valid ISO 639-1 two-letter code (e.g. en, es)."
+        ) from e
+
     # Build AppConfig with safe defaults for missing keys
     return AppConfig(
         beats=int(merged.get("beats", 5)),
@@ -178,4 +194,5 @@ def load_app_config(
         tts_voice=tts_voice,
         tts_arguments=tts_arguments,
         bg_music=bg_music,
+        language=language,
     )

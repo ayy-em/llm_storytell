@@ -23,6 +23,7 @@ OUTLINE_REQUIRED = {
     "style_rules",
     "location_context",
     "character_context",
+    "language",
 }
 OUTLINE_OPTIONAL: set[str] = set()
 OUTLINE_ALLOWED = OUTLINE_REQUIRED | OUTLINE_OPTIONAL
@@ -41,6 +42,7 @@ SECTION_OPTIONAL = {
     "continuity_context",
     "location_context",
     "character_context",
+    "language",
 }
 SECTION_ALLOWED = SECTION_REQUIRED | SECTION_OPTIONAL
 
@@ -61,6 +63,7 @@ CRITIC_REQUIRED = {
 CRITIC_OPTIONAL = {
     "location_context",
     "character_context",
+    "language",
 }
 CRITIC_ALLOWED = CRITIC_REQUIRED | CRITIC_OPTIONAL
 

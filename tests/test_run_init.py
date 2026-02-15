@@ -126,6 +126,7 @@ class TestInitializeRun:
         assert inputs["seed"] == "A dark tale of mystery."
         assert inputs["beats"] == 5
         assert inputs["run_id"] == "run-test-002"
+        assert inputs.get("language", "en") == "en"
         assert "timestamp" in inputs
         assert str(context_dir) in inputs["context_dir"]
         assert str(prompts_dir) in inputs["prompts_dir"]
@@ -153,6 +154,7 @@ class TestInitializeRun:
 
         assert state["app"] == "test-app"
         assert state["seed"] == "A dark tale of mystery."
+        assert state.get("language", "en") == "en"
         assert state["selected_context"] == {
             "location": None,
             "characters": [],
@@ -163,6 +165,30 @@ class TestInitializeRun:
         assert state["summaries"] == []
         assert state["continuity_ledger"] == {}
         assert state["token_usage"] == []
+
+    def test_language_persisted_in_inputs_and_state(self, temp_project: Path) -> None:
+        """When language is passed to initialize_run, it is stored in inputs.json and state.json."""
+        context_dir = temp_project / "context" / "test-app"
+        prompts_dir = temp_project / "prompts" / "apps" / "test-app"
+
+        run_dir = initialize_run(
+            app_name="test-app",
+            seed="A seed.",
+            context_dir=context_dir,
+            prompts_dir=prompts_dir,
+            beats=3,
+            run_id="run-lang-001",
+            base_dir=temp_project,
+            language="es",
+        )
+
+        with (run_dir / "inputs.json").open() as f:
+            inputs = json.load(f)
+        assert inputs["language"] == "es"
+
+        with (run_dir / "state.json").open() as f:
+            state = json.load(f)
+        assert state["language"] == "es"
 
     def test_creates_run_log(self, temp_project: Path) -> None:
         """run.log is created with initialization entries."""

@@ -156,6 +156,7 @@ def execute_section_step(
         # Section ID is 1-based for display
         section_id = section_index + 1
 
+        language = state.get("language", "en")
         prompt_vars = {
             "section_id": section_id,
             "section_index": section_index,
@@ -168,6 +169,7 @@ def execute_section_step(
             "location_context": context_vars["location_context"],
             "character_context": context_vars["character_context"],
             "section_length": section_length,
+            "language": language,
         }
 
         try:

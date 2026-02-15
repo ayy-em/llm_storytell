@@ -91,6 +91,7 @@ def execute_outline_step(
         if not prompt_path.exists():
             raise OutlineStepError(f"Prompt template not found: {prompt_path}")
 
+        language = state.get("language", "en")
         prompt_vars = {
             "seed": seed,
             "lore_bible": context_vars["lore_bible"],
@@ -98,6 +99,7 @@ def execute_outline_step(
             "location_context": context_vars["location_context"],
             "character_context": context_vars["character_context"],
             "beats_count": beats_count,
+            "language": language,
         }
 
         try:

@@ -41,7 +41,7 @@ class RunSettings:
     """Resolved run settings for the pipeline runner.
 
     All data the runner needs: app paths, app config, seed, beats,
-    section_length, run_id, config_path, model, word_count, TTS flags.
+    section_length, run_id, config_path, model, word_count, language, TTS flags.
     """
 
     app_paths: AppPaths
@@ -53,6 +53,7 @@ class RunSettings:
     config_path: Path
     model: str
     word_count: int | None
+    language: str
     tts_enabled: bool
     resolved_tts_config: dict[str, Any] | None
 
@@ -74,6 +75,7 @@ def resolve_run_settings(
     tts_model: str | None = None,
     run_id: str | None = None,
     config_path: Path | None = None,
+    language_arg: str | None = None,
 ) -> RunSettings:
     """Build RunSettings from CLI-like args and app config.
 
@@ -132,6 +134,7 @@ def resolve_run_settings(
             section_length = app_config.section_length
 
     model = model_arg if model_arg is not None else app_config.model
+    language = language_arg if language_arg is not None else app_config.language
 
     resolved_tts_config: dict[str, Any] | None = None
     if tts_enabled:
@@ -156,6 +159,7 @@ def resolve_run_settings(
                 defaults["tts_voice"] if use_provider_defaults else app_config.tts_voice
             )
         )
+        resolved_tts_config["language"] = language
 
     return RunSettings(
         app_paths=app_paths,
@@ -167,6 +171,7 @@ def resolve_run_settings(
         config_path=config_path,
         model=model,
         word_count=word_count,
+        language=language,
         tts_enabled=tts_enabled,
         resolved_tts_config=resolved_tts_config,
     )

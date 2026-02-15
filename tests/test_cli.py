@@ -46,6 +46,79 @@ def test_tts_parser_accepts_flags() -> None:
     assert getattr(args, "tts_voice", None) == "Nova"
 
 
+def test_parser_accepts_language() -> None:
+    """Parser accepts --language."""
+    parser = create_parser()
+    args = parser.parse_args(["run", "--app", "a", "--seed", "s", "--language", "es"])
+    assert getattr(args, "language", None) == "es"
+
+
+def test_language_passed_to_run_pipeline(
+    temp_app_minimal: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--language is passed to resolve_run_settings and run_pipeline receives settings.language."""
+    monkeypatch.chdir(temp_app_minimal)
+    captured_settings = []
+
+    def capture_run_pipeline(settings: object) -> int:
+        captured_settings.clear()
+        captured_settings.append(settings)
+        return 0
+
+    with patch(
+        "llm_storytell.cli.run_pipeline",
+        side_effect=capture_run_pipeline,
+    ):
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story.",
+                "--beats",
+                "1",
+                "--language",
+                "fr",
+                "--run-id",
+                "lang-run",
+            ]
+        )
+
+    assert exit_code == 0
+    assert len(captured_settings) == 1
+    settings = captured_settings[0]
+    assert settings.language == "fr"
+
+
+def test_invalid_language_exits_nonzero(
+    temp_app_minimal: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """Invalid --language (non-ISO 639) causes exit code 1 and error on stderr."""
+    monkeypatch.chdir(temp_app_minimal)
+
+    exit_code = main(
+        [
+            "run",
+            "--app",
+            "test-app",
+            "--seed",
+            "A story.",
+            "--beats",
+            "1",
+            "--language",
+            "not-a-code",
+        ]
+    )
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "Error" in captured.err or "invalid" in captured.err.lower()
+    assert "ISO 639" in captured.err or "language" in captured.err.lower()
+
+
 def test_tts_default_enabled(
     temp_app_minimal: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

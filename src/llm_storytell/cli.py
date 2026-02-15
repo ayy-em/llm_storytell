@@ -11,6 +11,7 @@ from llm_storytell.config import (
     load_app_config,
     resolve_app,
 )
+from llm_storytell.iso639 import InvalidLanguageError, validate_iso639
 from llm_storytell.pipeline.resolve import resolve_run_settings
 from llm_storytell.pipeline.runner import run_pipeline
 
@@ -104,6 +105,12 @@ def create_parser() -> argparse.ArgumentParser:
         "--tts-voice",
         required=False,
         help="TTS voice (e.g. Onyx for OpenAI, or voice_id for ElevenLabs). Default depends on provider.",
+    )
+    run_parser.add_argument(
+        "--language",
+        required=False,
+        metavar="CODE",
+        help="ISO 639-1 language code for story output (e.g. en, es). Overrides app config.",
     )
 
     return parser
@@ -213,6 +220,17 @@ def main(argv: list[str] | None = None) -> int:
         tts_voice = getattr(args, "tts_voice", None)
         tts_model = getattr(args, "tts_model", None)
 
+        language_arg = getattr(args, "language", None)
+        if language_arg is not None:
+            try:
+                language_arg = validate_iso639(language_arg)
+            except InvalidLanguageError as e:
+                print(
+                    f"Error: Invalid --language: {e}. Use a valid ISO 639-1 code (e.g. en, es).",
+                    file=sys.stderr,
+                )
+                return 1
+
         settings = resolve_run_settings(
             app_paths,
             app_config,
@@ -229,6 +247,7 @@ def main(argv: list[str] | None = None) -> int:
             tts_model=tts_model,
             run_id=args.run_id,
             config_path=args.config_path,
+            language_arg=language_arg,
         )
 
         return run_pipeline(settings)

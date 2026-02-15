@@ -7,13 +7,16 @@
 - style_rules
 - location_context
 - character_context
+- language (ISO 639-1 code for the story language, e.g. en, es)
 
 ## Task
 Generate a deterministic narrative outline that decomposes the seed into exactly `beats_count` ordered beats.
 This outline is the sole structural plan for downstream sections.
+The story must be written in the language indicated by `language` (ISO 639-1 code).
 
 ## Rules
 - Seed defines intent.
+- The entire story (outline and downstream sections) must be in the language corresponding to the given ISO 639-1 code.
 - Lore bible is authoritative.
 - Do not add prose, dialogue, or stylistic embellishment.
 - Beats must represent meaningful narrative transitions.
@@ -37,6 +40,9 @@ Character context:
 
 Beats count:
 {beats_count}
+
+Language (ISO 639-1 code; write the story in this language):
+{language}
 
 ## Output
 - Output valid JSON only (no markdown, no commentary).

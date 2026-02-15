@@ -14,10 +14,12 @@ Optional:
 - location_context
 - character_context
 - section_length (target word range, e.g. "400-600")
+- language (ISO 639-1 code; write this section in this language)
 
 ## Task
 Write one narrative section that realizes the given outline beat.
 Respect prior content if provided.
+Write the section in the language indicated by `language` (ISO 639-1 code).
 
 ## Rules
 - Lore bible is authoritative.
@@ -49,6 +51,9 @@ Location context:
 
 Character context:
 {character_context}
+
+Language (ISO 639-1 code; write this section in this language):
+{language}
 
 ## Output
 - Valid Markdown.

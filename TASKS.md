@@ -60,7 +60,7 @@ Each task includes:
 
 Agent is to stop after reading task and request clarification if any of the non-optional items are missing.
 
-## Task: Definition of Done
+## Task: Definition of Done (mandatory task completion checks, apply to all tasks)
 
 1. Running the CLI command defined in SPEC.md initiates a successful run
 2. `runs/<run_id>/` folder is created, containing:
@@ -76,9 +76,7 @@ Agent is to stop after reading task and request clarification if any of the non-
 7. README.md and SPEC.md are up-to-date and accurately reflect actual scope, technical solution design and other project information.
 8. No finished tasks are found in TASKS.md file.
 
-## Task Group: Bug Bash pre-v1.2 public release
-
-(No open tasks; completed tasks moved to COMPLETED_TASKS.md.)
+## Tasks
 
 ---
 

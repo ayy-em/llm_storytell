@@ -10,9 +10,11 @@
 ## Optional inputs
 - location_context (string, optional)
 - character_context (string, optional)
+- language (string, optional; ISO 639-1 code of the story language)
 
 ## Purpose
 Produce a corrected final script and a machine-readable editor report.
+The final script is in the language indicated by `language`.
 Corrections must preserve intent, continuity, and lore consistency.
 
 ## Non-negotiable constraints (HARD)
@@ -67,6 +69,9 @@ Location context (if any):
 
 Character context (if any):
 {character_context}
+
+Language (ISO 639-1 code of the story):
+{language}
 
 Full draft:
 {full_draft}

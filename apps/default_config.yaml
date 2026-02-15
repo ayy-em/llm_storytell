@@ -1,13 +1,15 @@
 # Pipeline defaults for all apps. Apps override via apps/<app_name>/app_config.yaml.
 beats: 5
 section_length: "400-600"
+# ISO 639-1 language code for story output (e.g. en, es)
+language: en
 # Context selection limits (used by context loader when configured)
 max_characters: 3
 max_locations: 1
 include_world: true
 # LLM
 llm_provider: openai
-model: gpt-5-mini-2025-08-07
+model: gpt-5-mini
 # TTS
 tts_model: gpt-4o-mini
 tts_voice: onyx

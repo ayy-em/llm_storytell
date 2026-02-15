@@ -42,6 +42,64 @@ class TestLoadAppConfig:
         assert result.include_world is False
         assert result.llm_provider == "openai"
         assert result.model == "gpt-4.1-mini"
+        assert result.language == "en"
+
+    def test_language_from_default_config(self, tmp_path: Path) -> None:
+        """When default_config has language, it is used."""
+        apps_dir = tmp_path / "apps"
+        apps_dir.mkdir()
+        (apps_dir / "default_config.yaml").write_text(
+            "beats: 5\n"
+            "section_length: '400-600'\n"
+            "max_characters: 3\n"
+            "max_locations: 1\n"
+            "include_world: true\n"
+            "llm_provider: openai\n"
+            "model: gpt-4.1-mini\n"
+            "language: es\n"
+        )
+        result = load_app_config("any-app", base_dir=tmp_path)
+        assert result.language == "es"
+
+    def test_language_from_app_override(self, tmp_path: Path) -> None:
+        """App app_config.yaml can override language."""
+        apps_dir = tmp_path / "apps"
+        apps_dir.mkdir()
+        (apps_dir / "default_config.yaml").write_text(
+            "beats: 5\n"
+            "section_length: '400-600'\n"
+            "max_characters: 3\n"
+            "max_locations: 1\n"
+            "include_world: true\n"
+            "llm_provider: openai\n"
+            "model: gpt-4.1-mini\n"
+            "language: en\n"
+        )
+        app_dir = apps_dir / "my-app"
+        app_dir.mkdir()
+        (app_dir / "app_config.yaml").write_text("language: fr\n")
+        result = load_app_config("my-app", base_dir=tmp_path)
+        assert result.language == "fr"
+
+    def test_invalid_language_raises_app_config_error(self, tmp_path: Path) -> None:
+        """Invalid language in config raises AppConfigError with verbose message."""
+        apps_dir = tmp_path / "apps"
+        apps_dir.mkdir()
+        (apps_dir / "default_config.yaml").write_text(
+            "beats: 5\n"
+            "section_length: '400-600'\n"
+            "max_characters: 3\n"
+            "max_locations: 1\n"
+            "include_world: true\n"
+            "llm_provider: openai\n"
+            "model: gpt-4.1-mini\n"
+            "language: not-a-code\n"
+        )
+        with pytest.raises(AppConfigError) as exc_info:
+            load_app_config("any-app", base_dir=tmp_path)
+        msg = str(exc_info.value).lower()
+        assert "language" in msg or "invalid" in msg
+        assert "iso 639" in msg or "iso639" in msg
 
     def test_merges_app_override_with_defaults(self, tmp_path: Path) -> None:
         """App app_config.yaml overrides defaults for specified keys."""
@@ -143,6 +201,7 @@ class TestAppConfig:
             include_world=True,
             llm_provider="openai",
             model="gpt-4.1-mini",
+            language="en",
         )
         with pytest.raises(AttributeError):
             config.beats = 10  # type: ignore[misc]

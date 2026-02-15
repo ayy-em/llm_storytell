@@ -4,6 +4,30 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Post-v1.2
 
+### [x] T0132 – Support stories in multiple languages (2026-02-15)
+
+**Goal**
+The pipeline should support generating stories in multiple languages.
+
+**Acceptance criteria**
+1. Setting "language" key in app's app_config.yaml (or in default_app_config.yaml if no app-specific config exists) to any ISO 639 code value makes the pipeline generate a story in that language
+2. Text-to-speech provider is presented with text to be voiced in the desired language
+3. User can initiate a run using an optional CLI argument --language, which overwrites these settings and instructs the pipeline to use that language
+4. Providing a non-ISO 639 string in either of the places (app's app_config.yaml, default_app_config.yaml or --language flag's value) immediately fails the pipeline, throwing a verbose exception
+
+**Allowed files**
+Any file necessary (ask for permission first)
+
+**Commands to run**
+- `uv run ruff format .`
+- `uv run ruff check .`
+- `uv run pytest -q`
+
+**Result**
+Added ISO 639-1 validation (`src/llm_storytell/iso639.py`: `validate_iso639()`, `InvalidLanguageError`). App config: `language` on `AppConfig` (default `"en"`), loaded/validated in `load_app_config()`; invalid language raises `AppConfigError`. CLI: `--language` flag; invalid value exits 1 with message to stderr. Resolve: `language_arg` and `language` on `RunSettings`; CLI overrides app config; `resolved_tts_config` includes `language` when TTS enabled. Run init: `language` persisted in `inputs.json` and `state.json`; `initialize_run(language=...)`. Outline/section/critic steps: `language` from state added to `prompt_vars`. Prompts: `10_outline.md`, `20_section.md`, `30_critic.md` document and use `{language}`. Default config: `apps/default_config.yaml` and built-in defaults set `language: en`. Tests: `test_iso639.py`, app_config (language default/override/invalid), run_init (language persisted), pipeline resolve (language from config/arg, TTS config), CLI (--language, invalid exits), prompt variable contracts and `test_template_fix` updated. Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (368 passed).
+
+---
+
 ### [x] T0131 – Update docs after changes (README/SPEC/TASKS) (2026-02-03)
 
 **Goal**

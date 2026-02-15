@@ -259,8 +259,8 @@ uv run python -m llm_storytell run \
 On success, a new directory `runs/<run_id>/` is created containing:
 
 * `run.log` — timestamped run and stage log
-* `inputs.json` — run inputs (app, seed, beats, paths)
-* `state.json` — pipeline state (outline, sections, summaries, token usage; when TTS enabled: `tts_config`, and after TTS step: `tts_token_usage`)
+* `inputs.json` — run inputs (app, seed, beats, language, paths)
+* `state.json` — pipeline state (app, seed, language, outline, sections, summaries, token usage; when TTS enabled: `tts_config`, and after TTS step: `tts_token_usage`)
 * `artifacts/` — `10_outline.json`, `20_section_01.md` … `20_section_NN.md`, `final_script.md`, `editor_report.json`; when TTS/audio runs: `story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>` (final narrated audio)
 * `llm_io/` — per-stage prompt/response debug files
 
@@ -291,8 +291,11 @@ On completion, the CLI and `run.log` show combined Chat token and TTS character 
 | `--no-tts` | flag | Disable TTS; pipeline ends after critic step. No `tts_config` in state. |
 | `--tts-provider` | string | TTS provider (e.g. openai). Overrides app config. Resolution: CLI → app_config → default. |
 | `--tts-voice` | string | TTS voice (e.g. Onyx). Overrides app config. Resolution: CLI → app_config → default. |
+| `--language` | ISO 639-1 code (e.g. `en`, `es`) | Language for story output. Overrides app config. Resolution: CLI → `app_config.yaml` → `default_config.yaml` (default `en`). Invalid code fails immediately with error. |
 
-Full reference: `SPEC.md` (CLI Interface).
+**Multi-language:** Stories can be generated in any language. Set `language` in `apps/default_config.yaml` or `apps/<app_name>/app_config.yaml` to an ISO 639-1 two-letter code (e.g. `en`, `es`, `fr`), or pass `--language <code>` on the CLI. The pipeline instructs the LLM to write in that language; the final script and TTS input are in the chosen language. Invalid codes (non–ISO 639-1) cause the run to fail at startup with a clear error.
+
+Full reference: `SPEC.md` (CLI Interface, Language).
 
 ---
 
@@ -303,7 +306,7 @@ Full reference: `SPEC.md` (CLI Interface).
   - **Character:** `apps/<app_name>/context/characters/` (required: at least one `.md` file)
 - Additionally (not required for a run to succeed), any number of `.md` files with additional background info on your stories' universe: `context/locations/`, `context/world/`, `context/style/` (see Context handling above)
 
-2. **Optional:** Add `apps/<app_name>/app_config.yaml` to override defaults (beats, section_length, context limits, model). If absent, the pipeline uses `apps/default_config.yaml` or built-in defaults.
+2. **Optional:** Add `apps/<app_name>/app_config.yaml` to override defaults (beats, section_length, context limits, model, language). If absent, the pipeline uses `apps/default_config.yaml` or built-in defaults. To generate stories in another language, set `language` to an ISO 639-1 code (e.g. `es`, `fr`); or use the `--language` CLI flag.
 
 3. **Optional:** Add `apps/<app_name>/prompts/` with pipeline templates (`10_outline.md`, `20_section.md`, etc.). If absent, the app uses prompts in `prompts/app-defaults/`.
 
