@@ -175,14 +175,17 @@ Context loading is **app-defined but platform-executed**. A single `ContextLoade
 
 ### Optional (missing folders must not stop output)
 
-* **Locations:** If `apps/<app_name>/context/locations/` exists and contains `.md` files, exactly **one** location is included (deterministic: first alphabetically). Otherwise `location_context` is `""`.
+* **Locations:** If `apps/<app_name>/context/locations/` exists and contains `.md` files, exactly **one** location is included (chosen at random per run). Otherwise `location_context` is `""`.
 * **World:** If `apps/<app_name>/context/world/` exists and contains `.md` files, **all** world files are loaded in alphabetical order, appended to lore_bible with a clear separator header (`---\n## World context (from world/*.md)\n\n`), and the list of world file paths is recorded in `state.json` under `selected_context.world_files`. If absent, generation still proceeds.
 
 ### Selection rules
 
-* **Deterministic:** No randomness. Location: first file alphabetically. Characters: first N alphabetically (N from app config or pipeline default). World: all files in alphabetical order.
+* **Location:** One file chosen at random from `context/locations/*.md` when the directory exists and has `.md` files (or none if `max_locations` is 0).
+* **Characters:** Up to N character files chosen at random from `context/characters/*.md` (N from app config or pipeline default; `max_characters=0` means all files, in sorted order). At least one character file is required.
+* **World:** All world files in alphabetical order, folded into lore_bible (unchanged).
+* **Reproducibility:** Random selection is seeded by `run_id`, so the same run_id yields the same location and character selection.
 * **Logged:** Selections are written to `run.log`.
-* **Persisted:** `state.json.selected_context` records `characters` (list of basenames), `location` (basename or null), and `world_files` (list of basenames) for reproducibility.
+* **Persisted:** `state.json.selected_context` records `characters` (list of basenames), `location` (basename or null), and `world_files` (list of basenames).
 
 No pipeline logic may assume a fixed number of context files. Missing optional folders must not stop output.
 
@@ -222,7 +225,7 @@ A run is successful if all expected artifacts exist and are non-empty:
 * Write `inputs.json`
 * Initialize `state.json`
 * Initialize `run.log`
-* Load and validate context (required: lore_bible + at least one character); select context deterministically; log and persist `selected_context`
+* Load and validate context (required: lore_bible + at least one character); select location and characters at random (seeded by run_id); log and persist `selected_context`
 
 ---
 
@@ -429,7 +432,7 @@ Logging behavior does not vary by app. Apps may influence content generation, bu
 **Logged events (required)**
 
 * Run initialization (run_id, app, seed)
-* Selected context files (deterministic; no randomness)
+* Selected context files (location and characters chosen at random per run; same run_id yields same selection)
 * Each pipeline stage:
     start timestamp
     end timestamp

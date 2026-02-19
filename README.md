@@ -109,8 +109,8 @@ Example apps:
 For the active app (e.g. `example_app`), context lives under `apps/<app_name>/context/`:
 
 * **Required:** The app’s **lore bible** (`apps/<app_name>/context/lore_bible.md`) must exist, and at least one character file in `apps/<app_name>/context/characters/*.md` must exist. If either is missing, the run fails early with a clear error.
-* **Optional:** If `apps/<app_name>/context/locations/` has `.md` files, exactly one location is included (first alphabetically). If `apps/<app_name>/context/world/` has `.md` files, all are loaded in alphabetical order and folded into the lore bible with a visible separator; the list is stored in `selected_context.world_files`.
-* Selection is **deterministic** (no randomness): location = first alphabetically, characters = first N (from app config or pipeline default) alphabetically. Selections are logged and persisted in `state.json` for reproducibility.
+* **Optional:** If `apps/<app_name>/context/locations/` has `.md` files, exactly one location is included (chosen at random per run). If `apps/<app_name>/context/world/` has `.md` files, all are loaded in alphabetical order and folded into the lore bible with a visible separator; the list is stored in `selected_context.world_files`.
+* **Location and characters** are selected at random each run: one location (when present) and up to N character files (N from app config or pipeline default; `max_characters=0` means all). Selection is seeded by `run_id`, so the same run_id reproduces the same selection. Selections are logged and persisted in `state.json`.
 
 ---
 

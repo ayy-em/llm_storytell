@@ -134,14 +134,19 @@ class TestContextLoader:
         assert "lore_bible.md" in selection.always_loaded
         assert len([k for k in selection.always_loaded if k != "lore_bible.md"]) == 0
 
-    def test_selects_one_location_deterministic(self, temp_context_dir: Path) -> None:
-        """Selects exactly one location file (first alphabetically)."""
+    def test_selects_one_location_random(self, temp_context_dir: Path) -> None:
+        """Selects exactly one location file at random from locations/."""
+        valid_locations = {
+            "locations/city.md",
+            "locations/desert.md",
+            "locations/forest.md",
+        }
         loader = ContextLoader(temp_context_dir)
         selection = loader.load_context("run-test-005")
 
-        assert selection.selected_location == "locations/city.md"
+        assert selection.selected_location in valid_locations
         assert selection.location_content is not None
-        assert "City" in selection.location_content
+        assert len(selection.location_content) > 0
 
     def test_handles_missing_locations_directory(self, tmp_path: Path) -> None:
         """Handles missing locations directory gracefully (optional)."""
@@ -173,19 +178,19 @@ class TestContextLoader:
         assert selection.selected_location is None
         assert selection.location_content is None
 
-    def test_selects_characters_deterministic_bounded(
-        self, temp_context_dir: Path
-    ) -> None:
-        """Selects up to 3 character files (first alphabetically)."""
-        loader = ContextLoader(temp_context_dir)
-        selection = loader.load_context("run-test-008")
-
-        # Alphabetical: hero, mentor, sidekick, villain -> first 3
-        assert selection.selected_characters == [
+    def test_selects_characters_random_bounded(self, temp_context_dir: Path) -> None:
+        """Selects up to 3 character files at random from characters/."""
+        valid_chars = {
             "characters/hero.md",
             "characters/mentor.md",
             "characters/sidekick.md",
-        ]
+            "characters/villain.md",
+        }
+        loader = ContextLoader(temp_context_dir)
+        selection = loader.load_context("run-test-008")
+
+        assert len(selection.selected_characters) == 3
+        assert set(selection.selected_characters) <= valid_chars
         assert len(selection.character_contents) == 3
 
     def test_fails_without_characters_directory(self, tmp_path: Path) -> None:
@@ -228,14 +233,12 @@ class TestContextLoader:
         assert selection.selected_characters == ["characters/only_one.md"]
         assert len(selection.character_contents) == 1
 
-    def test_deterministic_selection_same_regardless_of_run_id(
-        self, temp_context_dir: Path
-    ) -> None:
-        """Selection is deterministic: same run_id or different run_id gives same result."""
+    def test_reproducible_selection_same_run_id(self, temp_context_dir: Path) -> None:
+        """Same run_id yields the same location and character selection."""
         loader = ContextLoader(temp_context_dir)
 
         selection1 = loader.load_context("run-reproducible-001")
-        selection2 = loader.load_context("run-reproducible-002")
+        selection2 = loader.load_context("run-reproducible-001")
 
         assert selection1.selected_location == selection2.selected_location
         assert selection1.selected_characters == selection2.selected_characters
@@ -318,33 +321,30 @@ class TestContextLoader:
         assert selection.selected_location is None
         assert selection.world_files == []
 
-    def test_handles_large_context_library_deterministic_bounded(
-        self, tmp_path: Path
-    ) -> None:
-        """Selects first location and first 3 characters alphabetically."""
+    def test_handles_large_context_library_random_bounded(self, tmp_path: Path) -> None:
+        """Selects one location and 3 characters at random from large sets."""
         context_dir = tmp_path / "context" / "large-app"
         context_dir.mkdir(parents=True)
         (context_dir / "lore_bible.md").write_text("# Large Lore")
 
         locations_dir = context_dir / "locations"
         locations_dir.mkdir()
+        valid_locations = {f"locations/location_{i:02d}.md" for i in range(20)}
         for i in range(20):
             (locations_dir / f"location_{i:02d}.md").write_text(f"# Location {i}")
 
         characters_dir = context_dir / "characters"
         characters_dir.mkdir()
+        valid_characters = {f"characters/character_{i:02d}.md" for i in range(15)}
         for i in range(15):
             (characters_dir / f"character_{i:02d}.md").write_text(f"# Character {i}")
 
         loader = ContextLoader(context_dir)
         selection = loader.load_context("run-large-001")
 
-        assert selection.selected_location == "locations/location_00.md"
-        assert selection.selected_characters == [
-            "characters/character_00.md",
-            "characters/character_01.md",
-            "characters/character_02.md",
-        ]
+        assert selection.selected_location in valid_locations
+        assert len(selection.selected_characters) == 3
+        assert set(selection.selected_characters) <= valid_characters
 
     def test_no_duplicate_character_selection(self, temp_context_dir: Path) -> None:
         """Selected characters are unique (no duplicates)."""
@@ -425,16 +425,19 @@ class TestContextLoaderAppConfigLimits:
     def test_app_config_max_characters_limits_selection(
         self, temp_context_dir: Path
     ) -> None:
-        """When app_config has max_characters=2, only 2 character files are selected."""
+        """When app_config has max_characters=2, only 2 character files are selected (at random)."""
+        valid_chars = {
+            "characters/hero.md",
+            "characters/mentor.md",
+            "characters/sidekick.md",
+            "characters/villain.md",
+        }
         app_config = _make_app_config(max_characters=2)
         loader = ContextLoader(temp_context_dir, app_config=app_config)
         selection = loader.load_context("run-limits-001")
 
         assert len(selection.selected_characters) == 2
-        assert selection.selected_characters == [
-            "characters/hero.md",
-            "characters/mentor.md",
-        ]
+        assert set(selection.selected_characters) <= valid_chars
         assert len(selection.character_contents) == 2
 
     def test_app_config_max_characters_zero_selects_all(
@@ -489,11 +492,23 @@ class TestContextLoaderAppConfigLimits:
 
     def test_no_app_config_uses_default_limits(self, temp_context_dir: Path) -> None:
         """When app_config is None, default limits apply (3 characters, 1 location, world included)."""
+        valid_locations = {
+            "locations/city.md",
+            "locations/desert.md",
+            "locations/forest.md",
+        }
+        valid_chars = {
+            "characters/hero.md",
+            "characters/mentor.md",
+            "characters/sidekick.md",
+            "characters/villain.md",
+        }
         loader = ContextLoader(temp_context_dir)
         selection = loader.load_context("run-default-001")
 
         assert len(selection.selected_characters) == 3
-        assert selection.selected_location == "locations/city.md"
+        assert set(selection.selected_characters) <= valid_chars
+        assert selection.selected_location in valid_locations
         assert "lore_bible.md" in selection.always_loaded
 
 
