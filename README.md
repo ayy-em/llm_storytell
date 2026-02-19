@@ -93,11 +93,9 @@ Apps may range from minimal configurations (e.g. a single lore file and a short 
 Example apps:
 
 * `example_app` — minimal committed app under `apps/example_app/`; run with `--app example_app` to try the pipeline.
-* `grim-narrator`
-  60-minute bleak, depressive, slow-paced stories
-* `toddler-bedtime` (future)
-  10-minute lighthearted stories about cars, upbeat tone, calm voice
-* others later
+* `grim-narrator` - 60-minute bleak, depressive, slow-paced stories about a dystopian future
+* `toddler-bedtime` - 10-minute lighthearted stories about cars, upbeat tone, calm voice
+* ... more to follow!
 
 ### MVP scope
 
@@ -246,7 +244,7 @@ Credentials are read from a file; no environment variables are required. Create 
 
 ---
 
-## Running the pipeline (MVP)
+## Running the pipeline
 
 From the project root (with venv active or via `uv run`):
 
@@ -363,3 +361,9 @@ If an AI agent is reading this:
 Follow the spec.
 Follow the tasks.
 Write boring code.
+
+uv run python -m llm_storytell run \
+  --app grim-narrator \
+  --beats 6 \
+  --tts \
+  --seed "In year 27026, any society seeks to destroy individuality, though each one does it differently. Some people always resist regardless, each in their own unique way."

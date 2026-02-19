@@ -7,6 +7,10 @@ from llm_storytell.context import ContextLoaderError
 from llm_storytell.llm import LLMProvider, LLMProviderError
 from llm_storytell.llm.pricing import estimate_run_cost, estimate_tts_cost
 from llm_storytell.pipeline.context import load_and_persist_context
+from llm_storytell.pipeline.deliverable_to_book import (
+    copy_no_tts_deliverable_to_book,
+    copy_tts_deliverable_to_book,
+)
 from llm_storytell.pipeline.providers import (
     ProviderError,
     create_llm_provider,
@@ -242,6 +246,11 @@ def run_pipeline(settings: RunSettings) -> int:
             )
             return 1
 
+        if not settings.tts_enabled:
+            copy_no_tts_deliverable_to_book(
+                run_dir=run_dir, base_dir=base_dir, logger=logger
+            )
+
         # TTS (when enabled)
         if settings.tts_enabled and settings.resolved_tts_config:
             try:
@@ -292,6 +301,9 @@ def run_pipeline(settings: RunSettings) -> int:
                     app_name=app_paths.app_name,
                 )
                 logger.log_stage_end("audio_prep", success=True)
+                copy_tts_deliverable_to_book(
+                    run_dir=run_dir, base_dir=base_dir, logger=logger
+                )
             except AudioPrepStepError as e:
                 logger.error(f"Audio-prep step failed: {e}")
                 logger.log_stage_end("audio_prep", success=False)
