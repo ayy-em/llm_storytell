@@ -214,6 +214,41 @@ def _stitch_segments(
     return out_path
 
 
+# Single-pass voiceover polish: clean rumble/harshness, normalize, light reverb, de-ess, limit
+VOICEOVER_POLISH_AF = (
+    "highpass=f=80,lowpass=f=16000,"
+    "equalizer=f=3000:t=q:w=1.2:g=-2,dynaudnorm=f=150:g=7,"
+    "aecho=0.8:0.88:20|40:0.15|0.10,highpass=f=80,"
+    "equalizer=f=7500:t=q:w=1.0:g=-4,equalizer=f=9500:t=q:w=1.0:g=-2,"
+    "alimiter=limit=0.97"
+)
+
+
+def _apply_voiceover_polish(
+    voiceover_path: Path,
+    ext: str,
+    logger: RunLogger,
+) -> None:
+    """Apply polish (clean, reverb, de-ess, limit) to stitched voiceover in place."""
+    voiceover_dir = voiceover_path.parent
+    polished_path = voiceover_dir / f"voiceover_polished{ext}"
+
+    _run_ffmpeg(
+        [
+            "-i",
+            str(voiceover_path),
+            "-af",
+            VOICEOVER_POLISH_AF,
+            str(polished_path),
+        ],
+        "voiceover polish (clean, reverb, de-ess, limit)",
+    )
+    polished_path.replace(voiceover_path)
+    size = voiceover_path.stat().st_size
+    logger.log_artifact_write(Path("voiceover") / voiceover_path.name, size)
+    logger.info("Voiceover polish applied")
+
+
 def _resolve_bg_music(base_dir: Path, app_name: str) -> Path:
     """Resolve background music: apps/<app>/assets/bg-music.* else assets/default-bg-music.wav."""
     base_dir = base_dir.resolve()
@@ -424,15 +459,16 @@ def execute_audio_prep_step(
     *,
     app_name: str | None = None,
 ) -> None:
-    """Stitch TTS segments, add background music with envelope, mix to final narration.
+    """Stitch TTS segments, polish voiceover, add background music with envelope, mix to final narration.
 
     Steps:
     1. Stitch segments from run_dir/tts/outputs/ into one voiceover track.
-    2. Get voiceover duration.
-    3. Load bg music: apps/<app_name>/assets/bg-music.* if exists, else assets/default-bg-music.wav.
-    4. Loop bg with 2s crossfade to voice_duration + 6s (3s intro + voice + 3s outro).
-    5. Apply bg volume envelope: 0-3s 75%→10%, 3s to (3+voice_duration) at 10%, last 3s 10%→75%.
-    6. Mix: voiceover placed from 00m03s to (3+voice_duration)s on the track; write to run_dir/artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>.
+    2. Apply voiceover polish (highpass/lowpass, EQ, dynaudnorm, reverb, de-ess, limiter).
+    3. Get voiceover duration.
+    4. Load bg music: apps/<app_name>/assets/bg-music.* if exists, else assets/default-bg-music.wav.
+    5. Loop bg with crossfade to voice_duration + 6s (3s intro + voice + 3s outro).
+    6. Apply bg volume envelope: 0-3s 65%→5%, 3s to (3+voice_duration) at 5%, last 3s 5%→65%.
+    7. Mix: voiceover placed from 00m03s to (3+voice_duration)s on the track; write to run_dir/artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>.
 
     Args:
         run_dir: Run directory (runs/<run_id>/).
@@ -453,6 +489,7 @@ def execute_audio_prep_step(
     logger.info(f"Stitching {len(segments)} segments")
 
     voiceover_path = _stitch_segments(run_dir, segments, ext, logger)
+    _apply_voiceover_polish(voiceover_path, ext, logger)
     voice_duration = _get_duration_seconds(voiceover_path)
     logger.info(f"Voiceover duration: {voice_duration:.2f}s")
 

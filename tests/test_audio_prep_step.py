@@ -265,7 +265,7 @@ class TestExecuteAudioPrepStep:
         ffmpeg_calls = [c for c in calls if c[0] == "ffmpeg"]
         ffprobe_calls = [c for c in calls if c[0] == "ffprobe"]
         assert len(ffprobe_calls) >= 2  # voiceover duration + bg duration
-        assert len(ffmpeg_calls) >= 4  # stitch, loop, envelope, mix
+        assert len(ffmpeg_calls) >= 5  # stitch, polish, loop, envelope, mix
 
         # Concat/stitch: -f concat -safe 0 -i ... -c copy
         stitch = next(
@@ -280,6 +280,19 @@ class TestExecuteAudioPrepStep:
         concat_idx = stitch.index("-f")
         assert stitch[concat_idx + 1] == "concat"
         assert "copy" in stitch
+
+        # Polish: -af with highpass, alimiter (clean, reverb, de-ess)
+        polish = next(
+            (
+                c
+                for c in ffmpeg_calls
+                if "-af" in c
+                and "highpass" in " ".join(c)
+                and "alimiter" in " ".join(c)
+            ),
+            None,
+        )
+        assert polish is not None
 
         # Mix: amix=inputs=2:duration=first
         mix = next(

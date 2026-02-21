@@ -199,7 +199,7 @@ LLM-Storytell/
       artifacts/
       llm_io/
       tts/           (when TTS enabled: prompts/, outputs/)
-      voiceover/     (when TTS enabled: stitched voiceover, bg)
+      voiceover/     (when TTS enabled: stitched and polished voiceover, bg)
 
   src/
     llm_storytell/
@@ -222,7 +222,7 @@ App-specific structure may evolve. Generated content must never be committed.
 * Python **3.12**
 * `uv`
 * OpenAI API key
-* **ffmpeg** (required when TTS/audio is enabled): used for stitching TTS segments and mixing with background music. Must be on PATH.
+* **ffmpeg** (required when TTS/audio is enabled): used for stitching TTS segments, polishing the voiceover (clean/reverb/de-ess/limit), and mixing with background music. Must be on PATH.
 
 ### Setup
 
@@ -262,10 +262,10 @@ On success, a new directory `runs/<run_id>/` is created containing:
 * `artifacts/` — `10_outline.json`, `20_section_01.md` … `20_section_NN.md`, `final_script.md`, `editor_report.json`; when TTS/audio runs: `story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>` (final narrated audio)
 * `llm_io/` — per-stage prompt/response debug files
 
-When TTS is enabled (default), the pipeline also runs a TTS step and an audio-prep step after the critic. In that case the run directory additionally contains:
+When TTS is enabled (default), the pipeline also runs a TTS step and an audio-prep step after the critic. The audio-prep step stitches TTS segments, applies a single-pass voiceover polish (highpass/lowpass, EQ, normalization, light reverb, de-ess, limiter), then mixes with background music. In that case the run directory additionally contains:
 
 * `tts/` — `prompts/` (chunked text per segment), `outputs/` (audio segments)
-* `voiceover/` — stitched voiceover track and intermediate bg-music files
+* `voiceover/` — stitched and polished voiceover track and intermediate bg-music files
 * `artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>` — final narration (voice + background music); dd/mm from run ID date
 
 On completion, the CLI and `run.log` show combined Chat token and TTS character usage and an estimated cost (Chat + TTS). Runs are immutable once completed.
@@ -364,6 +364,13 @@ Write boring code.
 
 uv run python -m llm_storytell run \
   --app grim-narrator \
-  --beats 6 \
+  --beats 7 \
   --tts \
-  --seed "In year 27026, any society seeks to destroy individuality, though each one does it differently. Some people always resist regardless, each in their own unique way."
+  --seed "Nobody is safe from the very impersonal, disgustingly impersonal and ridiculously bureaucratic horrors of the state, carried out by these who had no choice but to do their job."
+
+
+  uv run python -m llm_storytell run \
+  --app daniel-bedtime \
+  --beats 2 \
+  --no-tts \
+  --seed "Обычная прогулка по городу оборачивается внезапным приключением для Дани."

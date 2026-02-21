@@ -78,12 +78,12 @@ def _run_dir_no_tts(
 
 
 class TestBookBasename:
-    """Book filename format: {MM-DD-YY}_{app}_{model}_{tts_voice}.mp3 or .pdf."""
+    """Book filename format: {DD-MM-YY}_{app}_{model}_{tts_voice}.mp3 or .pdf."""
 
     def test_book_basename_tts(self, tmp_path: Path) -> None:
         run_dir = _run_dir_tts(tmp_path)
         name = _book_basename_tts(run_dir)
-        assert name == "02-09-25_my_app_gpt-4.1-mini_onyx.mp3"
+        assert name == "09-02-25_my_app_gpt-4.1-mini_onyx.mp3"
 
     def test_book_basename_tts_fallback(self, tmp_path: Path) -> None:
         run_dir = tmp_path / "run"
@@ -99,7 +99,7 @@ class TestBookBasename:
     def test_book_basename_no_tts(self, tmp_path: Path) -> None:
         run_dir = _run_dir_no_tts(tmp_path)
         name = _book_basename_no_tts(run_dir)
-        assert name == "02-19-25_my_app_gpt-4.1-mini.pdf"
+        assert name == "19-02-25_my_app_gpt-4.1-mini.pdf"
 
     def test_book_basename_no_tts_fallback(self, tmp_path: Path) -> None:
         run_dir = tmp_path / "run"
@@ -126,7 +126,7 @@ class TestCopyTtsDeliverableToBook:
 
         copy_tts_deliverable_to_book(run_dir=run_dir, base_dir=base_dir, logger=logger)
 
-        book_file = base_dir / "runs" / "book" / "02-09-25_my_app_gpt-4.1-mini_onyx.mp3"
+        book_file = base_dir / "runs" / "book" / "09-02-25_my_app_gpt-4.1-mini_onyx.mp3"
         assert book_file.is_file()
         assert book_file.read_bytes() == b"fake_mp3_content"
 
@@ -169,7 +169,7 @@ class TestCopyNoTtsDeliverableToBook:
                 run_dir=run_dir, base_dir=base_dir, logger=logger
             )
 
-        book_file = base_dir / "runs" / "book" / "02-19-25_my_app_gpt-4.1-mini.pdf"
+        book_file = base_dir / "runs" / "book" / "19-02-25_my_app_gpt-4.1-mini.pdf"
         assert book_file.is_file()
         assert book_file.read_bytes()[:4] == b"%PDF"
 

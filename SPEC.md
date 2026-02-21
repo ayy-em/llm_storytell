@@ -158,7 +158,7 @@ python -m llm_storytell run \
 
 Defaults for beats and section_length come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits. The same merge applies to `language`: it may be set in `default_config.yaml` or in an app’s `app_config.yaml`; `--language` overrides when provided. Invalid language (non–ISO 639-1) in config or CLI causes startup failure with a clear error message.
 
-**TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). The resolved voice name is **normalized to lowercase** before being sent to the TTS provider (e.g. OpenAI expects `onyx`, not `Onyx`); config and CLI may use either casing. When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`. When TTS is enabled, the pipeline runs the TTS step then the audio-prep step; **ffmpeg** (and ffprobe) must be on PATH for the audio-prep step (stitching and mixing).
+**TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). The resolved voice name is **normalized to lowercase** before being sent to the TTS provider (e.g. OpenAI expects `onyx`, not `Onyx`); config and CLI may use either casing. When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`. When TTS is enabled, the pipeline runs the TTS step then the audio-prep step; **ffmpeg** (and ffprobe) must be on PATH for the audio-prep step (stitching, voiceover polish, and mixing).
 
 **Target word count (v1.0.3):** When `--word-count N` is used, the pipeline derives `beat_count` (round N / baseline section length, clamped to 1–20) and per-section length (N / beat_count), then passes the range `[per_section*0.8, per_section*1.2]` as section_length. Generated stories are intended to fall within approximately 10% of the target word count; this is best-effort and can be verified manually or via tests.
 
@@ -567,7 +567,7 @@ The orchestrator executes strictly in order:
 2. **Outline** — generate outline beats.
 3. **For each beat:** section, then summarize.
 4. **Critic** — final script and editor report.
-5. **When TTS is enabled (default):** **TTS step** (chunk final script, synthesize segments to audio) → **audio-prep step** (stitch segments, add background music, mix to final narration). When `--no-tts` is set, the pipeline ends after the critic step.
+5. **When TTS is enabled (default):** **TTS step** (chunk final script, synthesize segments to audio) → **audio-prep step** (stitch segments, polish voiceover, add background music, mix to final narration). Voiceover polish is a single ffmpeg pass: highpass/lowpass, EQ, dynaudnorm, light reverb (aecho), de-ess, and limiter. When `--no-tts` is set, the pipeline ends after the critic step.
 
 ---
 
@@ -602,7 +602,7 @@ runs/<run_id>/
       segment_01.<ext>
       ...
   voiceover/                      (when TTS/audio ran)
-    voiceover.<ext>
+    voiceover.<ext>               (stitched then polished: clean, reverb, de-ess, limit)
     concat_list.txt
     bg_looped.wav
     bg_enveloped.wav

@@ -78,10 +78,36 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 ## Tasks
 
+
+### [ ] T0133 – 
+
+**Goal**
+...
+
+**How to do it**
+...
+
+**Cost calculation base**
+-
+
+**Acceptance criteria**
+- 
+
+**Allowed files**
+- ...
+
+**Commands to run**
+- `uv run ruff format .`
+- `uv run ruff check .`
+- `uv run pytest -q`
+
+**Result**
+
+
 ---
 
 ## Roadmap (**do not start** yet unless explictly told)
-- **v1.3** – Cloud execution + scheduled delivery (Telegram / email)
+- **v1.3** – Pipeline delivery step (via Telegram bot)
 - **v1.4** – One-command video generation
 - **v1.4.1** – Burned-in subtitles
 - **v1.5** – Vector database for large-scale context retrieval and rotation
@@ -97,6 +123,10 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 ## Backlog (Do not start)
 
-- **Stderr on failure:** Change codebase so the run command is more explicit about errors via stderr on failures (e.g. step failures, validation errors). To be worked on later; do not implement now.
-- **Python API:** Add a minimal non-CLI API for running the pipeline programmatically (low priority).
-- **Increase CLI output when doing tts chunking**: show total number of segments, 
+- Stderr on failure Change codebase so the run command is more explicit about errors via stderr on failures (e.g. step failures, validation errors). To be worked on later; do not implement now.
+- Python API: Add a minimal non-CLI API for running the pipeline programmatically (low priority).
+- Increase CLI output when doing tts chunking**: show total number of segments
+- Script to summarize all of app's characters in all_characters.md and locations in all_locations.md
+- automated seed generation
+- bulk job scheduling via batch_job.json
+- add time elapsed for a run to logs and CLI output (measure diff between timestamp of run start and final step completed)

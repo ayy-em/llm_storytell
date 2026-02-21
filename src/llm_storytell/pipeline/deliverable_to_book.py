@@ -17,8 +17,8 @@ def _sanitize(s: str) -> str:
     return re.sub(r"[^\w\-.]", "_", s.strip()).strip(".") or "unknown"
 
 
-def _run_id_to_mm_dd_yy(run_id: str) -> tuple[str, str, str]:
-    """Parse run-YYYYMMDD-HHMMSS to (mm, dd, yy) as two-digit strings. ('01','01','00') if not matching."""
+def _run_id_to_dd_mm_yy(run_id: str) -> tuple[str, str, str]:
+    """Parse run-YYYYMMDD-HHMMSS to (dd, mm, yy) as two-digit strings. ('01','01','00') if not matching."""
     if not run_id or not isinstance(run_id, str):
         return "01", "01", "00"
     m = re.match(r"run-(\d{4})(\d{2})(\d{2})", run_id.strip())
@@ -26,12 +26,12 @@ def _run_id_to_mm_dd_yy(run_id: str) -> tuple[str, str, str]:
         return "01", "01", "00"
     yyyy, mm, dd = m.group(1), m.group(2), m.group(3)
     yy = yyyy[-2:] if len(yyyy) >= 2 else "00"
-    return mm, dd, yy
+    return dd, mm, yy
 
 
 def _book_basename_tts(run_dir: Path) -> str:
-    """Build {MM-DD-YY}_{app}_{model}_{tts_voice}.mp3 from run_dir."""
-    mm, dd, yy = "01", "01", "00"
+    """Build {DD-MM-YY}_{app}_{model}_{tts_voice}.mp3 from run_dir."""
+    dd, mm, yy = "01", "01", "00"
     app_name = "unknown"
     model = "unknown"
     tts_voice = "unknown"
@@ -40,7 +40,7 @@ def _book_basename_tts(run_dir: Path) -> str:
         app_name = str(inputs_data.get("app") or "unknown").strip()
         model = str(inputs_data.get("model") or "unknown").strip()
         run_id = inputs_data.get("run_id") or run_dir.name
-        mm, dd, yy = _run_id_to_mm_dd_yy(str(run_id))
+        dd, mm, yy = _run_id_to_dd_mm_yy(str(run_id))
     except StateIOError:
         pass
     try:
@@ -49,12 +49,12 @@ def _book_basename_tts(run_dir: Path) -> str:
         tts_voice = str(tts_cfg.get("tts_voice") or "unknown").strip()
     except StateIOError:
         pass
-    return f"{mm}-{dd}-{yy}_{_sanitize(app_name)}_{_sanitize(model)}_{_sanitize(tts_voice)}.mp3"
+    return f"{dd}-{mm}-{yy}_{_sanitize(app_name)}_{_sanitize(model)}_{_sanitize(tts_voice)}.mp3"
 
 
 def _book_basename_no_tts(run_dir: Path) -> str:
-    """Build {MM-DD-YY}_{app}_{model}.pdf from run_dir."""
-    mm, dd, yy = "01", "01", "00"
+    """Build {DD-MM-YY}_{app}_{model}.pdf from run_dir."""
+    dd, mm, yy = "01", "01", "00"
     app_name = "unknown"
     model = "unknown"
     try:
@@ -62,10 +62,10 @@ def _book_basename_no_tts(run_dir: Path) -> str:
         app_name = str(inputs_data.get("app") or "unknown").strip()
         model = str(inputs_data.get("model") or "unknown").strip()
         run_id = inputs_data.get("run_id") or run_dir.name
-        mm, dd, yy = _run_id_to_mm_dd_yy(str(run_id))
+        dd, mm, yy = _run_id_to_dd_mm_yy(str(run_id))
     except StateIOError:
         pass
-    return f"{mm}-{dd}-{yy}_{_sanitize(app_name)}_{_sanitize(model)}.pdf"
+    return f"{dd}-{mm}-{yy}_{_sanitize(app_name)}_{_sanitize(model)}.pdf"
 
 
 def copy_tts_deliverable_to_book(
