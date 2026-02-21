@@ -1,6 +1,7 @@
 """Pipeline runner: orchestration of run init, context, steps, and providers."""
 
 import sys
+import traceback
 from pathlib import Path
 
 from llm_storytell.context import ContextLoaderError
@@ -26,6 +27,23 @@ from llm_storytell.steps.outline import OutlineStepError, execute_outline_step
 from llm_storytell.steps.section import SectionStepError, execute_section_step
 from llm_storytell.steps.summarize import SummarizeStepError, execute_summarize_step
 from llm_storytell.tts_providers import TTSProviderError
+
+
+def _log_and_print_failure(
+    logger, run_dir: Path, stage_message: str, e: BaseException
+) -> None:
+    """Log full exception with traceback to run.log and print to stderr."""
+    tb_str = "".join(
+        traceback.format_exception(type(e), e, e.__traceback__, chain=True)
+    )
+    logger.error(f"{stage_message}: {e}\n{tb_str}")
+    print(f"[llm_storytell] Error: {stage_message}: {e}", file=sys.stderr, flush=True)
+    print(tb_str, file=sys.stderr, flush=True)
+    print(
+        f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def run_pipeline(settings: RunSettings) -> int:
@@ -75,12 +93,7 @@ def run_pipeline(settings: RunSettings) -> int:
                 run_id=run_dir.name,
             )
         except ContextLoaderError as e:
-            logger.error(str(e))
-            print(
-                f"[llm_storytell] Error: {e}",
-                file=sys.stderr,
-                flush=True,
-            )
+            _log_and_print_failure(logger, run_dir, "context load failed", e)
             return 1
 
         try:
@@ -88,8 +101,7 @@ def run_pipeline(settings: RunSettings) -> int:
                 settings.config_path, default_model=settings.model
             )
         except ProviderError as e:
-            logger.error(str(e))
-            print(f"[llm_storytell] Error: {e}", file=sys.stderr, flush=True)
+            _log_and_print_failure(logger, run_dir, "LLM provider creation failed", e)
             return 1
 
         schema_base = base_dir / "src" / "llm_storytell" / "schemas"
@@ -113,28 +125,15 @@ def run_pipeline(settings: RunSettings) -> int:
             )
             logger.log_stage_end("outline", success=True)
         except (OutlineStepError, LLMProviderError) as e:
-            logger.error(f"Outline step failed: {e}")
             logger.log_stage_end("outline", success=False)
-            print(
-                f"[llm_storytell] Error: outline stage failed: {e}",
-                file=sys.stderr,
-                flush=True,
-            )
-            print(
-                f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
-                file=sys.stderr,
-                flush=True,
-            )
+            _log_and_print_failure(logger, run_dir, "outline stage failed", e)
             return 1
 
         try:
             state = load_state(run_dir)
         except StateIOError as e:
-            logger.error(str(e))
-            print(
-                f"[llm_storytell] Error: {e}",
-                file=sys.stderr,
-                flush=True,
+            _log_and_print_failure(
+                logger, run_dir, "loading state after outline failed", e
             )
             return 1
 
@@ -177,17 +176,12 @@ def run_pipeline(settings: RunSettings) -> int:
                 )
                 logger.log_stage_end(stage_name, success=True)
             except (SectionStepError, LLMProviderError) as e:
-                logger.error(f"Section {section_index} step failed: {e}")
                 logger.log_stage_end(stage_name, success=False)
-                print(
-                    f"[llm_storytell] Error: section {section_index} failed: {e}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                print(
-                    f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
-                    file=sys.stderr,
-                    flush=True,
+                _log_and_print_failure(
+                    logger,
+                    run_dir,
+                    f"section {section_index} failed",
+                    e,
                 )
                 return 1
 
@@ -204,17 +198,12 @@ def run_pipeline(settings: RunSettings) -> int:
                 )
                 logger.log_stage_end(summarize_stage_name, success=True)
             except (SummarizeStepError, LLMProviderError) as e:
-                logger.error(f"Summarize {section_index} step failed: {e}")
                 logger.log_stage_end(summarize_stage_name, success=False)
-                print(
-                    f"[llm_storytell] Error: summarize {section_index} failed: {e}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                print(
-                    f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
-                    file=sys.stderr,
-                    flush=True,
+                _log_and_print_failure(
+                    logger,
+                    run_dir,
+                    f"summarize {section_index} failed",
+                    e,
                 )
                 return 1
 
@@ -232,18 +221,8 @@ def run_pipeline(settings: RunSettings) -> int:
             )
             logger.log_stage_end("critic", success=True)
         except (CriticStepError, LLMProviderError) as e:
-            logger.error(f"Critic step failed: {e}")
             logger.log_stage_end("critic", success=False)
-            print(
-                f"[llm_storytell] Error: critic stage failed: {e}",
-                file=sys.stderr,
-                flush=True,
-            )
-            print(
-                f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
-                file=sys.stderr,
-                flush=True,
-            )
+            _log_and_print_failure(logger, run_dir, "critic stage failed", e)
             return 1
 
         if not settings.tts_enabled:
@@ -258,8 +237,9 @@ def run_pipeline(settings: RunSettings) -> int:
                     settings.config_path, settings.resolved_tts_config
                 )
             except ProviderError as e:
-                logger.error(str(e))
-                print(f"[llm_storytell] Error: {e}", file=sys.stderr, flush=True)
+                _log_and_print_failure(
+                    logger, run_dir, "TTS provider creation failed", e
+                )
                 return 1
 
             tts_model = settings.resolved_tts_config.get("tts_model")
@@ -277,18 +257,8 @@ def run_pipeline(settings: RunSettings) -> int:
                 )
                 logger.log_stage_end("tts", success=True)
             except (LLMTTSStepError, TTSProviderError) as e:
-                logger.error(f"TTS step failed: {e}")
                 logger.log_stage_end("tts", success=False)
-                print(
-                    f"[llm_storytell] Error: TTS stage failed: {e}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                print(
-                    f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
-                    file=sys.stderr,
-                    flush=True,
-                )
+                _log_and_print_failure(logger, run_dir, "TTS stage failed", e)
                 return 1
 
             print("[llm_storytell] Running audio prep (stitch + mix)...", flush=True)
@@ -305,18 +275,8 @@ def run_pipeline(settings: RunSettings) -> int:
                     run_dir=run_dir, base_dir=base_dir, logger=logger
                 )
             except AudioPrepStepError as e:
-                logger.error(f"Audio-prep step failed: {e}")
                 logger.log_stage_end("audio_prep", success=False)
-                print(
-                    f"[llm_storytell] Error: audio-prep stage failed: {e}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                print(
-                    f"[llm_storytell] See log for details: {run_dir / 'run.log'}",
-                    file=sys.stderr,
-                    flush=True,
-                )
+                _log_and_print_failure(logger, run_dir, "audio-prep stage failed", e)
                 return 1
 
         logger.info(f"Pipeline completed successfully. Run directory: {run_dir}")
@@ -392,5 +352,9 @@ def run_pipeline(settings: RunSettings) -> int:
         print(f"Error: Failed to initialize run: {e}", file=sys.stderr)
         return 1
     except Exception as e:
+        tb_str = "".join(
+            traceback.format_exception(type(e), e, e.__traceback__, chain=True)
+        )
         print(f"Error: Unexpected error: {e}", file=sys.stderr)
+        print(tb_str, file=sys.stderr)
         return 1

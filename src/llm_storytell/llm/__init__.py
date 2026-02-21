@@ -214,10 +214,12 @@ class OpenAIProvider(LLMProvider):
                     ) from exc
                 attempts += 1
                 if attempts >= max_attempts:
-                    msg = f"OpenAI call failed after {attempts} attempts"
+                    msg = (
+                        f"OpenAI call failed after {attempts} attempts: {last_error!s}"
+                    )
                     raise LLMProviderError(msg) from last_error
         else:  # pragma: no cover - defensive, loop always breaks or raises
-            msg = f"OpenAI call failed after {attempts} attempts"
+            msg = f"OpenAI call failed after {attempts} attempts: {last_error!s}"
             raise LLMProviderError(msg) from last_error
 
         content, prompt_tokens, completion_tokens, total_tokens = (
