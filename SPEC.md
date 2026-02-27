@@ -181,7 +181,7 @@ Context loading is **app-defined but platform-executed**. A single `ContextLoade
 ### Selection rules
 
 * **Location:** One file chosen at random from `context/locations/*.md` when the directory exists and has `.md` files (or none if `max_locations` is 0).
-* **Characters:** Up to N character files chosen at random from `context/characters/*.md` (N from app config or pipeline default; `max_characters=0` means all files, in sorted order). At least one character file is required.
+* **Characters:** Up to N character files chosen at random from `context/characters/*.md` (N from app config or pipeline default; `max_characters=0` means all files). Both the set and the order of selected characters are random (seeded by run_id). At least one character file is required.
 * **World:** All world files in alphabetical order, folded into lore_bible (unchanged).
 * **Reproducibility:** Random selection is seeded by `run_id`, so the same run_id yields the same location and character selection.
 * **Logged:** Selections are written to `run.log`.

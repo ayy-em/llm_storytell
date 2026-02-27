@@ -90,7 +90,7 @@ class ContextLoader:
     - Random selection: one location (when max_locations >= 1) and up to max_characters
       character files are chosen at random per run; selection is seeded by run_id
       so the same run_id yields the same selection (reproducible).
-    - max_characters=0 means all character files are selected (in sorted order).
+    - max_characters=0 means all character files are selected in random order.
     - Required: lore_bible.md must exist; at least one character file must exist.
     """
 
@@ -259,8 +259,8 @@ class ContextLoader:
     def _select_characters(self) -> tuple[list[str], dict[str, str]]:
         """Select character files at random (up to _max_characters).
 
-        When _max_characters is 0, all character files are selected in sorted order;
-        otherwise a random sample of up to _max_characters is chosen. At least one
+        When _max_characters is 0, all character files are selected in random order;
+        otherwise a random sample of up to _max_characters is chosen (random order). At least one
         character file is required; raises if characters dir is missing or empty.
         Caller must have seeded random from run_id for reproducibility.
 
@@ -280,7 +280,8 @@ class ContextLoader:
                 "(at least one .md file is required)"
             )
         if self._max_characters == 0:
-            selected = character_files
+            selected = character_files.copy()
+            random.shuffle(selected)
         else:
             n = min(self._max_characters, len(character_files))
             selected = random.sample(character_files, n)

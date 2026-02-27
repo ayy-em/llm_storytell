@@ -304,7 +304,7 @@ Full reference: `SPEC.md` (CLI Interface, Language).
   - **Character:** `apps/<app_name>/context/characters/` (required: at least one `.md` file)
 - Additionally (not required for a run to succeed), any number of `.md` files with additional background info on your stories' universe: `context/locations/`, `context/world/`, `context/style/` (see Context handling above)
 
-2. **Optional:** Add `apps/<app_name>/app_config.yaml` to override defaults (beats, section_length, context limits, model, language). If absent, the pipeline uses `apps/default_config.yaml` or built-in defaults. To generate stories in another language, set `language` to an ISO 639-1 code (e.g. `es`, `fr`); or use the `--language` CLI flag.
+2. **Optional:** Add `apps/<app_name>/app_config.yaml` to override defaults (beats, section_length, context limits, model, language). If absent, the pipeline uses `apps/default_config.yaml` or built-in defaults. To generate stories in another language, set `language` to an ISO 639-1 code (e.g. `es`, `fr`); or use the `--language` CLI flag. For TTS runs, you can set **MP3 metadata** (written as ID3 tags on the final file): `audio_artist`, `audio_title`, `audio_album` (or hyphenated `audio-artist`, etc.). If unset, artist defaults to the app name and title to the output filename.
 
 3. **Optional:** Add `apps/<app_name>/prompts/` with pipeline templates (`10_outline.md`, `20_section.md`, etc.). If absent, the app uses prompts in `prompts/app-defaults/`.
 
@@ -364,10 +364,9 @@ Write boring code.
 
 uv run python -m llm_storytell run \
   --app grim-narrator \
-  --beats 7 \
+  --beats 6 \
   --tts \
-  --seed "Nobody is safe from the very impersonal, disgustingly impersonal and ridiculously bureaucratic horrors of the state, carried out by these who had no choice but to do their job."
-
+  --seed "Frontlines of the future are a barely disguised meat grinder"
 
   uv run python -m llm_storytell run \
   --app daniel-bedtime \

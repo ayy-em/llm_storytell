@@ -6,6 +6,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import yaml
+
 from llm_storytell.logging import RunLogger
 
 # Segment limits (must match llm_tts step)
@@ -214,12 +216,13 @@ def _stitch_segments(
     return out_path
 
 
-# Single-pass voiceover polish: clean rumble/harshness, normalize, light reverb, de-ess, limit
+# Single-pass voiceover polish: clean rumble/harshness, normalize, very light reverb, de-ess, limit
+# Reverb kept subtle (low mix, short tail) to avoid "can/well" boxy sound; de-ess/lowpass reduce hiss.
 VOICEOVER_POLISH_AF = (
-    "highpass=f=80,lowpass=f=16000,"
-    "equalizer=f=3000:t=q:w=1.2:g=-2,dynaudnorm=f=150:g=7,"
-    "aecho=0.8:0.88:20|40:0.15|0.10,highpass=f=80,"
-    "equalizer=f=7500:t=q:w=1.0:g=-4,equalizer=f=9500:t=q:w=1.0:g=-2,"
+    "highpass=f=80,lowpass=f=14000,"
+    "equalizer=f=3000:t=q:w=1.2:g=-2,dynaudnorm=f=150:g=5,"
+    "aecho=0.8:0.38:50|100:0.05|0.02,highpass=f=80,"
+    "equalizer=f=5500:t=q:w=1.0:g=-2,equalizer=f=7500:t=q:w=1.0:g=-5,equalizer=f=9500:t=q:w=1.0:g=-4,"
     "alimiter=limit=0.97"
 )
 
@@ -372,24 +375,41 @@ def _build_looped_bg_with_crossfade(
 PAD_START = 3
 PAD_END = 3
 
+# Seconds over which bg fades from intro-end level down to duck level (avoids abrupt cliff).
+BG_DUCK_RAMP = 1.5
+
+# BG volume scale: 0.5 = 50% quieter than previous (more background, less competing with voice).
+BG_VOLUME_SCALE = 0.5
+# Envelope levels (after scale): intro 39%→18%, ramp 18%→3%, during narration 3%, outro 3%→42% then 45%.
+_BG_INTRO_START = 0.65 * BG_VOLUME_SCALE  # 0.39
+_BG_INTRO_END = 0.30 * BG_VOLUME_SCALE    # 0.18 (intro fades to this, then ramp to duck)
+_BG_DUCK = 0.05 * BG_VOLUME_SCALE         # 0.03 (during voiceover)
+_BG_OUTRO_END = 0.70 * BG_VOLUME_SCALE    # 0.42 (end of outro fade)
+_BG_OUTRO_TAIL = 0.75 * BG_VOLUME_SCALE   # 0.45 (final tail)
+
 
 def _apply_bg_volume_envelope(
     looped_bg_path: Path,
     voice_duration: float,
     run_dir: Path,
 ) -> Path:
-    """Apply volume envelope to bg: 0-3s 65%→5%, 3s to (3+voice) at 5%, last 3s 5%→65%."""
+    """Apply volume envelope to bg: intro fade, ramp to duck, flat during voice, outro fade up (scaled by BG_VOLUME_SCALE)."""
     voiceover_dir = run_dir / "voiceover"
     enveloped_path = voiceover_dir / "bg_enveloped.wav"
     v = voice_duration
+    ramp_end = PAD_START + BG_DUCK_RAMP
     flat_end = PAD_START + v
     end_fade_end = PAD_START + PAD_END + v
-    # 0-3s: 65%→5%; 3 to 3+v: 5%; 3+v to 3+v+3: 5%→65%
+    intro_delta = _BG_INTRO_START - _BG_INTRO_END
+    ramp_delta = _BG_DUCK - _BG_INTRO_END  # negative: 0.03 - 0.18
+    outro_delta = _BG_OUTRO_END - _BG_DUCK
+    # Intro 0→3s; ramp 3s→3+BG_DUCK_RAMP (18%→3%); flat duck; outro fade; tail
     # Commas inside -af separate filters; escape literal commas so ffmpeg parses one volume filter
     expr = (
-        f"if(lt(t,{PAD_START}),0.65-t/{PAD_START}*0.35,"
-        f"if(lt(t,{flat_end}),0.05,"
-        f"if(lt(t,{end_fade_end}),0.05+(t-{flat_end})/{PAD_END}*0.65,0.75)))"
+        f"if(lt(t,{PAD_START}),{_BG_INTRO_START}-t/{PAD_START}*{intro_delta},"
+        f"if(lt(t,{ramp_end}),{_BG_INTRO_END}+(t-{PAD_START})/{BG_DUCK_RAMP}*{ramp_delta},"
+        f"if(lt(t,{flat_end}),{_BG_DUCK},"
+        f"if(lt(t,{end_fade_end}),{_BG_DUCK}+(t-{flat_end})/{PAD_END}*{outro_delta},{_BG_OUTRO_TAIL}))))"
     )
     expr_escaped = expr.replace(",", "\\,")
     _run_ffmpeg(
@@ -407,6 +427,64 @@ def _apply_bg_volume_envelope(
     return enveloped_path
 
 
+def _load_audio_metadata_from_app_config(
+    base_dir: Path,
+    app_name: str,
+    out_basename_no_ext: str,
+) -> dict[str, str]:
+    """Load optional audio_artist, audio_title, audio_album from app config (default + app overrides).
+
+    Returns a dict suitable for ffmpeg -metadata (e.g. artist, title, album).
+    Defaults: artist=app_name, title=out_basename_no_ext, album empty.
+    """
+    merged: dict = {}
+    default_path = base_dir / "apps" / "default_config.yaml"
+    if default_path.exists():
+        try:
+            with default_path.open(encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            if isinstance(data, dict):
+                merged = dict(data)
+        except Exception:
+            pass
+    app_config_path = base_dir / "apps" / app_name / "app_config.yaml"
+    if app_config_path.exists():
+        try:
+            with app_config_path.open(encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    if v is not None:
+                        merged[k] = v
+        except Exception:
+            pass
+
+    def _get(*keys: str, default: str = "") -> str:
+        for key in keys:
+            if key in merged and merged[key] is not None:
+                v = str(merged[key]).strip()
+                if v:
+                    return v
+        return default
+
+    artist = _get("audio_artist", "audio-artist", default=app_name)
+    title = _get("audio_title", "audio-title", default=out_basename_no_ext)
+    album = _get("audio_album", "audio-album", default="")
+    out: dict[str, str] = {"artist": artist, "title": title}
+    if album:
+        out["album"] = album
+    return out
+
+
+def _mp3_metadata_args(metadata: dict[str, str]) -> list[str]:
+    """Build ffmpeg -metadata key=value args from a dict. Only non-empty values."""
+    args: list[str] = []
+    for key, value in metadata.items():
+        if value and isinstance(value, str) and value.strip():
+            args.extend(["-metadata", f"{key}={value.strip()}"])
+    return args
+
+
 def _mix_voiceover_and_bg(
     voiceover_path: Path,
     bg_path: Path,
@@ -415,21 +493,26 @@ def _mix_voiceover_and_bg(
     logger: RunLogger,
     ext: str,
     voice_duration: float,
+    *,
+    metadata: dict[str, str] | None = None,
 ) -> None:
     """Mix voiceover and background; write to out_path.
 
     Voiceover is placed from PAD_START to PAD_START+voice_duration on the track
     (3s intro of music only, then voice+music, then PAD_END s of music only).
     Voice track gets 1.75x gain.
+    For MP3/M4A, optional metadata (e.g. artist, title, album) is written as ID3/tags.
     """
     if ext.lower() == ".wav":
         codec_args = ["-c:a", "pcm_s16le"]
+        meta_args: list[str] = []
     else:
         codec_args = ["-c:a", "libmp3lame", "-q:a", "2"]
+        meta_args = _mp3_metadata_args(metadata or {})
     delay_ms = int(PAD_START * 1000)
     # Delay voice by PAD_START so it starts at 3s; pad end by PAD_END so total = bg length
     filter_complex = (
-        f"[0:a]volume=1.75,adelay={delay_ms}|{delay_ms},apad=pad_dur={PAD_END}[vo];"
+        f"[0:a]volume=1.25,adelay={delay_ms}|{delay_ms},apad=pad_dur={PAD_END}[vo];"
         "[vo][1:a]amix=inputs=2:duration=first[aout]"
     )
     _run_ffmpeg(
@@ -443,6 +526,7 @@ def _mix_voiceover_and_bg(
             "-map",
             "[aout]",
             *codec_args,
+            *meta_args,
             str(out_path),
         ],
         "mix voiceover and bg with boosted voiceover volume",
@@ -467,7 +551,7 @@ def execute_audio_prep_step(
     3. Get voiceover duration.
     4. Load bg music: apps/<app_name>/assets/bg-music.* if exists, else assets/default-bg-music.wav.
     5. Loop bg with crossfade to voice_duration + 6s (3s intro + voice + 3s outro).
-    6. Apply bg volume envelope: 0-3s 65%→5%, 3s to (3+voice_duration) at 5%, last 3s 5%→65%.
+    6. Apply bg volume envelope (scaled so bg is ~40% quieter): intro duck, 3% during voice, outro fade up.
     7. Mix: voiceover placed from 00m03s to (3+voice_duration)s on the track; write to run_dir/artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>.
 
     Args:
@@ -506,8 +590,19 @@ def execute_audio_prep_step(
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     out_name = _voiceover_artifact_filename(run_dir, app_name, ext)
     out_path = artifacts_dir / out_name
+    out_basename_no_ext = out_path.stem
+    metadata = _load_audio_metadata_from_app_config(
+        base_dir, app_name, out_basename_no_ext
+    )
 
     _mix_voiceover_and_bg(
-        voiceover_path, enveloped_bg, out_path, run_dir, logger, ext, voice_duration
+        voiceover_path,
+        enveloped_bg,
+        out_path,
+        run_dir,
+        logger,
+        ext,
+        voice_duration,
+        metadata=metadata,
     )
     logger.info(f"Audio-prep complete: {out_path}")

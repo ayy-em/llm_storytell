@@ -2,6 +2,7 @@
 
 import sys
 import traceback
+from datetime import datetime, timezone
 from pathlib import Path
 
 from llm_storytell.context import ContextLoaderError
@@ -29,10 +30,22 @@ from llm_storytell.steps.summarize import SummarizeStepError, execute_summarize_
 from llm_storytell.tts_providers import TTSProviderError
 
 
+def _timestamp_utc() -> str:
+    """Current UTC timestamp in ISO 8601 format (seconds)."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def _log_and_print_failure(
     logger, run_dir: Path, stage_message: str, e: BaseException
 ) -> None:
     """Log full exception with traceback to run.log and print to stderr."""
+    end_ts = _timestamp_utc()
+    logger.info(f"Pipeline run finished at {end_ts} (failed)")
+    print(
+        f"[llm_storytell] Pipeline run finished at {end_ts} (failed)",
+        file=sys.stderr,
+        flush=True,
+    )
     tb_str = "".join(
         traceback.format_exception(type(e), e, e.__traceback__, chain=True)
     )
@@ -75,6 +88,9 @@ def run_pipeline(settings: RunSettings) -> int:
         )
 
         logger = get_run_logger(run_dir)
+        start_ts = _timestamp_utc()
+        logger.info(f"Pipeline run started at {start_ts}")
+        print(f"[llm_storytell] Pipeline run started at {start_ts}", flush=True)
 
         print(
             f"[llm_storytell] Initialized run '{run_dir.name}' "
@@ -279,6 +295,9 @@ def run_pipeline(settings: RunSettings) -> int:
                 _log_and_print_failure(logger, run_dir, "audio-prep stage failed", e)
                 return 1
 
+        end_ts = _timestamp_utc()
+        logger.info(f"Pipeline run finished at {end_ts}")
+        print(f"[llm_storytell] Pipeline run finished at {end_ts}", flush=True)
         logger.info(f"Pipeline completed successfully. Run directory: {run_dir}")
         print("[llm_storytell] Run complete.", flush=True)
 
@@ -349,9 +368,21 @@ def run_pipeline(settings: RunSettings) -> int:
         return 0
 
     except RunInitializationError as e:
+        end_ts = _timestamp_utc()
+        print(
+            f"[llm_storytell] Pipeline run finished at {end_ts} (failed)",
+            file=sys.stderr,
+            flush=True,
+        )
         print(f"Error: Failed to initialize run: {e}", file=sys.stderr)
         return 1
     except Exception as e:
+        end_ts = _timestamp_utc()
+        print(
+            f"[llm_storytell] Pipeline run finished at {end_ts} (failed)",
+            file=sys.stderr,
+            flush=True,
+        )
         tb_str = "".join(
             traceback.format_exception(type(e), e, e.__traceback__, chain=True)
         )

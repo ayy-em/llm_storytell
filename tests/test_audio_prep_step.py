@@ -345,9 +345,9 @@ class TestExecuteAudioPrepStep:
         full = " ".join(envelope_cmd)
         # Envelope: 0-3s fade, 3 to 3+voice_duration flat, then 3s fade. For voice_duration=12: 3, 15, 18.
         assert "3" in full and "15" in full and "18" in full
-        assert "0.75" in full
-        # Flat ducking level is 5% (0.05), not 10%
-        assert "0.05" in full
+        # BG envelope scaled by BG_VOLUME_SCALE (0.6): duck 3%, scaled intro/outro
+        assert "0.03" in full
+        assert "0.39" in full  # intro start (0.65*0.6)
 
     def test_loop_target_duration_voice_plus_six(self, tmp_path: Path) -> None:
         """Step runs and produces narration artifact when voice duration is 10s (loop target 16s)."""
