@@ -360,13 +360,15 @@ If an AI agent is reading this:
 
 Follow the spec.
 Follow the tasks.
+
 Write boring code.
 
 uv run python -m llm_storytell run \
   --app grim-narrator \
-  --beats 6 \
+  --beats 5 \
   --tts \
-  --seed "Frontlines of the future are a barely disguised meat grinder"
+  --tts-provider elevenlabs \
+  --seed "The grim brutality of living in a state locked into an eternal war is not something one easily gets used to. Life far behind the front lines inevitably adopts the war footing as well."
 
   uv run python -m llm_storytell run \
   --app daniel-bedtime \

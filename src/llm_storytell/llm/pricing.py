@@ -30,12 +30,16 @@ MODEL_COST_PER_1M: dict[str, tuple[float, float]] = {
     "gpt-4o-2024-05-13": (5.00, 15.00),
 }
 
-# TTS: USD per 1M characters (input). OpenAI TTS pricing.
-# Source: OpenAI platform pricing.
+# TTS: USD per 1M characters (input).
+# OpenAI: platform pricing. ElevenLabs: converted from USD per 1k chars (×1000).
 TTS_COST_PER_1M_CHARS: dict[str, float] = {
+    # OpenAI
     "tts-1": 15.00,
     "tts-1-hd": 30.00,
     "gpt-4o-mini-tts": 15.50,
+    # ElevenLabs ($ per 1k chars → $ per 1M chars)
+    "eleven_flash_v2_5": 80.00,        # $0.08 per 1k
+    "eleven_multilingual_v2": 170.00,  # $0.17 per 1k
 }
 
 

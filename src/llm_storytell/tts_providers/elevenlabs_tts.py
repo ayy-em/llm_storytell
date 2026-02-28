@@ -8,7 +8,7 @@ from llm_storytell.tts_providers import TTSProvider, TTSProviderError, TTSResult
 
 # Default voice_id per user request
 DEFAULT_VOICE_ID = "6FiCmD8eY5VyjOdG5Zjk"
-DEFAULT_MODEL_ID = "eleven_multilingual_v2"
+DEFAULT_MODEL_ID = "eleven_flash_v2_5"
 DEFAULT_OUTPUT_FORMAT = "mp3_44100_128"
 
 # OpenAI TTS model names; do not send these to ElevenLabs API
