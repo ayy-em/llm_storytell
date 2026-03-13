@@ -184,7 +184,10 @@ LLM-Storytell/
         world/
         style/
       prompts/         (optional; if absent, app uses app-defaults)
-      app_config.yaml  (optional)
+      app_config.yaml   (optional)
+      assets/           (optional: album-cover.png, bg-music.* for TTS runs)
+
+  assets/               (optional: default-bg-music.wav, album-cover.png for TTS runs)
 
   prompts/
     README.md
@@ -266,7 +269,7 @@ When TTS is enabled (default), the pipeline also runs a TTS step and an audio-pr
 
 * `tts/` — `prompts/` (chunked text per segment), `outputs/` (audio segments)
 * `voiceover/` — stitched and polished voiceover track and intermediate bg-music files
-* `artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>` — final narration (voice + background music); dd/mm from run ID date
+* `artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>` — final narration (voice + background music); dd/mm from run ID date. If `apps/<app_name>/assets/album-cover.png` or repo-root `assets/album-cover.png` exists, that image is embedded as album cover in the final MP3/M4A.
 
 On completion, the CLI and `run.log` show combined Chat token and TTS character usage and an estimated cost (Chat + TTS). Runs are immutable once completed.
 
@@ -305,6 +308,8 @@ Full reference: `SPEC.md` (CLI Interface, Language).
 - Additionally (not required for a run to succeed), any number of `.md` files with additional background info on your stories' universe: `context/locations/`, `context/world/`, `context/style/` (see Context handling above)
 
 2. **Optional:** Add `apps/<app_name>/app_config.yaml` to override defaults (beats, section_length, context limits, model, language). If absent, the pipeline uses `apps/default_config.yaml` or built-in defaults. To generate stories in another language, set `language` to an ISO 639-1 code (e.g. `es`, `fr`); or use the `--language` CLI flag. For TTS runs, you can set **MP3 metadata** (written as ID3 tags on the final file): `audio_artist`, `audio_title`, `audio_album` (or hyphenated `audio-artist`, etc.). If unset, artist defaults to the app name and title to the output filename.
+
+   **Optional (TTS):** Under `apps/<app_name>/assets/` you may add `album-cover.png` (and optionally `bg-music.*` for background music). If `album-cover.png` is present, the final audio file (MP3/M4A) has that image embedded as album art. If the app has no `assets/album-cover.png`, the pipeline checks repo-root `assets/album-cover.png` and uses it when present; if neither exists, no cover is embedded.
 
 3. **Optional:** Add `apps/<app_name>/prompts/` with pipeline templates (`10_outline.md`, `20_section.md`, etc.). If absent, the app uses prompts in `prompts/app-defaults/`.
 
@@ -365,10 +370,9 @@ Write boring code.
 
 uv run python -m llm_storytell run \
   --app grim-narrator \
-  --beats 5 \
+  --beats 7 \
   --tts \
-  --tts-provider elevenlabs \
-  --seed "The grim brutality of living in a state locked into an eternal war is not something one easily gets used to. Life far behind the front lines inevitably adopts the war footing as well."
+  --seed "The casual, highly optimized and very impersonal disregard for human lives the system has is always a relevation to these selected for the meat grinder via surprise mandatory military conscription."
 
   uv run python -m llm_storytell run \
   --app daniel-bedtime \

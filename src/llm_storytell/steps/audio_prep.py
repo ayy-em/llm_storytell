@@ -268,6 +268,25 @@ def _resolve_bg_music(base_dir: Path, app_name: str) -> Path:
     )
 
 
+ALBUM_COVER_FILENAME = "album-cover.png"
+
+
+def _resolve_album_cover(base_dir: Path, app_name: str) -> Path | None:
+    """Resolve album cover image for final audio metadata.
+
+    First checks apps/<app_name>/assets/album-cover.png; if missing, checks
+    base_dir/assets/album-cover.png. Returns path if either exists, else None.
+    """
+    base_dir = base_dir.resolve()
+    app_cover = base_dir / "apps" / app_name / "assets" / ALBUM_COVER_FILENAME
+    if app_cover.is_file():
+        return app_cover
+    default_cover = base_dir / "assets" / ALBUM_COVER_FILENAME
+    if default_cover.is_file():
+        return default_cover
+    return None
+
+
 # Crossfade duration (seconds) at loop points when building looped bg track
 BG_LOOP_CROSSFADE = 5
 
@@ -382,10 +401,10 @@ BG_DUCK_RAMP = 1.5
 BG_VOLUME_SCALE = 0.5
 # Envelope levels (after scale): intro 39%→18%, ramp 18%→3%, during narration 3%, outro 3%→42% then 45%.
 _BG_INTRO_START = 0.65 * BG_VOLUME_SCALE  # 0.39
-_BG_INTRO_END = 0.30 * BG_VOLUME_SCALE    # 0.18 (intro fades to this, then ramp to duck)
-_BG_DUCK = 0.05 * BG_VOLUME_SCALE         # 0.03 (during voiceover)
-_BG_OUTRO_END = 0.70 * BG_VOLUME_SCALE    # 0.42 (end of outro fade)
-_BG_OUTRO_TAIL = 0.75 * BG_VOLUME_SCALE   # 0.45 (final tail)
+_BG_INTRO_END = 0.30 * BG_VOLUME_SCALE  # 0.18 (intro fades to this, then ramp to duck)
+_BG_DUCK = 0.05 * BG_VOLUME_SCALE  # 0.03 (during voiceover)
+_BG_OUTRO_END = 0.70 * BG_VOLUME_SCALE  # 0.42 (end of outro fade)
+_BG_OUTRO_TAIL = 0.75 * BG_VOLUME_SCALE  # 0.45 (final tail)
 
 
 def _apply_bg_volume_envelope(
@@ -495,6 +514,7 @@ def _mix_voiceover_and_bg(
     voice_duration: float,
     *,
     metadata: dict[str, str] | None = None,
+    cover_path: Path | None = None,
 ) -> None:
     """Mix voiceover and background; write to out_path.
 
@@ -502,6 +522,7 @@ def _mix_voiceover_and_bg(
     (3s intro of music only, then voice+music, then PAD_END s of music only).
     Voice track gets 1.75x gain.
     For MP3/M4A, optional metadata (e.g. artist, title, album) is written as ID3/tags.
+    When cover_path is set and ext is .mp3 or .m4a, the image is embedded as album cover.
     """
     if ext.lower() == ".wav":
         codec_args = ["-c:a", "pcm_s16le"]
@@ -515,20 +536,42 @@ def _mix_voiceover_and_bg(
         f"[0:a]volume=1.25,adelay={delay_ms}|{delay_ms},apad=pad_dur={PAD_END}[vo];"
         "[vo][1:a]amix=inputs=2:duration=first[aout]"
     )
-    _run_ffmpeg(
+    embed_cover = (
+        cover_path is not None
+        and cover_path.is_file()
+        and ext.lower() in (".mp3", ".m4a")
+    )
+    ffmpeg_args: list[str] = [
+        "-i",
+        str(voiceover_path),
+        "-i",
+        str(bg_path),
+    ]
+    if embed_cover:
+        ffmpeg_args.extend(["-i", str(cover_path)])
+    ffmpeg_args.extend(
         [
-            "-i",
-            str(voiceover_path),
-            "-i",
-            str(bg_path),
             "-filter_complex",
             filter_complex,
             "-map",
             "[aout]",
-            *codec_args,
-            *meta_args,
-            str(out_path),
-        ],
+        ]
+    )
+    if embed_cover:
+        ffmpeg_args.extend(["-map", "2:0", "-c:v", "mjpeg", "-id3v2_version", "3"])
+        ffmpeg_args.extend(
+            [
+                "-metadata:s:v",
+                "title=Album cover",
+                "-metadata:s:v",
+                "comment=Cover (front)",
+            ]
+        )
+    ffmpeg_args.extend(codec_args)
+    ffmpeg_args.extend(meta_args)
+    ffmpeg_args.append(str(out_path))
+    _run_ffmpeg(
+        ffmpeg_args,
         "mix voiceover and bg with boosted voiceover volume",
     )
     size = out_path.stat().st_size
@@ -552,7 +595,8 @@ def execute_audio_prep_step(
     4. Load bg music: apps/<app_name>/assets/bg-music.* if exists, else assets/default-bg-music.wav.
     5. Loop bg with crossfade to voice_duration + 6s (3s intro + voice + 3s outro).
     6. Apply bg volume envelope (scaled so bg is ~40% quieter): intro duck, 3% during voice, outro fade up.
-    7. Mix: voiceover placed from 00m03s to (3+voice_duration)s on the track; write to run_dir/artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>.
+    7. Resolve album cover: apps/<app_name>/assets/album-cover.png if present, else base_dir/assets/album-cover.png; if neither exists, no cover.
+    8. Mix: voiceover placed from 00m03s to (3+voice_duration)s on the track; write to run_dir/artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>. When cover is present and output is MP3/M4A, embed cover as attached picture.
 
     Args:
         run_dir: Run directory (runs/<run_id>/).
@@ -594,6 +638,9 @@ def execute_audio_prep_step(
     metadata = _load_audio_metadata_from_app_config(
         base_dir, app_name, out_basename_no_ext
     )
+    cover_path = _resolve_album_cover(base_dir, app_name)
+    if cover_path is not None:
+        logger.info(f"Album cover: {cover_path}")
 
     _mix_voiceover_and_bg(
         voiceover_path,
@@ -604,5 +651,6 @@ def execute_audio_prep_step(
         ext,
         voice_duration,
         metadata=metadata,
+        cover_path=cover_path,
     )
     logger.info(f"Audio-prep complete: {out_path}")

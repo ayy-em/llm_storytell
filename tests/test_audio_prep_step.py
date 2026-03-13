@@ -10,11 +10,13 @@ import pytest
 
 from llm_storytell.logging import RunLogger
 from llm_storytell.steps.audio_prep import (
+    ALBUM_COVER_FILENAME,
     MAX_SEGMENTS,
     AudioPrepStepError,
     _discover_segments,
     _get_app_name,
     _parse_run_id_dd_mm,
+    _resolve_album_cover,
     _resolve_bg_music,
     _voiceover_artifact_filename,
     execute_audio_prep_step,
@@ -219,6 +221,49 @@ class TestResolveBgMusic:
             _resolve_bg_music(base, "no_app")
 
 
+class TestResolveAlbumCover:
+    """Album cover path resolution: app-specific first, then repo default."""
+
+    def test_returns_none_when_both_missing(self, tmp_path: Path) -> None:
+        base = tmp_path / "project"
+        base.mkdir()
+        assert _resolve_album_cover(base, "my_app") is None
+
+    def test_returns_none_when_assets_dir_exists_but_no_cover(
+        self, tmp_path: Path
+    ) -> None:
+        base = tmp_path / "project"
+        base.mkdir()
+        (base / "apps" / "my_app" / "assets").mkdir(parents=True)
+        assert _resolve_album_cover(base, "my_app") is None
+
+    def test_app_specific_cover_when_present(self, tmp_path: Path) -> None:
+        base = tmp_path / "project"
+        base.mkdir()
+        (base / "apps" / "my_app" / "assets").mkdir(parents=True)
+        app_cover = base / "apps" / "my_app" / "assets" / ALBUM_COVER_FILENAME
+        app_cover.write_bytes(b"\x89PNG\r\n")
+        assert _resolve_album_cover(base, "my_app") == app_cover
+
+    def test_default_cover_when_app_has_none(self, tmp_path: Path) -> None:
+        base = tmp_path / "project"
+        base.mkdir()
+        (base / "assets").mkdir()
+        default_cover = base / "assets" / ALBUM_COVER_FILENAME
+        default_cover.write_bytes(b"\x89PNG\r\n")
+        assert _resolve_album_cover(base, "no_app") == default_cover
+
+    def test_app_cover_overrides_default(self, tmp_path: Path) -> None:
+        base = tmp_path / "project"
+        base.mkdir()
+        (base / "apps" / "my_app" / "assets").mkdir(parents=True)
+        (base / "assets").mkdir()
+        app_cover = base / "apps" / "my_app" / "assets" / ALBUM_COVER_FILENAME
+        app_cover.write_bytes(b"app")
+        (base / "assets" / ALBUM_COVER_FILENAME).write_bytes(b"default")
+        assert _resolve_album_cover(base, "my_app") == app_cover
+
+
 class TestExecuteAudioPrepStep:
     """Full step execution with mocked subprocess."""
 
@@ -310,6 +355,51 @@ class TestExecuteAudioPrepStep:
         assert len(story) == 1
         assert story[0].name == "story-example_app-unknown-unknown-unknown-00-00.mp3"
 
+    def test_mix_includes_album_cover_when_present(self, tmp_path: Path) -> None:
+        """When app or default has album-cover.png, mix ffmpeg call embeds it (MP3)."""
+        run_dir = _run_dir(tmp_path, ["segment_01.mp3", "segment_02.mp3"])
+        base = tmp_path / "base"
+        base.mkdir()
+        (base / "assets").mkdir()
+        (base / "assets" / "default-bg-music.wav").write_bytes(b"x")
+        (base / "assets" / ALBUM_COVER_FILENAME).write_bytes(b"\x89PNG\r\n")
+        log_path = run_dir / "run.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+
+        all_calls: list[list[str]] = []
+        probe_returns = ["30.5", "10.0"]
+
+        def fake_run(cmd: list[str], *args: object, **kwargs: object) -> MagicMock:
+            all_calls.append(list(cmd))
+            out = MagicMock()
+            out.returncode = 0
+            out.stderr = ""
+            if cmd[0] == "ffprobe":
+                idx = len([c for c in all_calls if c[0] == "ffprobe"]) - 1
+                out.stdout = probe_returns[idx % len(probe_returns)]
+            else:
+                out.stdout = ""
+            if cmd[0] == "ffmpeg":
+                Path(cmd[-1]).parent.mkdir(parents=True, exist_ok=True)
+                Path(cmd[-1]).write_bytes(b"x")
+            return out
+
+        with patch(
+            "llm_storytell.steps.audio_prep.subprocess.run", side_effect=fake_run
+        ):
+            execute_audio_prep_step(run_dir, base, logger, app_name="example_app")
+
+        mix = next((c for c in all_calls if "amix" in " ".join(c)), None)
+        assert mix is not None
+        cmd_str = " ".join(mix)
+        # Three inputs: voice, bg, cover
+        assert mix.count("-i") == 3
+        assert ALBUM_COVER_FILENAME in cmd_str
+        assert "-map" in cmd_str and "2:0" in mix
+        assert "-c:v" in mix and "mjpeg" in cmd_str
+        assert "Cover (front)" in cmd_str
+
     def test_volume_envelope_uses_voice_duration(self, tmp_path: Path) -> None:
         run_dir = _run_dir(tmp_path, ["segment_01.mp3"])
         base = tmp_path / "base"
@@ -345,9 +435,9 @@ class TestExecuteAudioPrepStep:
         full = " ".join(envelope_cmd)
         # Envelope: 0-3s fade, 3 to 3+voice_duration flat, then 3s fade. For voice_duration=12: 3, 15, 18.
         assert "3" in full and "15" in full and "18" in full
-        # BG envelope scaled by BG_VOLUME_SCALE (0.6): duck 3%, scaled intro/outro
-        assert "0.03" in full
-        assert "0.39" in full  # intro start (0.65*0.6)
+        # BG envelope scaled by BG_VOLUME_SCALE (0.5): duck 0.025, intro start 0.325 (0.65*0.5)
+        assert "0.025" in full
+        assert "0.325" in full
 
     def test_loop_target_duration_voice_plus_six(self, tmp_path: Path) -> None:
         """Step runs and produces narration artifact when voice duration is 10s (loop target 16s)."""

@@ -4,6 +4,36 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Post-v1.2
 
+### [x] T0133 – Album cover support for final audio (2026-03-13)
+
+**Goal**
+Enable embedding an album cover image into the final audio file (MP3/M4A) when TTS/audio-prep runs, using an optional image file supplied per app or at repo root.
+
+**How to do it**
+- At the audio-prep step, resolve album cover in order: (1) `apps/<app_name>/assets/album-cover.png` if present, (2) repo-root `assets/album-cover.png` if present; otherwise no cover.
+- When a cover path is resolved and the output format is MP3 or M4A, embed the image as attached picture (ID3/metadata) via ffmpeg in the same mix pass (no new dependencies).
+- If neither file exists, do not add any cover; pipeline continues as before.
+
+**Acceptance criteria**
+- App-specific `apps/<app_name>/assets/album-cover.png` is used when present.
+- Repo-root `assets/album-cover.png` is used when app has no cover and repo file exists.
+- When neither exists, no album cover is embedded; run succeeds and final audio is unchanged in behavior.
+- Final MP3/M4A artifact contains the chosen image as album cover when one was resolved.
+
+**Allowed files**
+- `src/llm_storytell/steps/audio_prep.py`
+- `tests/test_audio_prep_step.py`
+
+**Commands to run**
+- `uv run ruff format .`
+- `uv run ruff check .`
+- `uv run pytest -q`
+
+**Result**
+Added `_resolve_album_cover(base_dir, app_name)` in `audio_prep.py`: returns `apps/<app_name>/assets/album-cover.png` if that file exists, else `assets/album-cover.png` if it exists, else `None`. Extended `_mix_voiceover_and_bg(..., cover_path=None)`: when `cover_path` is set and output ext is `.mp3` or `.m4a`, ffmpeg mix call adds third input (cover image), `-map 2:0`, `-c:v mjpeg`, `-id3v2_version 3`, and `-metadata:s:v` for album cover. `execute_audio_prep_step` resolves cover, logs it when present, and passes it to `_mix_voiceover_and_bg`. Tests: `TestResolveAlbumCover` (none, app-only, default-only, app overrides default), `test_mix_includes_album_cover_when_present` (mix ffmpeg args include cover input and metadata). Unrelated fix: `test_volume_envelope_uses_voice_duration` assertions updated to match current envelope constants (0.025, 0.325). README.md and SPEC.md updated for album cover resolution and optional assets; COMPLETED_TASKS.md updated with this task. Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (382 passed).
+
+---
+
 ### [x] T0132 – Support stories in multiple languages (2026-02-15)
 
 **Goal**

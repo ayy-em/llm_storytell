@@ -82,6 +82,9 @@ LLM-Storytell/
       prompts/          (optional; if absent, app uses app-defaults)
         *.md
       app_config.yaml   (optional)
+      assets/           (optional: album-cover.png, bg-music.* for audio-prep)
+
+  assets/               (optional: default-bg-music.wav, album-cover.png for audio-prep)
 
   prompts/
     README.md
@@ -567,7 +570,7 @@ The orchestrator executes strictly in order:
 2. **Outline** — generate outline beats.
 3. **For each beat:** section, then summarize.
 4. **Critic** — final script and editor report.
-5. **When TTS is enabled (default):** **TTS step** (chunk final script, synthesize segments to audio) → **audio-prep step** (stitch segments, polish voiceover, add background music, mix to final narration). Voiceover polish is a single ffmpeg pass: highpass/lowpass, EQ, dynaudnorm, light reverb (aecho), de-ess, and limiter. When `--no-tts` is set, the pipeline ends after the critic step.
+5. **When TTS is enabled (default):** **TTS step** (chunk final script, synthesize segments to audio) → **audio-prep step** (stitch segments, polish voiceover, add background music, mix to final narration). Voiceover polish is a single ffmpeg pass: highpass/lowpass, EQ, dynaudnorm, light reverb (aecho), de-ess, and limiter. The audio-prep step resolves **album cover** for the final file: it checks `apps/<app_name>/assets/album-cover.png`, then repo-root `assets/album-cover.png`; if either exists, that image is embedded as attached picture (ID3/metadata) in the final MP3 or M4A. If neither exists, no cover is added and the pipeline continues normally. When `--no-tts` is set, the pipeline ends after the critic step.
 
 ---
 
@@ -587,7 +590,7 @@ runs/<run_id>/
     30_critic_raw_response.txt
     final_script.md
     editor_report.json
-    story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>   (when TTS/audio ran)
+    story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>   (when TTS/audio ran; may contain embedded album cover if apps/<app>/assets/album-cover.png or assets/album-cover.png existed)
   llm_io/
     <stage_name>/
       prompt.txt

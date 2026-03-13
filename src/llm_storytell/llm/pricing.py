@@ -38,7 +38,7 @@ TTS_COST_PER_1M_CHARS: dict[str, float] = {
     "tts-1-hd": 30.00,
     "gpt-4o-mini-tts": 15.50,
     # ElevenLabs ($ per 1k chars → $ per 1M chars)
-    "eleven_flash_v2_5": 80.00,        # $0.08 per 1k
+    "eleven_flash_v2_5": 80.00,  # $0.08 per 1k
     "eleven_multilingual_v2": 170.00,  # $0.17 per 1k
 }
 
