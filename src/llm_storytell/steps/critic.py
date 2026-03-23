@@ -160,6 +160,69 @@ def _load_all_sections(run_dir: Path, expected_section_count: int) -> str:
     return "\n\n".join(draft_parts)
 
 
+def _coerce_critic_json_block(
+    parsed: dict[str, Any],
+) -> tuple[dict[str, Any], str | None]:
+    """Extract editor report and optional script from possibly wrapped JSON.
+
+    Some models return a wrapper object ``{"editor_report": {...}, "final_script": "..."}``
+    in the JSON block instead of a bare object with ``issues_found`` /
+    ``changes_applied``. The inner (or flat) report object is passed to schema
+    validation as-is except that ``final_script`` is stripped when it appears
+    alongside the report fields (schema forbids it).
+
+    Args:
+        parsed: Object parsed from the ``===EDITOR_REPORT_JSON===`` block.
+
+    Returns:
+        ``(editor_report, optional_final_script)``. The optional script is used
+        when the markdown ``===FINAL_SCRIPT===`` block is empty but the model
+        put the script only inside JSON.
+
+    Raises:
+        CriticStepError: If required fields are missing or have wrong types.
+    """
+    required = frozenset({"issues_found", "changes_applied"})
+
+    json_script: str | None = None
+    fs_top = parsed.get("final_script")
+    if isinstance(fs_top, str) and fs_top.strip():
+        json_script = fs_top
+
+    candidate: dict[str, Any]
+    if required <= parsed.keys():
+        candidate = dict(parsed)
+        candidate.pop("final_script", None)
+    else:
+        inner = parsed.get("editor_report")
+        if not isinstance(inner, dict) or not (required <= inner.keys()):
+            raise CriticStepError(
+                f"editor_report missing required keys: {sorted(required)}. "
+                f"Found keys: {sorted(parsed.keys())}. "
+                "Expected either a JSON object with 'issues_found' and "
+                "'changes_applied', or an object with an 'editor_report' property "
+                "containing those keys."
+            )
+        candidate = dict(inner)
+        fs_inner = candidate.pop("final_script", None)
+        if json_script is None and isinstance(fs_inner, str) and fs_inner.strip():
+            json_script = fs_inner
+
+    issues_found = candidate["issues_found"]
+    if not isinstance(issues_found, list):
+        raise CriticStepError(
+            f"editor_report.issues_found must be an array, got {type(issues_found).__name__}"
+        )
+
+    changes_applied = candidate["changes_applied"]
+    if not isinstance(changes_applied, list):
+        raise CriticStepError(
+            f"editor_report.changes_applied must be an array, got {type(changes_applied).__name__}"
+        )
+
+    return candidate, json_script
+
+
 def _parse_two_block_response(content: str) -> tuple[str, dict[str, Any]]:
     """Parse LLM response with two-block format.
 
@@ -258,27 +321,9 @@ def _parse_two_block_response(content: str) -> tuple[str, dict[str, Any]]:
             f"editor_report must be a JSON object, got {type(editor_report).__name__}"
         )
 
-    # Check required keys
-    required_keys = {"issues_found", "changes_applied"}
-    missing_keys = required_keys - set(editor_report.keys())
-    if missing_keys:
-        raise CriticStepError(
-            f"editor_report missing required keys: {sorted(missing_keys)}. "
-            f"Found keys: {sorted(editor_report.keys())}"
-        )
-
-    # Validate types
-    issues_found = editor_report.get("issues_found")
-    if not isinstance(issues_found, list):
-        raise CriticStepError(
-            f"editor_report.issues_found must be an array, got {type(issues_found).__name__}"
-        )
-
-    changes_applied = editor_report.get("changes_applied")
-    if not isinstance(changes_applied, list):
-        raise CriticStepError(
-            f"editor_report.changes_applied must be an array, got {type(changes_applied).__name__}"
-        )
+    editor_report, json_final_script = _coerce_critic_json_block(editor_report)
+    if not final_script.strip() and json_final_script:
+        final_script = json_final_script
 
     return final_script, editor_report
 

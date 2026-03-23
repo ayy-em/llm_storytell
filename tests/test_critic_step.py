@@ -21,6 +21,7 @@ logging_module = import_module("llm_storytell.logging")
 
 execute_critic_step = critic_module.execute_critic_step
 CriticStepError = critic_module.CriticStepError
+_parse_two_block_response = critic_module._parse_two_block_response
 LLMResult = llm_module.LLMResult
 LLMProvider = llm_module.LLMProvider
 LLMProviderError = llm_module.LLMProviderError
@@ -223,6 +224,64 @@ def valid_critic_response() -> str:
         + "\n===EDITOR_REPORT_JSON===\n\n"
         + json.dumps(editor_report, indent=2)
     )
+
+
+class TestParseTwoBlockResponse:
+    """Unit tests for critic two-block parsing (including wrapped JSON)."""
+
+    def test_wrapped_editor_report_uses_json_final_script_when_markdown_empty(
+        self,
+    ) -> None:
+        """Model puts script only under JSON final_script; markdown block empty."""
+        inner = {"issues_found": ["tone"], "changes_applied": ["fixed tone"]}
+        wrapped = {"final_script": "# From JSON only\n", "editor_report": inner}
+        content = "===FINAL_SCRIPT===\n\n\n\n===EDITOR_REPORT_JSON===\n\n" + json.dumps(
+            wrapped
+        )
+        script, report = _parse_two_block_response(content)
+        assert report == inner
+        assert script == "# From JSON only\n"
+
+    def test_wrapped_editor_report_prefers_markdown_when_non_empty(self) -> None:
+        """When markdown has body, it wins over JSON final_script."""
+        inner = {"issues_found": [], "changes_applied": []}
+        wrapped = {
+            "final_script": "# Wrong\n",
+            "editor_report": inner,
+        }
+        content = (
+            "===FINAL_SCRIPT===\n\n# From markdown\n\n"
+            "===EDITOR_REPORT_JSON===\n\n" + json.dumps(wrapped)
+        )
+        script, report = _parse_two_block_response(content)
+        assert report == inner
+        assert "# From markdown" in script
+        assert "Wrong" not in script
+
+    def test_flat_json_still_valid(self) -> None:
+        """Bare issues_found / changes_applied object (original contract)."""
+        body = {"issues_found": ["x"], "changes_applied": ["y"]}
+        content = (
+            "===FINAL_SCRIPT===\n\nok\n\n"
+            "===EDITOR_REPORT_JSON===\n\n" + json.dumps(body)
+        )
+        script, report = _parse_two_block_response(content)
+        assert script.strip() == "ok"
+        assert report == body
+
+    def test_flat_json_final_script_stripped_for_schema(self) -> None:
+        """final_script may appear on the flat JSON object; it is not in the report dict."""
+        body = {
+            "issues_found": ["a"],
+            "changes_applied": ["b"],
+            "final_script": "# from flat json\n",
+        }
+        content = "===FINAL_SCRIPT===\n\n\n\n===EDITOR_REPORT_JSON===\n\n" + json.dumps(
+            body
+        )
+        script, report = _parse_two_block_response(content)
+        assert report == {"issues_found": ["a"], "changes_applied": ["b"]}
+        assert script == "# from flat json\n"
 
 
 class TestExecuteCriticStepSuccess:

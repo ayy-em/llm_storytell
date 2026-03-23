@@ -368,11 +368,7 @@ Follow the tasks.
 
 Write boring code.
 
-uv run python -m llm_storytell run \
-  --app grim-narrator \
-  --beats 7 \
-  --tts \
-  --seed "The casual, highly optimized and very impersonal disregard for human lives the system has is always a relevation to these selected for the meat grinder via surprise mandatory military conscription."
+
 
   uv run python -m llm_storytell run \
   --app daniel-bedtime \
