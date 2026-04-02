@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from llm_storytell.logging import RunLogger
 from llm_storytell.pipeline.deliverable_to_book import (
+    _allocate_unique_book_filename,
     _book_basename_no_tts,
     _book_basename_tts,
     copy_no_tts_deliverable_to_book,
@@ -78,12 +79,16 @@ def _run_dir_no_tts(
 
 
 class TestBookBasename:
-    """Book filename format: {DD-MM-YY}_{app}_{model}_{tts_voice}.mp3 or .pdf."""
+    """Book TTS: {DD-MM}_{app4}_{model}_{tts_voice}.mp3 (CET date, no year). PDF unchanged."""
 
     def test_book_basename_tts(self, tmp_path: Path) -> None:
         run_dir = _run_dir_tts(tmp_path)
-        name = _book_basename_tts(run_dir)
-        assert name == "09-02-25_my_app_gpt-4.1-mini_onyx.mp3"
+        with patch(
+            "llm_storytell.pipeline.deliverable_to_book._cet_dd_mm_stamp",
+            return_value="09-02",
+        ):
+            name = _book_basename_tts(run_dir)
+        assert name == "09-02_my_a_gpt-4.1-mini_onyx.mp3"
 
     def test_book_basename_tts_fallback(self, tmp_path: Path) -> None:
         run_dir = tmp_path / "run"
@@ -92,9 +97,22 @@ class TestBookBasename:
             json.dumps({"app": "x", "run_id": "run-001"}),
             encoding="utf-8",
         )
-        name = _book_basename_tts(run_dir)
+        with patch(
+            "llm_storytell.pipeline.deliverable_to_book._cet_dd_mm_stamp",
+            return_value="01-01",
+        ):
+            name = _book_basename_tts(run_dir)
         assert name.endswith(".mp3")
-        assert "01-01-00" in name
+        assert name.startswith("01-01_")
+
+    def test_allocate_unique_book_filename(self, tmp_path: Path) -> None:
+        book_dir = tmp_path / "book"
+        book_dir.mkdir()
+        assert _allocate_unique_book_filename(book_dir, "a.mp3") == "a.mp3"
+        (book_dir / "a.mp3").write_bytes(b"x")
+        assert _allocate_unique_book_filename(book_dir, "a.mp3") == "a_2.mp3"
+        (book_dir / "a_2.mp3").write_bytes(b"x")
+        assert _allocate_unique_book_filename(book_dir, "a.mp3") == "a_3.mp3"
 
     def test_book_basename_no_tts(self, tmp_path: Path) -> None:
         run_dir = _run_dir_no_tts(tmp_path)
@@ -124,11 +142,43 @@ class TestCopyTtsDeliverableToBook:
         log_path.touch()
         logger = RunLogger(log_path)
 
-        copy_tts_deliverable_to_book(run_dir=run_dir, base_dir=base_dir, logger=logger)
+        with patch(
+            "llm_storytell.pipeline.deliverable_to_book._cet_dd_mm_stamp",
+            return_value="09-02",
+        ):
+            copy_tts_deliverable_to_book(
+                run_dir=run_dir, base_dir=base_dir, logger=logger
+            )
 
-        book_file = base_dir / "runs" / "book" / "09-02-25_my_app_gpt-4.1-mini_onyx.mp3"
+        book_file = base_dir / "runs" / "book" / "09-02_my_a_gpt-4.1-mini_onyx.mp3"
         assert book_file.is_file()
         assert book_file.read_bytes() == b"fake_mp3_content"
+
+    def test_copies_with_incremented_name_when_collision(self, tmp_path: Path) -> None:
+        run_dir_a = _run_dir_tts(tmp_path)
+        other_root = tmp_path / "other"
+        other_root.mkdir()
+        run_dir_b = _run_dir_tts(other_root)
+        base_dir = tmp_path / "base"
+        base_dir.mkdir()
+        log_path = tmp_path / "run.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+
+        with patch(
+            "llm_storytell.pipeline.deliverable_to_book._cet_dd_mm_stamp",
+            return_value="12-12",
+        ):
+            copy_tts_deliverable_to_book(
+                run_dir=run_dir_a, base_dir=base_dir, logger=logger
+            )
+            copy_tts_deliverable_to_book(
+                run_dir=run_dir_b, base_dir=base_dir, logger=logger
+            )
+
+        book = base_dir / "runs" / "book"
+        assert (book / "12-12_my_a_gpt-4.1-mini_onyx.mp3").is_file()
+        assert (book / "12-12_my_a_gpt-4.1-mini_onyx_2.mp3").is_file()
 
     def test_skips_when_artifact_missing(self, tmp_path: Path) -> None:
         run_dir = _run_dir_tts(tmp_path)

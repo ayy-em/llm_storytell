@@ -8,6 +8,7 @@ from pathlib import Path
 
 from llm_storytell.logging import RunLogger
 from llm_storytell.pipeline.state import StateIOError, load_inputs, load_state
+from llm_storytell.steps.audio_prep import _app_prefix_four_chars, _cet_dd_mm_stamp
 
 
 def _sanitize(s: str) -> str:
@@ -29,9 +30,23 @@ def _run_id_to_dd_mm_yy(run_id: str) -> tuple[str, str, str]:
     return dd, mm, yy
 
 
+def _allocate_unique_book_filename(book_dir: Path, filename: str) -> str:
+    """If filename is free in book_dir, return it; else filename_stem_{i}.ext for i>=2."""
+    if not (book_dir / filename).exists():
+        return filename
+    stem = Path(filename).stem
+    suffix = Path(filename).suffix
+    i = 2
+    while True:
+        alt = f"{stem}_{i}{suffix}"
+        if not (book_dir / alt).exists():
+            return alt
+        i += 1
+
+
 def _book_basename_tts(run_dir: Path) -> str:
-    """Build {DD-MM-YY}_{app}_{model}_{tts_voice}.mp3 from run_dir."""
-    dd, mm, yy = "01", "01", "00"
+    """Build {DD-MM}_{app4}_{model}_{tts_voice}.mp3 (DD-MM from Europe/Berlin, no year)."""
+    dd_mm = _cet_dd_mm_stamp()
     app_name = "unknown"
     model = "unknown"
     tts_voice = "unknown"
@@ -39,8 +54,6 @@ def _book_basename_tts(run_dir: Path) -> str:
         inputs_data = load_inputs(run_dir)
         app_name = str(inputs_data.get("app") or "unknown").strip()
         model = str(inputs_data.get("model") or "unknown").strip()
-        run_id = inputs_data.get("run_id") or run_dir.name
-        dd, mm, yy = _run_id_to_dd_mm_yy(str(run_id))
     except StateIOError:
         pass
     try:
@@ -49,7 +62,8 @@ def _book_basename_tts(run_dir: Path) -> str:
         tts_voice = str(tts_cfg.get("tts_voice") or "unknown").strip()
     except StateIOError:
         pass
-    return f"{dd}-{mm}-{yy}_{_sanitize(app_name)}_{_sanitize(model)}_{_sanitize(tts_voice)}.mp3"
+    app4 = _app_prefix_four_chars(app_name)
+    return f"{dd_mm}_{app4}_{_sanitize(model)}_{_sanitize(tts_voice)}.mp3"
 
 
 def _book_basename_no_tts(run_dir: Path) -> str:
@@ -93,7 +107,9 @@ def copy_tts_deliverable_to_book(
             return
         book_dir = base_dir / "runs" / "book"
         book_dir.mkdir(parents=True, exist_ok=True)
-        dest_name = _book_basename_tts(run_dir)
+        dest_name = _allocate_unique_book_filename(
+            book_dir, _book_basename_tts(run_dir)
+        )
         dest = book_dir / dest_name
         shutil.copy2(src, dest)
         logger.info(f"Deliverable copied to runs/book/{dest_name}")

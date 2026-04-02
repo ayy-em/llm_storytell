@@ -255,7 +255,7 @@ Generate a high-level narrative structure.
 * `10_outline.json`
 * Stored in `state.json.outline`
 
-Validated against `outline.schema.json`.
+Validated against `outline.schema.json` (each beat’s `summary` must be at least **100** characters so beats carry enough narrative plan for sections).
 
 ---
 
@@ -280,7 +280,7 @@ Runs once per outline beat. The draft pass must function correctly for any numbe
 * Section metadata block
 * Section summary JSON
 
-All structured outputs validated against schemas.
+All structured outputs validated against schemas (section frontmatter: `local_summary` at least **100** characters). If the first model response fails only because `local_summary` is too short, the section step performs **one** follow-up LLM call with a repair prompt, then re-validates (still failing if the repair is invalid).
 
 ---
 
@@ -590,7 +590,7 @@ runs/<run_id>/
     30_critic_raw_response.txt
     final_script.md
     editor_report.json
-    story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>   (when TTS/audio ran; may contain embedded album cover if apps/<app>/assets/album-cover.png or assets/album-cover.png existed)
+    story-<app4>-<llm_model>-<tts_model>-<tts_voice>-<DD-MM>.<ext>   (when TTS/audio ran; <app4> = first four chars of sanitized app name; <DD-MM> = calendar day in Europe/Berlin when written; may contain embedded album cover if apps/<app>/assets/album-cover.png or assets/album-cover.png existed)
   llm_io/
     <stage_name>/
       prompt.txt

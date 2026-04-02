@@ -76,6 +76,38 @@ class _MockLLMProvider(LLMProvider):
         )
 
 
+class _SequenceMockLLMProvider(LLMProvider):
+    """Returns scripted responses in order for each generate() call."""
+
+    def __init__(self, contents: list[str]) -> None:
+        super().__init__(provider_name="mock-seq")
+        self._contents = contents
+        self._i = 0
+        self.calls: list[dict[str, Any]] = []
+
+    def generate(
+        self,
+        prompt: str,
+        *,
+        step: str,
+        model: str | None = None,
+        **kwargs: Any,
+    ) -> LLMResult:
+        if self._i >= len(self._contents):
+            raise LLMProviderError("mock-seq: no more scripted responses")
+        content = self._contents[self._i]
+        self._i += 1
+        self.calls.append({"prompt": prompt, "step": step, "model": model, **kwargs})
+        return LLMResult(
+            content=content,
+            provider="mock-seq",
+            model=model or "mock-model",
+            prompt_tokens=10,
+            completion_tokens=20,
+            total_tokens=30,
+        )
+
+
 @pytest.fixture
 def temp_run_dir_with_outline(tmp_path: Path) -> Path:
     """Create a temporary run directory with outline in state."""
@@ -92,9 +124,33 @@ def temp_run_dir_with_outline(tmp_path: Path) -> Path:
             "characters": ["hero.md", "villain.md"],
         },
         "outline": [
-            {"beat_id": 1, "title": "Beginning", "summary": "The story begins."},
-            {"beat_id": 2, "title": "Middle", "summary": "The story develops."},
-            {"beat_id": 3, "title": "End", "summary": "The story concludes."},
+            {
+                "beat_id": 1,
+                "title": "Beginning",
+                "summary": (
+                    "The story begins in a decaying industrial city as the worker wakes and "
+                    "prepares for shift; streets, hunger, and routine establish tone and stakes "
+                    "before the protagonist reaches the factory gates for the opening beat."
+                ),
+            },
+            {
+                "beat_id": 2,
+                "title": "Middle",
+                "summary": (
+                    "The middle beat escalates workplace conflict: quotas shift, supervisors "
+                    "pressure the line, and the protagonist witnesses an incident that hints "
+                    "at deeper corruption tying safety failures to management incentives."
+                ),
+            },
+            {
+                "beat_id": 3,
+                "title": "End",
+                "summary": (
+                    "The closing beat resolves the arc with a grim choice about testimony versus "
+                    "survival; solidarity frays, consequences land, and the narrative ends on a "
+                    "bitter realization about power and complicity in the decaying city."
+                ),
+            },
         ],
         "sections": [],
         "summaries": [],
@@ -322,6 +378,57 @@ class TestExecuteSectionStepSuccess:
         llm_io_section = temp_run_dir_with_outline / "llm_io" / "section_00"
         assert (llm_io_section / "prompt.txt").exists()
         assert (llm_io_section / "response.txt").exists()
+
+    def test_retries_once_when_local_summary_too_short(
+        self,
+        temp_run_dir_with_outline: Path,
+        temp_context_dir: Path,
+        temp_prompts_dir: Path,
+        valid_section_content: str,
+    ) -> None:
+        """Second LLM call repairs frontmatter when only local_summary is below minLength."""
+        short_frontmatter = """---
+section_id: 1
+local_summary: Too short.
+new_entities: []
+new_locations: []
+unresolved_threads: []
+---
+
+## The Beginning
+
+The fog clung to the riverbank as the worker woke up.
+"""
+        provider = _SequenceMockLLMProvider([short_frontmatter, valid_section_content])
+        logger = RunLogger(temp_run_dir_with_outline / "run.log")
+
+        execute_section_step(
+            run_dir=temp_run_dir_with_outline,
+            context_dir=temp_context_dir,
+            prompts_dir=temp_prompts_dir,
+            llm_provider=provider,
+            logger=logger,
+            section_index=0,
+            section_length="400-600",
+            schema_base=SCHEMA_BASE,
+        )
+
+        assert len(provider.calls) == 2
+        assert provider.calls[0]["step"] == "section_00"
+        assert provider.calls[1]["step"] == "section_00_repair"
+        assert "Previous response" in provider.calls[1][
+            "prompt"
+        ] or "previous answer" in (provider.calls[1]["prompt"].lower())
+
+        assert (
+            temp_run_dir_with_outline / "llm_io" / "section_00_repair" / "response.txt"
+        ).exists()
+
+        with (temp_run_dir_with_outline / "state.json").open(encoding="utf-8") as f:
+            state = json.load(f)
+        assert state["token_usage"][0]["prompt_tokens"] == 20
+        assert state["token_usage"][0]["completion_tokens"] == 40
+        assert state["token_usage"][0]["total_tokens"] == 60
 
     def test_section_loop_multiple_sections(
         self,

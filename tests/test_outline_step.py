@@ -171,27 +171,47 @@ def valid_outline_json() -> str:
             {
                 "beat_id": 1,
                 "title": "Beginning",
-                "summary": "The story begins with the worker waking up.",
+                "summary": (
+                    "The story begins with the worker waking up in a decaying industrial quarter; "
+                    "dawn leaks through grimy glass as distant whistles mark the shift change and "
+                    "the first beat establishes hunger, routine, and the walk toward the plant."
+                ),
             },
             {
                 "beat_id": 2,
                 "title": "Morning",
-                "summary": "The worker goes to work in the factory.",
+                "summary": (
+                    "On the factory floor the protagonist joins a line under flickering bulbs while "
+                    "supervisors patrol; machines devour silence and a disputed quota introduces "
+                    "the first interpersonal tension that will echo through later beats."
+                ),
             },
             {
                 "beat_id": 3,
                 "title": "Incident",
-                "summary": "Something unexpected happens at work.",
+                "summary": (
+                    "An unexpected stoppage ripples through the hall; rumors spread about missing "
+                    "parts and altered schedules, forcing the worker to choose between compliance "
+                    "and curiosity as safety rules tighten around the crew."
+                ),
             },
             {
                 "beat_id": 4,
                 "title": "Discovery",
-                "summary": "The worker discovers something important.",
+                "summary": (
+                    "The worker uncovers evidence that management has concealed a hazard tied to "
+                    "prior injuries; allies waver, trust fractures, and the beat ends with a "
+                    "decision whether to document the finding or stay silent for self-preservation."
+                ),
             },
             {
                 "beat_id": 5,
                 "title": "End",
-                "summary": "The story concludes with a grim realization.",
+                "summary": (
+                    "The finale confronts the cost of speaking up in a city that punishes dissent; "
+                    "the protagonist accepts a grim tradeoff, and the closing beat lands on a "
+                    "bitter realization about solidarity, survival, and the limits of reform."
+                ),
             },
         ]
     }
@@ -629,9 +649,30 @@ class TestExecuteOutlineStepErrors:
         # Outline with 3 beats but 5 were requested
         wrong_count_outline = {
             "beats": [
-                {"beat_id": 1, "title": "One", "summary": "First beat summary here"},
-                {"beat_id": 2, "title": "Two", "summary": "Second beat summary here"},
-                {"beat_id": 3, "title": "Three", "summary": "Third beat summary here"},
+                {
+                    "beat_id": 1,
+                    "title": "One",
+                    "summary": (
+                        "First beat summary with enough characters for outline schema validation "
+                        "even though this test only asserts wrong beat count against requested five."
+                    ),
+                },
+                {
+                    "beat_id": 2,
+                    "title": "Two",
+                    "summary": (
+                        "Second beat summary with enough characters for outline schema validation "
+                        "even though this test only asserts wrong beat count against requested five."
+                    ),
+                },
+                {
+                    "beat_id": 3,
+                    "title": "Three",
+                    "summary": (
+                        "Third beat summary with enough characters for outline schema validation "
+                        "even though this test only asserts wrong beat count against requested five."
+                    ),
+                },
             ]
         }
         provider = _MockLLMProvider(response_content=json.dumps(wrong_count_outline))

@@ -88,8 +88,24 @@ def temp_run_dir_with_sections(tmp_path: Path) -> Path:
             "characters": ["hero.md", "villain.md"],
         },
         "outline": [
-            {"beat_id": 1, "title": "Beginning", "summary": "The story begins."},
-            {"beat_id": 2, "title": "Middle", "summary": "The story develops."},
+            {
+                "beat_id": 1,
+                "title": "Beginning",
+                "summary": (
+                    "The story begins in a decaying industrial city as the worker wakes and "
+                    "heads to shift; hunger, routine, and crowded streets establish stakes before "
+                    "the factory gates close behind the protagonist for the opening narrative beat."
+                ),
+            },
+            {
+                "beat_id": 2,
+                "title": "Middle",
+                "summary": (
+                    "The middle beat escalates conflict on the floor: quotas tighten, supervisors "
+                    "intimidate the line, and the protagonist witnesses an incident suggesting "
+                    "management conceals hazards tied to injuries and broken safety culture."
+                ),
+            },
         ],
         "sections": [],
         "summaries": [],
@@ -115,7 +131,7 @@ def temp_run_dir_with_sections(tmp_path: Path) -> Path:
     # Create section artifacts
     section1_content = """---
 section_id: 1
-local_summary: First section summary
+local_summary: First section summary for critic integration test fixture content; this prose extends past one hundred characters so section frontmatter satisfies JSON Schema minLength for local_summary in automated critic tests.
 new_entities: []
 new_locations: []
 unresolved_threads: []
@@ -129,7 +145,7 @@ This is the first section content.
 
     section2_content = """---
 section_id: 2
-local_summary: Second section summary
+local_summary: Second section summary for critic integration test fixture content; this prose extends past one hundred characters so section frontmatter satisfies JSON Schema minLength for local_summary in automated critic tests.
 new_entities: []
 new_locations: []
 unresolved_threads: []
@@ -438,7 +454,15 @@ class TestExecuteCriticStepSuccess:
             "seed": "A single section story.",
             "selected_context": {},
             "outline": [
-                {"beat_id": 1, "title": "Only", "summary": "The only section."}
+                {
+                    "beat_id": 1,
+                    "title": "Only",
+                    "summary": (
+                        "The only section beat still requires a long outline summary: the protagonist "
+                        "faces a single decisive arc from dawn shift through a workplace incident to "
+                        "a closing realization about survival and complicity in the decaying city."
+                    ),
+                }
             ],
             "sections": [],
             "summaries": [],
@@ -451,7 +475,7 @@ class TestExecuteCriticStepSuccess:
         # Create single section artifact
         section_content = """---
 section_id: 1
-local_summary: Only section
+local_summary: Only section in this single-section critic test fixture run; additional narrative summary text ensures the local_summary field exceeds one hundred characters for JSON Schema validation in section frontmatter fixtures.
 new_entities: []
 new_locations: []
 unresolved_threads: []
@@ -554,7 +578,16 @@ class TestExecuteCriticStepErrors:
             "app": "grim-narrator",
             "seed": "Test",
             "selected_context": {},
-            "outline": [{"beat_id": 1, "title": "One", "summary": "First"}],
+            "outline": [
+                {
+                    "beat_id": 1,
+                    "title": "One",
+                    "summary": (
+                        "First beat outline summary with concrete events, setting, and stakes so "
+                        "state.outline satisfies outline.schema.json minimum summary length in critic tests."
+                    ),
+                }
+            ],
             "sections": [],
             "summaries": [],
             "continuity_ledger": {},
@@ -626,9 +659,30 @@ class TestExecuteCriticStepErrors:
             "seed": "Test",
             "selected_context": {},
             "outline": [
-                {"beat_id": 1, "title": "One", "summary": "First"},
-                {"beat_id": 2, "title": "Two", "summary": "Second"},
-                {"beat_id": 3, "title": "Three", "summary": "Third"},
+                {
+                    "beat_id": 1,
+                    "title": "One",
+                    "summary": (
+                        "First beat outline summary with concrete events, setting, and stakes so "
+                        "state.outline satisfies outline.schema.json minimum summary length in critic tests."
+                    ),
+                },
+                {
+                    "beat_id": 2,
+                    "title": "Two",
+                    "summary": (
+                        "Second beat outline summary with concrete events, setting, and stakes so "
+                        "state.outline satisfies outline.schema.json minimum summary length in critic tests."
+                    ),
+                },
+                {
+                    "beat_id": 3,
+                    "title": "Three",
+                    "summary": (
+                        "Third beat outline summary with concrete events, setting, and stakes so "
+                        "state.outline satisfies outline.schema.json minimum summary length in critic tests."
+                    ),
+                },
             ],
             "sections": [],
             "summaries": [],
@@ -642,7 +696,7 @@ class TestExecuteCriticStepErrors:
         # Create sections 01 and 03, missing 02
         section1 = """---
 section_id: 1
-local_summary: First
+local_summary: First section placeholder summary for missing middle section test; extended prose ensures local_summary exceeds one hundred characters required by section.schema.json in this critic gap-detection fixture.
 new_entities: []
 new_locations: []
 unresolved_threads: []
@@ -656,7 +710,7 @@ Content one.
 
         section3 = """---
 section_id: 3
-local_summary: Third
+local_summary: Third section placeholder summary for missing middle section test; extended prose ensures local_summary exceeds one hundred characters required by section.schema.json in this critic gap-detection fixture.
 new_entities: []
 new_locations: []
 unresolved_threads: []
@@ -699,7 +753,16 @@ Content three.
             "app": "grim-narrator",
             "seed": "Test",
             "selected_context": {},
-            "outline": [{"beat_id": 1, "title": "One", "summary": "First"}],
+            "outline": [
+                {
+                    "beat_id": 1,
+                    "title": "One",
+                    "summary": (
+                        "First beat outline summary with concrete events, setting, and stakes so "
+                        "state.outline satisfies outline.schema.json minimum summary length in critic tests."
+                    ),
+                }
+            ],
             "sections": [],
             "summaries": [],
             "continuity_ledger": {},
@@ -751,7 +814,16 @@ Content.
             "app": "grim-narrator",
             "seed": "Test",
             "selected_context": {},
-            "outline": [{"beat_id": 1, "title": "One", "summary": "First"}],
+            "outline": [
+                {
+                    "beat_id": 1,
+                    "title": "One",
+                    "summary": (
+                        "First beat outline summary with concrete events, setting, and stakes so "
+                        "state.outline satisfies outline.schema.json minimum summary length in critic tests."
+                    ),
+                }
+            ],
             "sections": [],
             "summaries": [],
             "continuity_ledger": {},

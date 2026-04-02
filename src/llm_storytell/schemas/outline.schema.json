@@ -12,7 +12,7 @@
           "properties": {
             "beat_id": { "type": "integer" },
             "title": { "type": "string", "minLength": 3 },
-            "summary": { "type": "string", "minLength": 20 }
+            "summary": { "type": "string", "minLength": 100 }
           },
           "additionalProperties": false
         }

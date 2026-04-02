@@ -12,6 +12,7 @@ from llm_storytell.config import (
     resolve_app,
 )
 from llm_storytell.iso639 import InvalidLanguageError, validate_iso639
+from llm_storytell.logging import RunLogger
 from llm_storytell.pipeline.resolve import resolve_run_settings
 from llm_storytell.pipeline.runner import run_pipeline
 
@@ -111,6 +112,17 @@ def create_parser() -> argparse.ArgumentParser:
         required=False,
         metavar="CODE",
         help="ISO 639-1 language code for story output (e.g. en, es). Overrides app config.",
+    )
+
+    audio_prep_parser = subparsers.add_parser(
+        "audio-prep",
+        help="Re-run audio-prep on an existing run (requires tts/outputs/ segment files).",
+    )
+    audio_prep_parser.add_argument(
+        "--run-dir",
+        type=Path,
+        required=True,
+        help="Path to the run directory (e.g. runs/run-20260325-000115).",
     )
 
     return parser
@@ -251,6 +263,29 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         return run_pipeline(settings)
+
+    if args.command == "audio-prep":
+        from llm_storytell.steps.audio_prep import (
+            AudioPrepStepError,
+            execute_audio_prep_step,
+        )
+
+        base_dir = Path.cwd()
+        run_dir = args.run_dir.expanduser().resolve()
+        if not run_dir.is_dir():
+            print(f"Error: run directory not found: {run_dir}", file=sys.stderr)
+            return 1
+        logger = RunLogger(run_dir / "run.log")
+        logger.log_stage_start("audio_prep")
+        try:
+            execute_audio_prep_step(run_dir, base_dir, logger)
+        except AudioPrepStepError as e:
+            logger.log_stage_end("audio_prep", success=False)
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        logger.log_stage_end("audio_prep", success=True)
+        print(f"Audio-prep finished. Output under {run_dir / 'artifacts'}")
+        return 0
 
     return 0
 

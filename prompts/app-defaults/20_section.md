@@ -59,11 +59,12 @@ Language (ISO 639-1 code; write this section in this language):
 - Valid Markdown.
 - Begin with YAML frontmatter exactly matching the required schema.
 - No extra frontmatter fields.
+- **Before you finish:** count characters in `local_summary` only. If under **100**, add another sentence with on-scene detail (who, where, what changed) until it reaches at least **100** characters.
 
 ### Frontmatter schema (required)
 ---
 section_id: {section_id}
-local_summary: "<≥100 chars summarizing this section>"
+local_summary: "<≥100 chars summarizing this section (tie to the outline beat; 2–3 sentences preferred)>"
 new_entities: []
 new_locations: []
 unresolved_threads: []

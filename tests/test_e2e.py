@@ -72,7 +72,11 @@ class MockLLMProvider(LLMProvider):
                     {
                         "beat_id": i,
                         "title": f"Beat {i}",
-                        "summary": f"This is beat {i} of the story. Important events happen here.",
+                        "summary": (
+                            f"This is beat {i} of the story; important events happen here and "
+                            "advance the plot with concrete stakes, locations, and character "
+                            "decisions that seed later sections and satisfy outline summary length."
+                        ),
                     }
                 )
             outline = {"beats": beats}
@@ -652,7 +656,7 @@ def test_e2e_with_tts_succeeds(
     assert (run_dir / "artifacts" / "final_script.md").exists()
     story_artifacts = list((run_dir / "artifacts").glob("story-*.mp3"))
     assert len(story_artifacts) == 1
-    assert story_artifacts[0].name.startswith("story-test-app-")
+    assert story_artifacts[0].name.startswith("story-test-")
     assert story_artifacts[0].name.endswith(".mp3")
 
 

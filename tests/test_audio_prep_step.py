@@ -13,9 +13,12 @@ from llm_storytell.steps.audio_prep import (
     ALBUM_COVER_FILENAME,
     MAX_SEGMENTS,
     AudioPrepStepError,
+    VOICEOVER_POLISH_AF,
+    _app_prefix_four_chars,
+    _default_audio_title_from_seed,
     _discover_segments,
     _get_app_name,
-    _parse_run_id_dd_mm,
+    _load_audio_metadata_from_app_config,
     _resolve_album_cover,
     _resolve_bg_music,
     _voiceover_artifact_filename,
@@ -40,14 +43,27 @@ def _run_dir(
     return run_dir
 
 
-class TestVoiceoverArtifactFilename:
-    """Final artifact filename: story-{app}-{llm_model}-{tts_model}-{tts_voice}-{dd}-{mm}.ext."""
+class TestVoiceoverPolishFilter:
+    """Regression: broken afade=out:st=0 silences everything after the fade window."""
 
-    def test_parse_run_id_dd_mm(self) -> None:
-        assert _parse_run_id_dd_mm("run-20260209-234638") == ("09", "02")
-        assert _parse_run_id_dd_mm("run-20251201-120000") == ("01", "12")
-        assert _parse_run_id_dd_mm("run-001") == ("00", "00")
-        assert _parse_run_id_dd_mm("") == ("00", "00")
+    def test_polish_chain_has_no_start_aligned_fade_out(self) -> None:
+        assert "afade=t=out:st=0" not in VOICEOVER_POLISH_AF
+
+
+class TestVoiceoverArtifactFilename:
+    """Final artifact: story-{app4}-{llm}-{tts_model}-{tts_voice}-{DD-MM}.ext (CET date)."""
+
+    def test_app_prefix_four_chars(self) -> None:
+        assert _app_prefix_four_chars("my_app") == "my_a"
+        assert _app_prefix_four_chars("grim-narrator") == "grim"
+        assert _app_prefix_four_chars("ab") == "ab"
+
+    def test_default_audio_title_from_seed(self) -> None:
+        assert _default_audio_title_from_seed("  hello  world  ", "fb") == "hello world"
+        long_seed = "x" * 40
+        assert len(_default_audio_title_from_seed(long_seed, "fb")) == 30
+        assert _default_audio_title_from_seed(None, "fb") == "fb"
+        assert _default_audio_title_from_seed("", "fb") == "fb"
 
     def test_voiceover_artifact_filename_from_inputs_and_state(
         self, tmp_path: Path
@@ -75,10 +91,13 @@ class TestVoiceoverArtifactFilename:
             ),
             encoding="utf-8",
         )
-        name = _voiceover_artifact_filename(run_dir, "my_app", ".mp3")
+        with patch(
+            "llm_storytell.steps.audio_prep._cet_dd_mm_stamp", return_value="09-02"
+        ):
+            name = _voiceover_artifact_filename(run_dir, "my_app", ".mp3")
         assert (
             name
-            == "story-my_app-gpt-4.1-mini-eleven_multilingual_v2-6FiCmD8eY5VyjOdG5Zjk-09-02.mp3"
+            == "story-my_a-gpt-4.1-mini-eleven_multilingual_v2-6FiCmD8eY5VyjOdG5Zjk-09-02.mp3"
         )
 
     def test_voiceover_artifact_filename_fallback_when_missing_inputs_state(
@@ -89,8 +108,11 @@ class TestVoiceoverArtifactFilename:
         (run_dir / "inputs.json").write_text(
             json.dumps({"app": "example_app", "run_id": "run-001"}), encoding="utf-8"
         )
-        name = _voiceover_artifact_filename(run_dir, "example_app", ".mp3")
-        assert name == "story-example_app-unknown-unknown-unknown-00-00.mp3"
+        with patch(
+            "llm_storytell.steps.audio_prep._cet_dd_mm_stamp", return_value="00-00"
+        ):
+            name = _voiceover_artifact_filename(run_dir, "example_app", ".mp3")
+        assert name == "story-exam-unknown-unknown-unknown-00-00.mp3"
 
 
 class TestGetAppName:
@@ -120,6 +142,31 @@ class TestGetAppName:
         )
         with pytest.raises(AudioPrepStepError, match="missing 'app'"):
             _get_app_name(run_dir)
+
+
+class TestLoadAudioMetadataFromAppConfig:
+    """ID3 defaults: title from truncated seed unless YAML overrides."""
+
+    def test_title_from_seed_when_no_config(self, tmp_path: Path) -> None:
+        base = tmp_path / "proj"
+        base.mkdir()
+        meta = _load_audio_metadata_from_app_config(
+            base, "app1", "stem", story_seed="hello world"
+        )
+        assert meta["title"] == "hello world"
+        assert meta["artist"] == "app1"
+
+    def test_yaml_audio_title_overrides_seed(self, tmp_path: Path) -> None:
+        base = tmp_path / "proj"
+        (base / "apps").mkdir(parents=True)
+        (base / "apps" / "default_config.yaml").write_text(
+            "audio_title: Custom\n",
+            encoding="utf-8",
+        )
+        meta = _load_audio_metadata_from_app_config(
+            base, "app1", "stem", story_seed="ignored"
+        )
+        assert meta["title"] == "Custom"
 
 
 class TestDiscoverSegments:
@@ -302,8 +349,15 @@ class TestExecuteAudioPrepStep:
                     last.write_bytes(b"x")
             return out
 
-        with patch(
-            "llm_storytell.steps.audio_prep.subprocess.run", side_effect=fake_run
+        with (
+            patch(
+                "llm_storytell.steps.audio_prep.subprocess.run",
+                side_effect=fake_run,
+            ),
+            patch(
+                "llm_storytell.steps.audio_prep._cet_dd_mm_stamp",
+                return_value="00-00",
+            ),
         ):
             execute_audio_prep_step(run_dir, base, logger, app_name="example_app")
 
@@ -353,7 +407,84 @@ class TestExecuteAudioPrepStep:
         artifacts_dir = run_dir / "artifacts"
         story = list(artifacts_dir.glob("story-*.mp3"))
         assert len(story) == 1
-        assert story[0].name == "story-example_app-unknown-unknown-unknown-00-00.mp3"
+        assert story[0].name == "story-exam-unknown-unknown-unknown-00-00.mp3"
+
+    def test_mix_ffmpeg_includes_truncated_seed_as_title(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "run-meta"
+        run_dir.mkdir()
+        seed = "S" * 45
+        (run_dir / "inputs.json").write_text(
+            json.dumps(
+                {"app": "example_app", "run_id": "run-001", "model": "m", "seed": seed}
+            ),
+            encoding="utf-8",
+        )
+        (run_dir / "state.json").write_text(
+            json.dumps({"tts_config": {"tts_model": "tm", "tts_voice": "v"}}),
+            encoding="utf-8",
+        )
+        outputs = run_dir / "tts" / "outputs"
+        outputs.mkdir(parents=True)
+        (outputs / "segment_01.mp3").write_bytes(b"f")
+        base = tmp_path / "base"
+        base.mkdir()
+        (base / "assets").mkdir()
+        (base / "assets" / "default-bg-music.wav").write_bytes(b"x")
+        log_path = run_dir / "run.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+
+        calls: list[list[str]] = []
+
+        def fake_run(cmd: list[str], *args: object, **kwargs: object) -> MagicMock:
+            calls.append(cmd)
+            out = MagicMock()
+            out.returncode = 0
+            out.stderr = ""
+            if cmd[0] == "ffprobe":
+                out.stdout = "10.0"
+            else:
+                out.stdout = ""
+            if cmd[0] == "ffmpeg" and len(cmd) >= 2:
+                last = Path(cmd[-1])
+                if (
+                    "voiceover" in str(last)
+                    or "story-" in str(last)
+                    or "bg_" in str(last)
+                ):
+                    last.parent.mkdir(parents=True, exist_ok=True)
+                    last.write_bytes(b"x")
+            return out
+
+        with (
+            patch(
+                "llm_storytell.steps.audio_prep.subprocess.run",
+                side_effect=fake_run,
+            ),
+            patch(
+                "llm_storytell.steps.audio_prep._cet_dd_mm_stamp",
+                return_value="00-00",
+            ),
+        ):
+            execute_audio_prep_step(run_dir, base, logger, app_name="example_app")
+
+        mix = next(
+            (c for c in calls if c[0] == "ffmpeg" and "amix" in " ".join(c)), None
+        )
+        assert mix is not None
+        expected_title = "S" * 30
+        assert "-metadata" in mix
+        title_meta = next(
+            (
+                mix[i + 1]
+                for i, x in enumerate(mix)
+                if x == "-metadata"
+                and i + 1 < len(mix)
+                and mix[i + 1].startswith("title=")
+            ),
+            None,
+        )
+        assert title_meta == f"title={expected_title}"
 
     def test_mix_includes_album_cover_when_present(self, tmp_path: Path) -> None:
         """When app or default has album-cover.png, mix ffmpeg call embeds it (MP3)."""
@@ -385,8 +516,15 @@ class TestExecuteAudioPrepStep:
                 Path(cmd[-1]).write_bytes(b"x")
             return out
 
-        with patch(
-            "llm_storytell.steps.audio_prep.subprocess.run", side_effect=fake_run
+        with (
+            patch(
+                "llm_storytell.steps.audio_prep.subprocess.run",
+                side_effect=fake_run,
+            ),
+            patch(
+                "llm_storytell.steps.audio_prep._cet_dd_mm_stamp",
+                return_value="00-00",
+            ),
         ):
             execute_audio_prep_step(run_dir, base, logger, app_name="example_app")
 
@@ -426,8 +564,15 @@ class TestExecuteAudioPrepStep:
             out.stderr = ""
             return out
 
-        with patch(
-            "llm_storytell.steps.audio_prep.subprocess.run", side_effect=fake_run
+        with (
+            patch(
+                "llm_storytell.steps.audio_prep.subprocess.run",
+                side_effect=fake_run,
+            ),
+            patch(
+                "llm_storytell.steps.audio_prep._cet_dd_mm_stamp",
+                return_value="00-00",
+            ),
         ):
             execute_audio_prep_step(run_dir, base, logger, app_name="example_app")
 
@@ -467,15 +612,20 @@ class TestExecuteAudioPrepStep:
                 Path(cmd[-1]).write_bytes(b"x")
             return out
 
-        with patch(
-            "llm_storytell.steps.audio_prep.subprocess.run", side_effect=fake_run
+        with (
+            patch(
+                "llm_storytell.steps.audio_prep.subprocess.run",
+                side_effect=fake_run,
+            ),
+            patch(
+                "llm_storytell.steps.audio_prep._cet_dd_mm_stamp",
+                return_value="00-00",
+            ),
         ):
             execute_audio_prep_step(run_dir, base, logger, app_name="example_app")
 
         assert (
-            run_dir
-            / "artifacts"
-            / "story-example_app-unknown-unknown-unknown-00-00.mp3"
+            run_dir / "artifacts" / "story-exam-unknown-unknown-unknown-00-00.mp3"
         ).exists()
         assert (run_dir / "voiceover" / "voiceover.mp3").exists()
 
@@ -499,16 +649,19 @@ class TestExecuteAudioPrepStep:
                 Path(cmd[-1]).write_bytes(b"x")
             return out
 
-        with patch(
-            "llm_storytell.steps.audio_prep.subprocess.run", side_effect=fake_run
+        with (
+            patch(
+                "llm_storytell.steps.audio_prep.subprocess.run",
+                side_effect=fake_run,
+            ),
+            patch(
+                "llm_storytell.steps.audio_prep._cet_dd_mm_stamp",
+                return_value="00-00",
+            ),
         ):
             execute_audio_prep_step(run_dir, base, logger)
 
-        out = (
-            run_dir
-            / "artifacts"
-            / "story-from_inputs-unknown-unknown-unknown-00-00.mp3"
-        )
+        out = run_dir / "artifacts" / "story-from-unknown-unknown-unknown-00-00.mp3"
         assert out.exists()
 
     def test_ffprobe_failure_raises(self, tmp_path: Path) -> None:

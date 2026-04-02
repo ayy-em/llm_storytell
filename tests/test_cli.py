@@ -309,3 +309,50 @@ def test_update_state_selected_context_atomic_write(tmp_path: Path) -> None:
     # No temp file left behind
     tmp_files = list(run_dir.glob("*.tmp"))
     assert len(tmp_files) == 0
+
+
+def test_audio_prep_parser_accepts_run_dir() -> None:
+    parser = create_parser()
+    args = parser.parse_args(["audio-prep", "--run-dir", "runs/run-xyz"])
+    assert args.command == "audio-prep"
+    assert args.run_dir == Path("runs/run-xyz")
+
+
+def test_audio_prep_missing_run_dir_exits_nonzero(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    exit_code = main(["audio-prep", "--run-dir", "runs/does-not-exist"])
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "not found" in err
+
+
+def test_audio_prep_invokes_execute_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_dir = tmp_path / "runs" / "r1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run.log").touch()
+    (run_dir / "tts" / "outputs").mkdir(parents=True)
+    (run_dir / "tts" / "outputs" / "segment_01.mp3").write_bytes(b"x")
+    monkeypatch.chdir(tmp_path)
+
+    calls: list[tuple[Path, Path]] = []
+
+    def fake_execute(rd: Path, bd: Path, logger: object, **kwargs: object) -> None:
+        calls.append((rd.resolve(), bd.resolve()))
+
+    with patch(
+        "llm_storytell.steps.audio_prep.execute_audio_prep_step",
+        side_effect=fake_execute,
+    ):
+        exit_code = main(["audio-prep", "--run-dir", str(run_dir)])
+
+    assert exit_code == 0
+    assert len(calls) == 1
+    assert calls[0][0] == run_dir.resolve()
+    assert calls[0][1] == tmp_path.resolve()

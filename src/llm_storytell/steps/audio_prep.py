@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 import subprocess
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -28,31 +30,43 @@ def _sanitize_filename_part(s: str) -> str:
     return re.sub(r"[^\w\-.]", "_", s.strip()).strip(".") or "unknown"
 
 
-def _parse_run_id_dd_mm(run_id: str) -> tuple[str, str]:
-    """Parse run-YYYYMMDD-HHMMSS to (dd, mm) as two-digit strings. Returns ('00','00') if not matching."""
-    if not run_id or not isinstance(run_id, str):
-        return "00", "00"
-    m = re.match(r"run-(\d{4})(\d{2})(\d{2})", run_id.strip())
-    if not m:
-        return "00", "00"
-    _yyyy, mm, dd = m.group(1), m.group(2), m.group(3)
-    return dd, mm
+_CET = ZoneInfo("Europe/Berlin")
+
+
+def _cet_dd_mm_stamp() -> str:
+    """Current calendar day in Europe/Berlin (CET/CEST) as DD-MM (no year)."""
+    return datetime.now(_CET).strftime("%d-%m")
+
+
+def _app_prefix_four_chars(name: str) -> str:
+    """First four characters of the sanitized app name (for compact filenames)."""
+    base = _sanitize_filename_part(name)
+    return base[:4] if base else "unkn"
+
+
+def _default_audio_title_from_seed(
+    seed: str | None, fallback: str, *, max_len: int = 30
+) -> str:
+    """Collapse whitespace and truncate story seed for ID3 title (fits common TIT2 limits)."""
+    if seed is None or not str(seed).strip():
+        return fallback
+    text = " ".join(str(seed).split())
+    if len(text) <= max_len:
+        return text
+    return text[:max_len].rstrip()
 
 
 def _voiceover_artifact_filename(run_dir: Path, app_name: str, ext: str) -> str:
-    """Build story-{app}-{llm_model}-{tts_model}-{tts_voice}-{dd}-{mm}{ext} from run_dir state/inputs."""
+    """Build story-{app4}-{llm_model}-{tts_model}-{tts_voice}-{DD-MM}{ext} (date in CET)."""
     from llm_storytell.pipeline.state import StateIOError, load_inputs, load_state
 
     llm_model = "unknown"
     tts_model = "unknown"
     tts_voice = "unknown"
-    dd, mm = "00", "00"
 
     try:
         inputs_data = load_inputs(run_dir)
         llm_model = str(inputs_data.get("model") or "unknown").strip()
-        run_id = inputs_data.get("run_id") or run_dir.name
-        dd, mm = _parse_run_id_dd_mm(str(run_id))
     except StateIOError:
         pass
 
@@ -64,11 +78,12 @@ def _voiceover_artifact_filename(run_dir: Path, app_name: str, ext: str) -> str:
     except StateIOError:
         pass
 
-    app = _sanitize_filename_part(app_name)
+    app4 = _app_prefix_four_chars(app_name)
     llm = _sanitize_filename_part(llm_model)
     tts_m = _sanitize_filename_part(tts_model)
     tts_v = _sanitize_filename_part(tts_voice)
-    return f"story-{app}-{llm}-{tts_m}-{tts_v}-{dd}-{mm}{ext}"
+    dd_mm = _cet_dd_mm_stamp()
+    return f"story-{app4}-{llm}-{tts_m}-{tts_v}-{dd_mm}{ext}"
 
 
 def _get_app_name(run_dir: Path) -> str:
@@ -217,13 +232,23 @@ def _stitch_segments(
 
 
 # Single-pass voiceover polish: clean rumble/harshness, normalize, very light reverb, de-ess, limit
-# Reverb kept subtle (low mix, short tail) to avoid "can/well" boxy sound; de-ess/lowpass reduce hiss.
+# Adjusted to minimize sudden boundary clicks:
+#   - Short fade-in at t=0 only (do NOT use afade=t=out:st=0 — in ffmpeg that fades out from the
+#     start of the stream and leaves the remainder silent).
+#   - Limiter at end for peak control.
+#   - Lower reverb and echo; increase dynaudnorm smoothness.
+#   - Remove potential double-highpass (which can risk phase clicks).
+
 VOICEOVER_POLISH_AF = (
-    "highpass=f=80,lowpass=f=14000,"
-    "equalizer=f=3000:t=q:w=1.2:g=-2,dynaudnorm=f=150:g=5,"
-    "aecho=0.8:0.38:50|100:0.05|0.02,highpass=f=80,"
-    "equalizer=f=5500:t=q:w=1.0:g=-2,equalizer=f=7500:t=q:w=1.0:g=-5,equalizer=f=9500:t=q:w=1.0:g=-4,"
-    "alimiter=limit=0.97"
+    "afade=t=in:ss=0:d=0.03,"
+    "highpass=f=80,lowpass=f=13500,"
+    "equalizer=f=3000:t=q:w=1.2:g=-2,"
+    "dynaudnorm=f=250:g=3:p=0.8:m=10,"
+    "aecho=0.7:0.32:40|80:0.035|0.012,"
+    "equalizer=f=5500:t=q:w=1.0:g=-2,"
+    "equalizer=f=7500:t=q:w=1.5:g=-7,"
+    "equalizer=f=9500:t=q:w=1.1:g=-5,"
+    "alimiter=limit=0.95"
 )
 
 
@@ -398,7 +423,7 @@ PAD_END = 3
 BG_DUCK_RAMP = 1.5
 
 # BG volume scale: 0.5 = 50% quieter than previous (more background, less competing with voice).
-BG_VOLUME_SCALE = 0.5
+BG_VOLUME_SCALE = 0.35
 # Envelope levels (after scale): intro 39%→18%, ramp 18%→3%, during narration 3%, outro 3%→42% then 45%.
 _BG_INTRO_START = 0.65 * BG_VOLUME_SCALE  # 0.39
 _BG_INTRO_END = 0.30 * BG_VOLUME_SCALE  # 0.18 (intro fades to this, then ramp to duck)
@@ -450,11 +475,13 @@ def _load_audio_metadata_from_app_config(
     base_dir: Path,
     app_name: str,
     out_basename_no_ext: str,
+    *,
+    story_seed: str | None = None,
 ) -> dict[str, str]:
     """Load optional audio_artist, audio_title, audio_album from app config (default + app overrides).
 
     Returns a dict suitable for ffmpeg -metadata (e.g. artist, title, album).
-    Defaults: artist=app_name, title=out_basename_no_ext, album empty.
+    Defaults: artist=app_name, title=truncated story seed from inputs or out_basename_no_ext, album empty.
     """
     merged: dict = {}
     default_path = base_dir / "apps" / "default_config.yaml"
@@ -487,7 +514,8 @@ def _load_audio_metadata_from_app_config(
         return default
 
     artist = _get("audio_artist", "audio-artist", default=app_name)
-    title = _get("audio_title", "audio-title", default=out_basename_no_ext)
+    default_title = _default_audio_title_from_seed(story_seed, out_basename_no_ext)
+    title = _get("audio_title", "audio-title", default=default_title)
     album = _get("audio_album", "audio-album", default="")
     out: dict[str, str] = {"artist": artist, "title": title}
     if album:
@@ -596,7 +624,7 @@ def execute_audio_prep_step(
     5. Loop bg with crossfade to voice_duration + 6s (3s intro + voice + 3s outro).
     6. Apply bg volume envelope (scaled so bg is ~40% quieter): intro duck, 3% during voice, outro fade up.
     7. Resolve album cover: apps/<app_name>/assets/album-cover.png if present, else base_dir/assets/album-cover.png; if neither exists, no cover.
-    8. Mix: voiceover placed from 00m03s to (3+voice_duration)s on the track; write to run_dir/artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>. When cover is present and output is MP3/M4A, embed cover as attached picture.
+    8. Mix: voiceover placed from 00m03s to (3+voice_duration)s on the track; write to run_dir/artifacts/story-<app4>-<llm_model>-<tts_model>-<tts_voice>-<DD-MM>.<ext> (DD-MM is current day in Europe/Berlin). When cover is present and output is MP3/M4A, embed cover as attached picture.
 
     Args:
         run_dir: Run directory (runs/<run_id>/).
@@ -635,8 +663,18 @@ def execute_audio_prep_step(
     out_name = _voiceover_artifact_filename(run_dir, app_name, ext)
     out_path = artifacts_dir / out_name
     out_basename_no_ext = out_path.stem
+    story_seed: str | None = None
+    try:
+        from llm_storytell.pipeline.state import StateIOError, load_inputs
+
+        inp = load_inputs(run_dir)
+        raw = inp.get("seed")
+        if raw is not None:
+            story_seed = str(raw)
+    except StateIOError:
+        pass
     metadata = _load_audio_metadata_from_app_config(
-        base_dir, app_name, out_basename_no_ext
+        base_dir, app_name, out_basename_no_ext, story_seed=story_seed
     )
     cover_path = _resolve_album_cover(base_dir, app_name)
     if cover_path is not None:

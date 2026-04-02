@@ -33,6 +33,53 @@ class SectionStepError(Exception):
     pass
 
 
+def _resolve_section_schema_path(
+    schema_base: Path | None,
+) -> Path:
+    """Return path to section.schema.json (same rules as validation block)."""
+    if schema_base is None:
+        current = Path.cwd()
+        project_root = None
+        for parent in [current] + list(current.parents):
+            if (parent / "SPEC.md").exists() or (parent / "pyproject.toml").exists():
+                project_root = parent
+                break
+        if project_root is None:
+            project_root = Path(__file__).parent.parent.parent.parent
+        schema_base_path = project_root / "src" / "llm_storytell" / "schemas"
+    else:
+        schema_base_path = Path(schema_base)
+    return schema_base_path / "section.schema.json"
+
+
+def _section_local_summary_min_len(schema_path: Path) -> int:
+    """Read minLength for local_summary from section.schema.json."""
+    with schema_path.open(encoding="utf-8") as f:
+        schema = json.load(f)
+    return int(schema["properties"]["local_summary"]["minLength"])
+
+
+def _schema_error_is_local_summary_too_short(exc: SchemaValidationError) -> bool:
+    msg = str(exc).lower()
+    return "local_summary" in str(exc) and "too short" in msg
+
+
+def _repair_local_summary_prompt(*, min_chars: int, previous_response: str) -> str:
+    """Follow-up prompt: fix frontmatter so local_summary meets minLength."""
+    return (
+        "The YAML frontmatter in your previous answer failed validation: "
+        f"`local_summary` must be at least {min_chars} characters (JSON Schema minLength).\n\n"
+        "Return ONE complete Markdown document: opening `---`, corrected YAML frontmatter "
+        f"where `local_summary` alone is at least {min_chars} characters (use 2–4 sentences "
+        "with concrete who/where/what-changed for THIS section only), then `---`, then the "
+        "narrative body. Keep the same plot events and tone; light edits to the prose are fine. "
+        "Required keys: section_id, local_summary, new_entities, new_locations, "
+        "unresolved_threads.\n\n"
+        "## Your previous response (fix the frontmatter)\n\n"
+        f"{previous_response}"
+    )
+
+
 def _parse_markdown_with_frontmatter(content: str) -> tuple[dict[str, Any], str]:
     """Parse markdown content with YAML frontmatter.
 
@@ -198,70 +245,12 @@ def execute_section_step(
         except OSError as e:
             logger.warning(f"Failed to save prompt for {stage_name}: {e}")
 
-        # Call LLM provider
+        schema_path = _resolve_section_schema_path(schema_base)
         try:
-            result = llm_provider.generate(
-                rendered_prompt,
-                step=f"section_{section_index:02d}",
-                temperature=0.7,
-            )
-        except LLMProviderError as e:
-            # On error: meta with error info, no response.txt (do not swallow write failures)
-            save_llm_io(
-                run_dir,
-                stage_name,
-                rendered_prompt,
-                None,
-                meta={
-                    "status": "error",
-                    "provider": llm_provider.provider_name,
-                    "model": effective_model,
-                    "error": str(e),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-            raise SectionStepError(f"LLM provider error: {e}") from e
+            min_local_summary = _section_local_summary_min_len(schema_path)
+        except (KeyError, TypeError, OSError, json.JSONDecodeError) as e:
+            raise SectionStepError(f"Cannot read section schema: {e}") from e
 
-        # Save LLM response (success: prompt, response, meta, raw_response)
-        try:
-            save_llm_io(
-                run_dir,
-                stage_name,
-                rendered_prompt,
-                result.content,
-                meta={
-                    "status": "success",
-                    "provider": result.provider,
-                    "model": result.model,
-                    "prompt_tokens": result.prompt_tokens,
-                    "completion_tokens": result.completion_tokens,
-                    "total_tokens": result.total_tokens,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-                raw_response=result.raw_response,
-            )
-        except OSError as e:
-            logger.warning(f"Failed to save response for {stage_name}: {e}")
-
-        # Log response diagnostics
-        logger.info(
-            f"Section {section_index} step LLM response: length={len(result.content)} chars, "
-            f"first 200 chars: {result.content[:200]!r}"
-        )
-
-        # Parse markdown with frontmatter
-        try:
-            frontmatter, section_text = _parse_markdown_with_frontmatter(result.content)
-        except SectionStepError:
-            raise
-        except Exception as e:
-            raise SectionStepError(f"Error parsing section content: {e}") from e
-
-        # Ensure section_id in frontmatter matches
-        frontmatter["section_id"] = section_id
-
-        # Extract only schema-required fields for validation
-        # The schema only validates metadata, not all frontmatter fields
         schema_fields = {
             "section_id",
             "local_summary",
@@ -269,32 +258,118 @@ def execute_section_step(
             "new_locations",
             "unresolved_threads",
         }
-        metadata_for_validation = {
-            k: v for k, v in frontmatter.items() if k in schema_fields
-        }
 
-        # Validate frontmatter against schema
-        if schema_base is None:
-            # Default to src/llm_storytell/schemas relative to project root
-            current = Path.cwd()
-            project_root = None
-            for parent in [current] + list(current.parents):
-                if (parent / "SPEC.md").exists() or (
-                    parent / "pyproject.toml"
-                ).exists():
-                    project_root = parent
-                    break
-            if project_root is None:
-                project_root = Path(__file__).parent.parent.parent.parent
-            schema_base_path = project_root / "src" / "llm_storytell" / "schemas"
+        result = None
+        accum_prompt = 0
+        accum_completion = 0
+        total_tokens_sum: int | None = 0
+        frontmatter: dict[str, Any] = {}
+        section_text = ""
+
+        for attempt in range(2):
+            is_repair = attempt == 1
+            if not is_repair:
+                prompt_for_llm = rendered_prompt
+                io_stage = stage_name
+                step_id = f"section_{section_index:02d}"
+            else:
+                if result is None:
+                    raise SectionStepError(
+                        "Section step: repair pass without prior response"
+                    )
+                prompt_for_llm = _repair_local_summary_prompt(
+                    min_chars=min_local_summary,
+                    previous_response=result.content,
+                )
+                io_stage = f"{stage_name}_repair"
+                step_id = f"section_{section_index:02d}_repair"
+                logger.warning(
+                    f"Section {section_index}: local_summary shorter than schema minimum; "
+                    "retrying once with a repair prompt."
+                )
+
+            try:
+                result = llm_provider.generate(
+                    prompt_for_llm,
+                    step=step_id,
+                    temperature=0.7,
+                )
+            except LLMProviderError as e:
+                save_llm_io(
+                    run_dir,
+                    io_stage,
+                    prompt_for_llm,
+                    None,
+                    meta={
+                        "status": "error",
+                        "provider": llm_provider.provider_name,
+                        "model": effective_model,
+                        "error": str(e),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+                raise SectionStepError(f"LLM provider error: {e}") from e
+
+            accum_prompt += result.prompt_tokens or 0
+            accum_completion += result.completion_tokens or 0
+            if result.total_tokens is None:
+                total_tokens_sum = None
+            elif total_tokens_sum is not None:
+                total_tokens_sum += result.total_tokens
+
+            try:
+                save_llm_io(
+                    run_dir,
+                    io_stage,
+                    prompt_for_llm,
+                    result.content,
+                    meta={
+                        "status": "success",
+                        "provider": result.provider,
+                        "model": result.model,
+                        "prompt_tokens": result.prompt_tokens,
+                        "completion_tokens": result.completion_tokens,
+                        "total_tokens": result.total_tokens,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                    raw_response=result.raw_response,
+                )
+            except OSError as e:
+                logger.warning(f"Failed to save response for {io_stage}: {e}")
+
+            logger.info(
+                f"Section {section_index} step LLM response ({io_stage}): "
+                f"length={len(result.content)} chars, "
+                f"first 200 chars: {result.content[:200]!r}"
+            )
+
+            try:
+                frontmatter, section_text = _parse_markdown_with_frontmatter(
+                    result.content
+                )
+            except SectionStepError:
+                raise
+            except Exception as e:
+                raise SectionStepError(f"Error parsing section content: {e}") from e
+
+            frontmatter["section_id"] = section_id
+            metadata_for_validation = {
+                k: v for k, v in frontmatter.items() if k in schema_fields
+            }
+            try:
+                validate_json_schema(metadata_for_validation, schema_path, logger)
+            except SchemaValidationError as e:
+                if attempt == 0 and _schema_error_is_local_summary_too_short(e):
+                    continue
+                raise SectionStepError(f"Schema validation failed: {e}") from e
+            break
         else:
-            schema_base_path = Path(schema_base)
+            raise SectionStepError(
+                "Section step: exited without successful schema validation"
+            )
 
-        schema_path = schema_base_path / "section.schema.json"
-        try:
-            validate_json_schema(metadata_for_validation, schema_path, logger)
-        except SchemaValidationError as e:
-            raise SectionStepError(f"Schema validation failed: {e}") from e
+        if result is None:
+            raise SectionStepError("Section step: no LLM result")
 
         # Reconstruct full section content with frontmatter
         frontmatter_yaml = yaml.dump(
@@ -334,15 +409,15 @@ def execute_section_step(
                 temp_file.unlink()
             raise SectionStepError(f"Error writing section artifact: {e}") from e
 
-        # Record token usage
+        # Record token usage (sums both calls if a local_summary repair ran)
         token_usage_dict = record_token_usage(
             logger=logger,
             step=f"section_{section_index:02d}",
             provider=result.provider,
             model=result.model,
-            prompt_tokens=result.prompt_tokens or 0,
-            completion_tokens=result.completion_tokens or 0,
-            total_tokens=result.total_tokens,
+            prompt_tokens=accum_prompt,
+            completion_tokens=accum_completion,
+            total_tokens=total_tokens_sum,
         )
 
         # Update state with section metadata

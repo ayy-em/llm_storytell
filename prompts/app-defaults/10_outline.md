@@ -54,7 +54,7 @@ Language (ISO 639-1 code; write the story in this language):
     {{
       "beat_id": 1,
       "title": "Short descriptive title",
-      "summary": "1–2 sentence factual description of the narrative event"
+      "summary": "2–4 sentences, ≥100 characters: concrete events, setting, stakes (feeds section summaries)"
     }}
   ]
 }}
@@ -64,5 +64,5 @@ Language (ISO 639-1 code; write the story in this language):
 - beats.length === beats_count
 - beat_id starts at 1 and increments sequentially
 - title: ≤10 words, ≥3 characters
-- summary: ≥20 characters
+- summary: ≥100 characters (substantive beat plan; avoids one-line placeholders downstream)
 - Fields allowed: beat_id, title, summary
