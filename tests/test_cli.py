@@ -53,6 +53,49 @@ def test_parser_accepts_language() -> None:
     assert getattr(args, "language", None) == "es"
 
 
+def test_parser_accepts_delivery() -> None:
+    """Parser accepts --delivery."""
+    parser = create_parser()
+    args = parser.parse_args(["run", "--app", "a", "--seed", "s", "--delivery"])
+    assert getattr(args, "delivery", None) is True
+
+
+def test_delivery_passed_to_run_settings(
+    temp_app_minimal: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--delivery is reflected on RunSettings passed to run_pipeline."""
+    monkeypatch.chdir(temp_app_minimal)
+    captured: list[object] = []
+
+    def capture_run_pipeline(settings: object) -> int:
+        captured.clear()
+        captured.append(settings)
+        return 0
+
+    with patch(
+        "llm_storytell.cli.run_pipeline",
+        side_effect=capture_run_pipeline,
+    ):
+        exit_code = main(
+            [
+                "run",
+                "--app",
+                "test-app",
+                "--seed",
+                "A story.",
+                "--beats",
+                "1",
+                "--delivery",
+                "--run-id",
+                "delivery-run",
+            ]
+        )
+
+    assert exit_code == 0
+    assert len(captured) == 1
+    assert getattr(captured[0], "delivery", None) is True
+
+
 def test_language_passed_to_run_pipeline(
     temp_app_minimal: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -78,36 +78,12 @@ Agent is to stop after reading task and request clarification if any of the non-
 
 ## Tasks
 
-
-### [ ] T0133 – 
-
-**Goal**
-...
-
-**How to do it**
-...
-
-**Cost calculation base**
--
-
-**Acceptance criteria**
-- 
-
-**Allowed files**
-- ...
-
-**Commands to run**
-- `uv run ruff format .`
-- `uv run ruff check .`
-- `uv run pytest -q`
-
-**Result**
-
+_(No open tasks.)_
 
 ---
 
 ## Roadmap (**do not start** yet unless explictly told)
-- **v1.3** – Pipeline delivery step (via Telegram bot)
+
 - **v1.4** – One-command video generation
 - **v1.4.1** – Burned-in subtitles
 - **v1.5** – Vector database for large-scale context retrieval and rotation
@@ -120,6 +96,7 @@ Agent is to stop after reading task and request clarification if any of the non-
 - **v1.0.3** – Target word count CLI flag added
 - **v1.1** – Text-to-speech audiobook output
 - **v1.2** – Background music mixing and audio polish — **Current version**
+- **v1.3** – Further pipeline flexibility
 
 ## Backlog (Do not start)
 

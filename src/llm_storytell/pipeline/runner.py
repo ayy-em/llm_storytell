@@ -1,9 +1,13 @@
 """Pipeline runner: orchestration of run init, context, steps, and providers."""
 
+import json
 import sys
+import time
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+
+import httpx
 
 from llm_storytell.context import ContextLoaderError
 from llm_storytell.llm import LLMProvider, LLMProviderError
@@ -28,6 +32,14 @@ from llm_storytell.steps.outline import OutlineStepError, execute_outline_step
 from llm_storytell.steps.section import SectionStepError, execute_section_step
 from llm_storytell.steps.summarize import SummarizeStepError, execute_summarize_step
 from llm_storytell.tts_providers import TTSProviderError
+
+
+class TelegramDeliveryError(Exception):
+    """Telegram delivery failed (credentials, book file, or Bot API)."""
+
+
+class TelegramRetryableError(Exception):
+    """Transient Telegram/HTTP failure; the delivery step may retry."""
 
 
 def _timestamp_utc() -> str:
@@ -57,6 +69,134 @@ def _log_and_print_failure(
         file=sys.stderr,
         flush=True,
     )
+
+
+def _load_telegram_creds(config_path: Path) -> tuple[str, str]:
+    creds_file = (Path(config_path) / "creds.json").expanduser().resolve()
+    if not creds_file.is_file():
+        raise TelegramDeliveryError(
+            f"Missing creds file for Telegram delivery: {creds_file}"
+        )
+    with creds_file.open(encoding="utf-8") as f:
+        raw = json.load(f)
+    token = (raw.get("TELEGRAM_BOT_API_TOKEN") or "").strip()
+    receiver = raw.get("TELEGRAM_RECEIVER_ID")
+    chat_id = "" if receiver is None else str(receiver).strip()
+    if not token or not chat_id:
+        raise TelegramDeliveryError(
+            "Telegram delivery requires TELEGRAM_BOT_API_TOKEN and "
+            "TELEGRAM_RECEIVER_ID in config/creds.json"
+        )
+    return token, chat_id
+
+
+def _newest_file_in_dir(directory: Path) -> Path | None:
+    if not directory.is_dir():
+        return None
+    candidates = [p for p in directory.iterdir() if p.is_file()]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime_ns)
+
+
+def _telegram_method_for_suffix(suffix: str) -> tuple[str, str]:
+    ext = suffix.lower()
+    if ext in (".mp3", ".m4a"):
+        return "sendAudio", "audio"
+    return "sendDocument", "document"
+
+
+def _mime_for_suffix(suffix: str) -> str:
+    ext = suffix.lower()
+    if ext == ".mp3":
+        return "audio/mpeg"
+    if ext == ".m4a":
+        return "audio/mp4"
+    if ext == ".pdf":
+        return "application/pdf"
+    return "application/octet-stream"
+
+
+def _post_telegram_file(
+    token: str,
+    chat_id: str,
+    file_path: Path,
+    *,
+    client: httpx.Client,
+) -> None:
+    method, field = _telegram_method_for_suffix(file_path.suffix)
+    url = f"https://api.telegram.org/bot{token}/{method}"
+    mime = _mime_for_suffix(file_path.suffix)
+    data: dict[str, str] = {"chat_id": chat_id}
+    if method == "sendAudio":
+        data["title"] = file_path.stem[:64]
+    with file_path.open("rb") as fh:
+        files = {field: (file_path.name, fh, mime)}
+        response = client.post(url, data=data, files=files)
+    try:
+        body = response.json() if response.content else {}
+    except json.JSONDecodeError:
+        raise TelegramDeliveryError(
+            f"Telegram API returned non-JSON (HTTP {response.status_code}): "
+            f"{response.text[:500]}"
+        ) from None
+    if response.status_code in (429, 500, 502, 503, 504):
+        raise TelegramRetryableError(
+            f"HTTP {response.status_code}: {body.get('description', response.text[:200])}"
+        )
+    if response.status_code >= 400:
+        raise TelegramDeliveryError(
+            body.get("description")
+            or f"Telegram API HTTP {response.status_code}: {response.text[:500]}"
+        )
+    if not body.get("ok"):
+        raise TelegramDeliveryError(body.get("description") or str(body))
+
+
+def _execute_telegram_delivery(
+    config_path: Path,
+    base_dir: Path,
+    logger,
+) -> None:
+    token, chat_id = _load_telegram_creds(config_path)
+    book_dir = (base_dir / "runs" / "book").resolve()
+    book_file = _newest_file_in_dir(book_dir)
+    if book_file is None:
+        raise TelegramDeliveryError(
+            f"No deliverable file found in {book_dir} (expected copy from pipeline)"
+        )
+    size_b = book_file.stat().st_size
+    logger.info(
+        f"Telegram delivery: sending {book_file.name} ({size_b} bytes) via Bot API"
+    )
+
+    delays = (1.0, 2.0, 4.0)
+    for attempt in range(len(delays) + 1):
+        try:
+            with httpx.Client(timeout=120.0) as client:
+                _post_telegram_file(token, chat_id, book_file, client=client)
+            logger.info("Telegram delivery completed successfully")
+            return
+        except TelegramRetryableError as e:
+            if attempt >= len(delays):
+                raise TelegramDeliveryError(
+                    f"Telegram delivery failed after retries: {e}"
+                ) from e
+            logger.warning(
+                f"Telegram delivery attempt {attempt + 1} failed ({e!s}); "
+                f"retrying in {delays[attempt]:.0f}s..."
+            )
+            time.sleep(delays[attempt])
+        except httpx.RequestError as e:
+            if attempt >= len(delays):
+                raise TelegramDeliveryError(
+                    f"Telegram delivery failed after retries: {e}"
+                ) from e
+            logger.warning(
+                f"Telegram delivery attempt {attempt + 1} network error ({e!s}); "
+                f"retrying in {delays[attempt]:.0f}s..."
+            )
+            time.sleep(delays[attempt])
 
 
 def run_pipeline(settings: RunSettings) -> int:
@@ -295,12 +435,6 @@ def run_pipeline(settings: RunSettings) -> int:
                 _log_and_print_failure(logger, run_dir, "audio-prep stage failed", e)
                 return 1
 
-        end_ts = _timestamp_utc()
-        logger.info(f"Pipeline run finished at {end_ts}")
-        print(f"[llm_storytell] Pipeline run finished at {end_ts}", flush=True)
-        logger.info(f"Pipeline completed successfully. Run directory: {run_dir}")
-        print("[llm_storytell] Run complete.", flush=True)
-
         try:
             state = load_state(run_dir)
             usage = state.get("token_usage") or []
@@ -360,6 +494,27 @@ def run_pipeline(settings: RunSettings) -> int:
                 logger.info("Estimated cost: N/A (model not in pricing table)")
         except (StateIOError, KeyError):
             pass
+
+        if settings.delivery:
+            print("[llm_storytell] Delivering to Telegram...", flush=True)
+            logger.log_stage_start("telegram_delivery")
+            try:
+                _execute_telegram_delivery(
+                    config_path=settings.config_path,
+                    base_dir=base_dir,
+                    logger=logger,
+                )
+                logger.log_stage_end("telegram_delivery", success=True)
+            except TelegramDeliveryError as e:
+                logger.log_stage_end("telegram_delivery", success=False)
+                _log_and_print_failure(logger, run_dir, "telegram delivery failed", e)
+                return 1
+
+        end_ts = _timestamp_utc()
+        logger.info(f"Pipeline run finished at {end_ts}")
+        print(f"[llm_storytell] Pipeline run finished at {end_ts}", flush=True)
+        logger.info(f"Pipeline completed successfully. Run directory: {run_dir}")
+        print("[llm_storytell] Run complete.", flush=True)
 
         print(
             f"[llm_storytell] Artifacts are in: {run_dir / 'artifacts'}",

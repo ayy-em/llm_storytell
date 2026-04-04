@@ -320,7 +320,7 @@ class TestResolveRunSettings:
         assert settings.resolved_tts_config["tts_voice"] == "onyx"
 
     def test_run_settings_has_all_expected_attrs(self, tmp_path: Path) -> None:
-        """RunSettings has app_paths, app_config, seed, beats, section_length, run_id, config_path, model, word_count, tts_enabled, resolved_tts_config."""
+        """RunSettings includes delivery (default False)."""
         app_paths = _minimal_app_paths(tmp_path)
         app_config = _minimal_app_config()
         settings = resolve_run_settings(
@@ -339,3 +339,18 @@ class TestResolveRunSettings:
         assert settings.run_id == "run-001"
         assert settings.config_path == tmp_path / "config"
         assert settings.word_count is None
+        assert settings.delivery is False
+
+    def test_delivery_true_when_passed(self, tmp_path: Path) -> None:
+        """resolve_run_settings sets delivery=True when requested."""
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = _minimal_app_config()
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            config_path=tmp_path / "config",
+            delivery=True,
+        )
+        assert settings.delivery is True

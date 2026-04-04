@@ -4,6 +4,50 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Post-v1.2
 
+### [x] T01301 – Delivery step of the pipeline via Telegram (2026-04-05)
+
+#### Goal
+After completing the run, if the run is started with delivery mode on, the finished artifact (one stored in /book/ dir as a final step), after the existing pipeline runs are all finished, the file is sent to a telegram user via Bot API as a file.
+
+#### How to do it
+- Telegram bot's API token is fetched from TELEGRAM_BOT_API_TOKEN key's value in config
+- User's telegram ID is fetched from TELEGRAM_RECEIVER_ID key in config/creds.json
+- Sending a file is performed via `sendAudio` method of the API: https://core.telegram.org/bots/api#sendaudio
+
+#### Acceptance criteria
+- TELEGRAM_BOT_API_TOKEN and TELEGRAM_RECEIVER_ID config keys requirement for delivery step mentioned in relevant documentation (README.md, SPEC.md, etc.)
+- New boolean CLI flag "--delivery" (defaults to False) is added that appends the delivery step to pipeline if True
+- New CLI flag is reflected in docs
+- All tests pass, as well as linting and formatting
+- Reasonable retry mechanism in place
+- Delivery step errors are properly shown in the terminal and a verbose representation of exception/stack trace is appended to run log
+- Upon completion, the resolution approach is recorded in "Results" section of this task and the finished task is moved to COMPLETED_TASKS.md
+- All relevant documentation in the repo is updated
+- Tests added for new functionality
+
+#### Allowed files
+- src/llm_storytell/pipeline/runner.py
+- src/llm_storytell/pipeline/resolve.py
+- src/llm_storytell/cli.py
+- src/llm_storytell/logging.py
+- docs/*
+- README.md, SPEC.md, TASKS.md & COMPLETED_TASKS.md
+
+#### Commands to run
+- `uv run ruff format .`
+- `uv run ruff check .`
+- `uv run pytest -q`
+
+#### Result
+- **`RunSettings.delivery`** and **`resolve_run_settings(..., delivery=...)`** in `resolve.py`; CLI **`--delivery`** passes through from `cli.py`.
+- **`runner.py`**: After token/cost summary, if `settings.delivery`, loads `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` from `config/creds.json`, picks the newest file in `runs/book/`, uploads via **httpx** multipart: **`sendAudio`** for `.mp3`/`.m4a`, **`sendDocument`** otherwise (e.g. PDF with `--no-tts`). **`TelegramRetryableError`** for HTTP 429/5xx; up to **3** attempts with backoff **1s / 2s / 4s**; network errors retried the same way. Failures use **`_log_and_print_failure`** (stderr + traceback in `run.log`), exit **1**. Success messages (**Run complete**, etc.) run only after delivery succeeds.
+- **Docs**: `README.md`, `SPEC.md` (CLI table, v1.3 delivery paragraph, pipeline step 6), **`docs/telegram-delivery.md`**.
+- **Tests**: `tests/test_telegram_delivery.py` (creds, newest file, sendAudio/sendDocument, retries, logging); `tests/test_cli.py` and `tests/test_pipeline_resolve.py` for `--delivery` / `delivery` flag. **`tests/test_audio_prep_step.py`**: `test_volume_envelope_uses_voice_duration` assertions updated to match current `_BG_DUCK` / `_BG_INTRO_START` (test was out of sync with `BG_VOLUME_SCALE`; not caused by this task).
+- **`logging.py`**: unchanged (no extra helpers needed).
+- Commands run: `uv run ruff format .`, `uv run ruff check --fix .`, `uv run ruff check .`, `uv run pytest -q` (**411 passed**).
+
+---
+
 ### [x] T0133 – Album cover support for final audio (2026-03-13)
 
 **Goal**

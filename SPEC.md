@@ -158,12 +158,15 @@ python -m llm_storytell run \
 | `--tts-provider` | string | TTS provider (e.g. `openai`). Overrides app config. Resolution order: CLI → `app_config.yaml` → default (OpenAI). |
 | `--tts-voice` | string | TTS voice name (e.g. `Onyx`). Overrides app config. Resolution order: CLI → `app_config.yaml` → default (Onyx). |
 | `--language` | ISO 639-1 code (e.g. `en`, `es`) | Language for story output. Overrides app config. Resolution order: CLI → `apps/<app_name>/app_config.yaml` → `apps/default_config.yaml` (default `en`). Must be a valid ISO 639-1 two-letter code; otherwise the pipeline fails immediately with a verbose exception. |
+| `--delivery` | flag (default off) | When set, after a successful run (including copy of the final deliverable to `runs/book/`), the pipeline sends that file to Telegram via the Bot API. Requires `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` in `config/creds.json`. Uses `sendAudio` for `.mp3`/`.m4a` and `sendDocument` for other types (e.g. `.pdf` when `--no-tts`). On failure, stderr and `run.log` include a verbose traceback; the process exits non-zero. |
 
 Defaults for beats and section_length come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits. The same merge applies to `language`: it may be set in `default_config.yaml` or in an app’s `app_config.yaml`; `--language` overrides when provided. Invalid language (non–ISO 639-1) in config or CLI causes startup failure with a clear error message.
 
 **TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). The resolved voice name is **normalized to lowercase** before being sent to the TTS provider (e.g. OpenAI expects `onyx`, not `Onyx`); config and CLI may use either casing. When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`. When TTS is enabled, the pipeline runs the TTS step then the audio-prep step; **ffmpeg** (and ffprobe) must be on PATH for the audio-prep step (stitching, voiceover polish, and mixing).
 
 **Target word count (v1.0.3):** When `--word-count N` is used, the pipeline derives `beat_count` (round N / baseline section length, clamped to 1–20) and per-section length (N / beat_count), then passes the range `[per_section*0.8, per_section*1.2]` as section_length. Generated stories are intended to fall within approximately 10% of the target word count; this is best-effort and can be verified manually or via tests.
+
+**Telegram delivery (v1.3):** With `--delivery`, the newest file in `runs/book/` after the normal book-copy step is uploaded using `https://api.telegram.org/bot<token>/sendAudio` or `sendDocument` as appropriate. Credentials are read only from `config/creds.json` (`TELEGRAM_BOT_API_TOKEN`, `TELEGRAM_RECEIVER_ID`). The delivery step retries transient failures (network errors and HTTP 429 / 5xx) up to three attempts with backoff.
 
 ---
 
@@ -570,7 +573,8 @@ The orchestrator executes strictly in order:
 2. **Outline** — generate outline beats.
 3. **For each beat:** section, then summarize.
 4. **Critic** — final script and editor report.
-5. **When TTS is enabled (default):** **TTS step** (chunk final script, synthesize segments to audio) → **audio-prep step** (stitch segments, polish voiceover, add background music, mix to final narration). Voiceover polish is a single ffmpeg pass: highpass/lowpass, EQ, dynaudnorm, light reverb (aecho), de-ess, and limiter. The audio-prep step resolves **album cover** for the final file: it checks `apps/<app_name>/assets/album-cover.png`, then repo-root `assets/album-cover.png`; if either exists, that image is embedded as attached picture (ID3/metadata) in the final MP3 or M4A. If neither exists, no cover is added and the pipeline continues normally. When `--no-tts` is set, the pipeline ends after the critic step.
+5. **When TTS is enabled (default):** **TTS step** (chunk final script, synthesize segments to audio) → **audio-prep step** (stitch segments, polish voiceover, add background music, mix to final narration). Voiceover polish is a single ffmpeg pass: highpass/lowpass, EQ, dynaudnorm, light reverb (aecho), de-ess, and limiter. The audio-prep step resolves **album cover** for the final file: it checks `apps/<app_name>/assets/album-cover.png`, then repo-root `assets/album-cover.png`; if either exists, that image is embedded as attached picture (ID3/metadata) in the final MP3 or M4A. If neither exists, no cover is added and the pipeline continues normally. When `--no-tts` is set, the pipeline ends after the critic step (after copying the text deliverable to `runs/book/` as PDF where applicable).
+6. **When `--delivery` is set:** After a successful run, token/cost summary, and the `runs/book/` copy, **Telegram delivery** uploads the newest file in `runs/book/` to the configured chat via the Bot API (`sendAudio` for `.mp3`/`.m4a`, `sendDocument` otherwise). Requires `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` in `config/creds.json`. Failures are logged with traceback and exit non-zero.
 
 ---
 
@@ -631,7 +635,7 @@ Runs are immutable once complete.
 * **v1.0.3** – Generating stories with target word count
 * **v1.1** – Text-to-speech audiobook output
 * **v1.2** – Background music mixing & voiceover audio quality — **Current version (released)**
-* **v1.3** – Increased pipeline flexibility, driven by app-specific configs
+* **v1.3** – Telegram delivery step (`--delivery`) + increased pipeline flexibility, driven by app-specific configs
 * **v1.4** – Multi-LLM provider support
 * **v1.5** – Smart prompt routing and cost-aware provider selection
 * **v1.6** – Add a "Voiceover text preparation" and support for phonetic hints 

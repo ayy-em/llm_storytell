@@ -41,7 +41,8 @@ class RunSettings:
     """Resolved run settings for the pipeline runner.
 
     All data the runner needs: app paths, app config, seed, beats,
-    section_length, run_id, config_path, model, word_count, language, TTS flags.
+    section_length, run_id, config_path, model, word_count, language, TTS flags,
+    and optional Telegram delivery.
     """
 
     app_paths: AppPaths
@@ -56,6 +57,7 @@ class RunSettings:
     language: str
     tts_enabled: bool
     resolved_tts_config: dict[str, Any] | None
+    delivery: bool
 
 
 def resolve_run_settings(
@@ -76,6 +78,7 @@ def resolve_run_settings(
     run_id: str | None = None,
     config_path: Path | None = None,
     language_arg: str | None = None,
+    delivery: bool = False,
 ) -> RunSettings:
     """Build RunSettings from CLI-like args and app config.
 
@@ -99,6 +102,7 @@ def resolve_run_settings(
         tts_model: --tts-model (optional).
         run_id: --run-id override (optional).
         config_path: --config-path (default config/).
+        delivery: Whether to send the runs/book deliverable via Telegram after success.
 
     Returns:
         RunSettings with derived beats, section_length, model, resolved_tts_config.
@@ -174,4 +178,5 @@ def resolve_run_settings(
         language=language,
         tts_enabled=tts_enabled,
         resolved_tts_config=resolved_tts_config,
+        delivery=delivery,
     )

@@ -113,6 +113,11 @@ def create_parser() -> argparse.ArgumentParser:
         metavar="CODE",
         help="ISO 639-1 language code for story output (e.g. en, es). Overrides app config.",
     )
+    run_parser.add_argument(
+        "--delivery",
+        action="store_true",
+        help="After a successful run, send the runs/book deliverable to Telegram (requires TELEGRAM_BOT_API_TOKEN and TELEGRAM_RECEIVER_ID in creds.json).",
+    )
 
     audio_prep_parser = subparsers.add_parser(
         "audio-prep",
@@ -260,6 +265,7 @@ def main(argv: list[str] | None = None) -> int:
             run_id=args.run_id,
             config_path=args.config_path,
             language_arg=language_arg,
+            delivery=bool(getattr(args, "delivery", False)),
         )
 
         return run_pipeline(settings)

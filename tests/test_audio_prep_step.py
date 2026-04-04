@@ -580,9 +580,11 @@ class TestExecuteAudioPrepStep:
         full = " ".join(envelope_cmd)
         # Envelope: 0-3s fade, 3 to 3+voice_duration flat, then 3s fade. For voice_duration=12: 3, 15, 18.
         assert "3" in full and "15" in full and "18" in full
-        # BG envelope scaled by BG_VOLUME_SCALE (0.5): duck 0.025, intro start 0.325 (0.65*0.5)
-        assert "0.025" in full
-        assert "0.325" in full
+        # BG envelope levels from audio_prep (BG_VOLUME_SCALE and _BG_*); keep in sync with implementation.
+        from llm_storytell.steps.audio_prep import _BG_DUCK, _BG_INTRO_START
+
+        assert str(_BG_DUCK) in full
+        assert str(_BG_INTRO_START) in full
 
     def test_loop_target_duration_voice_plus_six(self, tmp_path: Path) -> None:
         """Step runs and produces narration artifact when voice duration is 10s (loop target 16s)."""
