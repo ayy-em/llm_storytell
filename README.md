@@ -239,9 +239,13 @@ Credentials are read from a file; no environment variables are required. Create 
 
 ```json
 {
-  "OPENAI_KEY": "your_api_key_here"
+  "OPENAI_KEY": "your_api_key_here",
+  "TELEGRAM_BOT_API_TOKEN": "optional: bot token for --delivery",
+  "TELEGRAM_RECEIVER_ID": "optional: numeric chat id or @username for --delivery"
 }
 ```
+
+For **`--delivery`**, both `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` must be set in `config/creds.json`. The pipeline sends the file most recently written under `runs/book/` (the same deliverable as the book-copy step). See `docs/telegram-delivery.md` for details.
 
 **Minimal .gitignore:** The repo ignores `runs/`, `apps/` (except `apps/example_app/`), and `config/creds.json`. App data lives under `apps/<app_name>/`; only `apps/example_app/` is committed as an example.
 
@@ -262,14 +266,14 @@ On success, a new directory `runs/<run_id>/` is created containing:
 * `run.log` — timestamped run and stage log
 * `inputs.json` — run inputs (app, seed, beats, language, paths)
 * `state.json` — pipeline state (app, seed, language, outline, sections, summaries, token usage; when TTS enabled: `tts_config`, and after TTS step: `tts_token_usage`)
-* `artifacts/` — `10_outline.json`, `20_section_01.md` … `20_section_NN.md`, `final_script.md`, `editor_report.json`; when TTS/audio runs: `story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>` (final narrated audio)
+* `artifacts/` — `10_outline.json`, `20_section_01.md` … `20_section_NN.md`, `final_script.md`, `editor_report.json`; when TTS/audio runs: `story-<app4>-<llm_model>-<tts_model>-<tts_voice>-<DD-MM>.<ext>` (final narrated audio; `<app4>` is the first four characters of the sanitized app name; `<DD-MM>` is the pipeline’s current calendar day in Europe/Berlin, CET/CEST)
 * `llm_io/` — per-stage prompt/response debug files
 
 When TTS is enabled (default), the pipeline also runs a TTS step and an audio-prep step after the critic. The audio-prep step stitches TTS segments, applies a single-pass voiceover polish (highpass/lowpass, EQ, normalization, light reverb, de-ess, limiter), then mixes with background music. In that case the run directory additionally contains:
 
 * `tts/` — `prompts/` (chunked text per segment), `outputs/` (audio segments)
 * `voiceover/` — stitched and polished voiceover track and intermediate bg-music files
-* `artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>` — final narration (voice + background music); dd/mm from run ID date. If `apps/<app_name>/assets/album-cover.png` or repo-root `assets/album-cover.png` exists, that image is embedded as album cover in the final MP3/M4A.
+* `artifacts/story-<app4>-<llm_model>-<tts_model>-<tts_voice>-<DD-MM>.<ext>` — final narration (voice + background music); date suffix is the current day in Europe/Berlin when the file is written. ID3 `title` is the current Europe/Berlin calendar day as **`DD.MM - `** followed by the run seed (from `inputs.json`), truncated to 30 characters, unless `audio_title` is set in app config (the date prefix is always applied). If `apps/<app_name>/assets/album-cover.png` or repo-root `assets/album-cover.png` exists, that image is embedded as album cover in the final MP3/M4A. A copy is also written under `runs/book/` as `<DD-MM>_<app4>_<model>_<tts_voice>.mp3` (same CET date); if that name already exists, `_<N>` is inserted before the extension (`_2`, `_3`, …).
 
 On completion, the CLI and `run.log` show combined Chat token and TTS character usage and an estimated cost (Chat + TTS). Runs are immutable once completed.
 
@@ -288,11 +292,12 @@ On completion, the CLI and `run.log` show combined Chat token and TTS character 
 | `--model` | model identifier | Model for all LLM calls. Default: `gpt-4.1-mini`. Run fails immediately if the provider does not recognize the model. |
 | `--section-length` | integer N | Target words per section; pipeline uses range `[N*0.8, N*1.2]`. Overrides app config when set. |
 | `--word-count` | integer N (100 < N < 15000) | Target total word count. Pipeline derives beat count and section length; see SPEC. |
-| `--tts` | flag | Enable TTS after critic (default). Pipeline runs TTS step then audio-prep; produces `tts/`, `voiceover/`, and `artifacts/story-<app>-<llm_model>-<tts_model>-<tts_voice>-<dd>-<mm>.<ext>`. Requires ffmpeg on PATH. |
+| `--tts` | flag | Enable TTS after critic (default). Pipeline runs TTS step then audio-prep; produces `tts/`, `voiceover/`, and `artifacts/story-<app4>-<llm_model>-<tts_model>-<tts_voice>-<DD-MM>.<ext>`. Requires ffmpeg on PATH. |
 | `--no-tts` | flag | Disable TTS; pipeline ends after critic step. No `tts_config` in state. |
 | `--tts-provider` | string | TTS provider (e.g. openai). Overrides app config. Resolution: CLI → app_config → default. |
 | `--tts-voice` | string | TTS voice (e.g. Onyx). Overrides app config. Resolution: CLI → app_config → default. |
 | `--language` | ISO 639-1 code (e.g. `en`, `es`) | Language for story output. Overrides app config. Resolution: CLI → `app_config.yaml` → `default_config.yaml` (default `en`). Invalid code fails immediately with error. |
+| `--delivery` | flag | After success, upload the newest file in `runs/book/` to Telegram (`sendAudio` for MP3/M4A, `sendDocument` for PDF). Requires `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` in `config/creds.json`. Retries on transient errors. |
 
 **Multi-language:** Stories can be generated in any language. Set `language` in `apps/default_config.yaml` or `apps/<app_name>/app_config.yaml` to an ISO 639-1 two-letter code (e.g. `en`, `es`, `fr`), or pass `--language <code>` on the CLI. The pipeline instructs the LLM to write in that language; the final script and TTS input are in the chosen language. Invalid codes (non–ISO 639-1) cause the run to fail at startup with a clear error.
 
@@ -307,7 +312,7 @@ Full reference: `SPEC.md` (CLI Interface, Language).
   - **Character:** `apps/<app_name>/context/characters/` (required: at least one `.md` file)
 - Additionally (not required for a run to succeed), any number of `.md` files with additional background info on your stories' universe: `context/locations/`, `context/world/`, `context/style/` (see Context handling above)
 
-2. **Optional:** Add `apps/<app_name>/app_config.yaml` to override defaults (beats, section_length, context limits, model, language). If absent, the pipeline uses `apps/default_config.yaml` or built-in defaults. To generate stories in another language, set `language` to an ISO 639-1 code (e.g. `es`, `fr`); or use the `--language` CLI flag. For TTS runs, you can set **MP3 metadata** (written as ID3 tags on the final file): `audio_artist`, `audio_title`, `audio_album` (or hyphenated `audio-artist`, etc.). If unset, artist defaults to the app name and title to the output filename.
+2. **Optional:** Add `apps/<app_name>/app_config.yaml` to override defaults (beats, section_length, context limits, model, language). If absent, the pipeline uses `apps/default_config.yaml` or built-in defaults. To generate stories in another language, set `language` to an ISO 639-1 code (e.g. `es`, `fr`); or use the `--language` CLI flag. For TTS runs, you can set **MP3 metadata** (written as ID3 tags on the final file): `audio_artist`, `audio_title`, `audio_album` (or hyphenated `audio-artist`, etc.). If unset, artist defaults to the app name and title defaults to the story seed truncated to 30 characters (falling back to the output basename if there is no seed). The embedded **title** tag is always prefixed with **`DD.MM - `** (Europe/Berlin calendar day when the file is written) before the configured or default title text.
 
    **Optional (TTS):** Under `apps/<app_name>/assets/` you may add `album-cover.png` (and optionally `bg-music.*` for background music). If `album-cover.png` is present, the final audio file (MP3/M4A) has that image embedded as album art. If the app has no `assets/album-cover.png`, the pipeline checks repo-root `assets/album-cover.png` and uses it when present; if neither exists, no cover is embedded.
 
@@ -368,10 +373,22 @@ Follow the tasks.
 
 Write boring code.
 
-
+uv run python -m llm_storytell run \
+  --app grim-narrator \
+  --beats 8 \
+  --tts \
+  --delivery \
+  --seed "The vast majority of days are indistinguishable. But once in a blue moon, a seemingly ordinary day ends up turning a bunch of people's lives upside down, with no way back."
 
   uv run python -m llm_storytell run \
   --app daniel-bedtime \
   --beats 2 \
   --no-tts \
   --seed "Обычная прогулка по городу оборачивается внезапным приключением для Дани."
+
+uv run python -m llm_storytell run \
+  --app irindica_truecrime \
+  --beats 5 \
+  --tts \
+  --delivery \
+  --seed "A horrifying story of a sex pervert turned maniac, with a few quirks, where the narrator is genuinely impressed and admiring the killer, despite the awful things they've perpetrated."
