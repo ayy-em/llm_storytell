@@ -372,23 +372,3 @@ Follow the spec.
 Follow the tasks.
 
 Write boring code.
-
-uv run python -m llm_storytell run \
-  --app grim-narrator \
-  --beats 8 \
-  --tts \
-  --delivery \
-  --seed "The vast majority of days are indistinguishable. But once in a blue moon, a seemingly ordinary day ends up turning a bunch of people's lives upside down, with no way back."
-
-  uv run python -m llm_storytell run \
-  --app daniel-bedtime \
-  --beats 2 \
-  --no-tts \
-  --seed "Обычная прогулка по городу оборачивается внезапным приключением для Дани."
-
-uv run python -m llm_storytell run \
-  --app irindica_truecrime \
-  --beats 5 \
-  --tts \
-  --delivery \
-  --seed "A horrifying story of a sex pervert turned maniac, with a few quirks, where the narrator is genuinely impressed and admiring the killer, despite the awful things they've perpetrated."
