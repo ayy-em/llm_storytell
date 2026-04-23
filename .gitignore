@@ -36,7 +36,7 @@ config/creds.json
 
 # Local QA & Testing
 tests/test_critic_prompt.txt
-manual_tts_run.py
+scripts/manual_tts_run.py
 
 # random IDE extensions
 .VSCodeCounter/
