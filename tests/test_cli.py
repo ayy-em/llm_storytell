@@ -60,6 +60,15 @@ def test_parser_accepts_delivery() -> None:
     assert getattr(args, "delivery", None) is True
 
 
+def test_parser_accepts_llm_provider() -> None:
+    """Parser accepts --llm-provider."""
+    parser = create_parser()
+    args = parser.parse_args(
+        ["run", "--app", "a", "--seed", "s", "--llm-provider", "claude"]
+    )
+    assert getattr(args, "llm_provider", None) == "claude"
+
+
 def test_delivery_passed_to_run_settings(
     temp_app_minimal: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

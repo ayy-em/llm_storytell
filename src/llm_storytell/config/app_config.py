@@ -187,7 +187,8 @@ def load_app_config(
         max_characters=int(merged.get("max_characters", 3)),
         max_locations=int(merged.get("max_locations", 1)),
         include_world=bool(merged.get("include_world", True)),
-        llm_provider=str(merged.get("llm_provider", "openai")),
+        llm_provider=str(merged.get("llm_provider", "openai")).strip().lower()
+        or "openai",
         model=str(merged.get("model", "gpt-5-mini")),
         tts_provider=tts_provider,
         tts_model=tts_model,

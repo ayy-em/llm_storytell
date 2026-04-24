@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from llm_storytell.llm import LLMProvider, OpenAIProvider
+from llm_storytell.llm import ClaudeProvider, LLMProvider, OpenAIProvider
 from llm_storytell.tts_providers import TTSProvider
 from llm_storytell.tts_providers.elevenlabs_tts import (
     DEFAULT_VOICE_ID,
@@ -42,6 +42,19 @@ def _load_creds_api_key(config_path: Path) -> str | None:
         return None
 
 
+def _load_anthropic_api_key(config_path: Path) -> str | None:
+    """Load Anthropic API key from config_path/creds.json. Returns None if missing/invalid."""
+    creds_path = config_path / "creds.json"
+    if not creds_path.exists():
+        return None
+    try:
+        with creds_path.open(encoding="utf-8") as f:
+            creds = json.load(f)
+        return creds.get("ANTHROPIC_API_KEY") or creds.get("anthropic_api_key")
+    except (OSError, json.JSONDecodeError, KeyError):
+        return None
+
+
 def _load_elevenlabs_api_key(config_path: Path) -> str | None:
     """Load ElevenLabs API key from config_path/creds.json. Returns None if missing/invalid."""
     creds_path = config_path / "creds.json"
@@ -56,20 +69,81 @@ def _load_elevenlabs_api_key(config_path: Path) -> str | None:
 
 
 def create_llm_provider(
-    config_path: Path, default_model: str = "gpt-4.1-mini"
+    config_path: Path,
+    *,
+    llm_provider: str = "openai",
+    default_model: str = "gpt-4.1-mini",
 ) -> LLMProvider:
     """Create LLM provider from configuration.
 
     Args:
         config_path: Path to config directory (creds.json).
+        llm_provider: Text LLM backend identifier: ``openai`` or ``claude``.
         default_model: Model to use for all LLM calls.
 
     Returns:
-        LLM provider instance (e.g. OpenAIProvider).
+        LLM provider instance (e.g. OpenAIProvider, ClaudeProvider).
 
     Raises:
-        ProviderError: If openai is not installed, API key is missing, or creation fails.
+        ProviderError: If SDK is missing, API key is missing, provider is
+            unsupported, or creation fails.
     """
+    provider_id = (llm_provider or "openai").strip().lower() or "openai"
+
+    if provider_id == "claude":
+        try:
+            from anthropic import Anthropic
+        except ImportError as e:
+            raise ProviderError(
+                "anthropic package not installed. Install with: pip install anthropic"
+            ) from e
+
+        api_key = _load_anthropic_api_key(config_path)
+        if not api_key:
+            raise ProviderError(
+                "No Anthropic API key found for Claude text generation. "
+                "Add ANTHROPIC_API_KEY or anthropic_api_key to config/creds.json."
+            )
+
+        try:
+            client = Anthropic(api_key=api_key)
+
+            def claude_client_wrapper(
+                prompt: str, model: str, max_tokens: int, **kwargs: Any
+            ) -> dict[str, Any]:
+                msg = client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                    **kwargs,
+                )
+                text_parts: list[str] = []
+                for block in msg.content:
+                    if getattr(block, "type", None) == "text":
+                        text_parts.append(block.text)
+                text = "".join(text_parts)
+                usage = msg.usage
+                return {
+                    "content": text,
+                    "usage": {
+                        "input_tokens": usage.input_tokens,
+                        "output_tokens": usage.output_tokens,
+                    },
+                }
+
+            return ClaudeProvider(
+                client=claude_client_wrapper,
+                default_model=default_model,
+                temperature=0.7,
+            )
+        except Exception as e:
+            raise ProviderError(f"Error creating Claude LLM provider: {e}") from e
+
+    if provider_id != "openai":
+        raise ProviderError(
+            f"Unsupported text LLM provider '{llm_provider}'. Supported: 'openai', 'claude'."
+        )
+
     try:
         from openai import OpenAI
     except ImportError as e:

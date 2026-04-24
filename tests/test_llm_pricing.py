@@ -113,6 +113,24 @@ class TestEstimateRunCost:
         assert cost is not None
         assert cost == 0.0
 
+    def test_claude_sonnet_4_6_cost_matches_rates(self) -> None:
+        """claude-sonnet-4-6: $3/1M input, $15/1M output."""
+        usage = [
+            {
+                "step": "outline",
+                "provider": "claude",
+                "model": "claude-sonnet-4-6",
+                "prompt_tokens": 1_000_000,
+                "completion_tokens": 500_000,
+                "total_tokens": 1_500_000,
+            }
+        ]
+        model, prompt, completion, total, cost = estimate_run_cost(usage)
+        assert model == "claude-sonnet-4-6"
+        assert cost is not None
+        # 3 + 7.5 = 10.5
+        assert abs(cost - 10.5) < 0.001
+
 
 class TestEstimateTtsCost:
     """Tests for estimate_tts_cost."""
@@ -202,6 +220,10 @@ class TestModelCostPer1M:
 
     def test_default_model_in_table(self) -> None:
         assert "gpt-4.1-mini" in MODEL_COST_PER_1M
+
+    def test_claude_sonnet_4_6_in_table(self) -> None:
+        assert "claude-sonnet-4-6" in MODEL_COST_PER_1M
+        assert MODEL_COST_PER_1M["claude-sonnet-4-6"] == (3.0, 15.0)
 
     def test_entries_are_input_output_pairs(self) -> None:
         for model, pair in MODEL_COST_PER_1M.items():

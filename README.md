@@ -224,7 +224,8 @@ App-specific structure may evolve. Generated content must never be committed.
 
 * Python **3.12**
 * `uv`
-* OpenAI API key
+* OpenAI API key for the default text LLM and for TTS when using OpenAI TTS
+* Anthropic API key only if you use **`--llm-provider claude`** (or set `llm_provider: claude` in app / default config)
 * **ffmpeg** (required when TTS/audio is enabled): used for stitching TTS segments, polishing the voiceover (clean/reverb/de-ess/limit), and mixing with background music. Must be on PATH.
 
 ### Setup
@@ -239,11 +240,14 @@ Credentials are read from a file; no environment variables are required. Create 
 
 ```json
 {
-  "OPENAI_KEY": "your_api_key_here",
+  "OPENAI_KEY": "your_openai_key_here",
+  "ANTHROPIC_API_KEY": "optional: required when using Claude for text (--llm-provider claude or llm_provider in YAML)",
   "TELEGRAM_BOT_API_TOKEN": "optional: bot token for --delivery",
   "TELEGRAM_RECEIVER_ID": "optional: numeric chat id or @username for --delivery"
 }
 ```
+
+For Claude text runs you may use **`ANTHROPIC_API_KEY`** or **`anthropic_api_key`** in `config/creds.json` (same file as OpenAI). OpenAI keys are accepted under the existing field names (`OPENAI_KEY`, `openai_api_key`, etc.).
 
 For **`--delivery`**, both `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` must be set in `config/creds.json`. The pipeline sends the file most recently written under `runs/book/` (the same deliverable as the book-copy step). See `docs/telegram-delivery.md` for details.
 
@@ -264,7 +268,7 @@ uv run python -m llm_storytell run \
 On success, a new directory `runs/<run_id>/` is created containing:
 
 * `run.log` — timestamped run and stage log
-* `inputs.json` — run inputs (app, seed, beats, language, paths)
+* `inputs.json` — run inputs (app, seed, beats, language, `llm_provider`, model, paths)
 * `state.json` — pipeline state (app, seed, language, outline, sections, summaries, token usage; when TTS enabled: `tts_config`, and after TTS step: `tts_token_usage`)
 * `artifacts/` — `10_outline.json`, `20_section_01.md` … `20_section_NN.md`, `final_script.md`, `editor_report.json`; when TTS/audio runs: `story-<app4>-<llm_model>-<tts_model>-<tts_voice>-<DD-MM>.<ext>` (final narrated audio; `<app4>` is the first four characters of the sanitized app name; `<DD-MM>` is the pipeline’s current calendar day in Europe/Berlin, CET/CEST)
 * `llm_io/` — per-stage prompt/response debug files
@@ -289,7 +293,8 @@ On completion, the CLI and `run.log` show combined Chat token and TTS character 
 | `--sections` | integer 1–20 | Alias for `--beats` (use one or the other). |
 | `--run-id` | string | Override run ID. Default: `run-YYYYMMDD-HHMMSS`. |
 | `--config-path` | path | Config directory. Default: `config/`. |
-| `--model` | model identifier | Model for all LLM calls. Default: `gpt-4.1-mini`. Run fails immediately if the provider does not recognize the model. |
+| `--model` | model identifier | Model for all **text** LLM calls (outline through critic). Default from merged app config; with Claude, an OpenAI-style default model id may be replaced by `claude-sonnet-4-6` unless you set `--model` or a Claude model in YAML. |
+| `--llm-provider` | `openai` or `claude` | Text LLM backend. Resolution: CLI → `app_config.yaml` → `default_config.yaml`. Claude requires `ANTHROPIC_API_KEY` (or `anthropic_api_key`) in `config/creds.json`. |
 | `--section-length` | integer N | Target words per section; pipeline uses range `[N*0.8, N*1.2]`. Overrides app config when set. |
 | `--word-count` | integer N (100 < N < 15000) | Target total word count. Pipeline derives beat count and section length; see SPEC. |
 | `--tts` | flag | Enable TTS after critic (default). Pipeline runs TTS step then audio-prep; produces `tts/`, `voiceover/`, and `artifacts/story-<app4>-<llm_model>-<tts_model>-<tts_voice>-<DD-MM>.<ext>`. Requires ffmpeg on PATH. |

@@ -6,7 +6,9 @@ not authoritative. Update from provider pricing when needed.
 
 # Standard tier, USD per 1M tokens (input, output).
 # Source: OpenAI platform pricing (Standard tier).
+# Anthropic Claude Sonnet 4.6: $3 / 1M input, $15 / 1M output (project task rate).
 MODEL_COST_PER_1M: dict[str, tuple[float, float]] = {
+    "claude-sonnet-4-6": (3.0, 15.0),
     # GPT-5 family
     "gpt-5.2": (1.75, 14.00),
     "gpt-5.1": (1.25, 10.00),

@@ -225,6 +225,7 @@ def run_pipeline(settings: RunSettings) -> int:
             resolved_tts_config=settings.resolved_tts_config,
             model=settings.model,
             language=settings.language,
+            llm_provider=settings.llm_provider,
         )
 
         logger = get_run_logger(run_dir)
@@ -253,12 +254,21 @@ def run_pipeline(settings: RunSettings) -> int:
             return 1
 
         try:
-            llm_provider: LLMProvider = create_llm_provider(
-                settings.config_path, default_model=settings.model
+            llm: LLMProvider = create_llm_provider(
+                settings.config_path,
+                llm_provider=settings.llm_provider,
+                default_model=settings.model,
             )
         except ProviderError as e:
             _log_and_print_failure(logger, run_dir, "LLM provider creation failed", e)
             return 1
+
+        logger.log_llm_text_config(settings.llm_provider, settings.model)
+        print(
+            f"[llm_storytell] LLM provider: {settings.llm_provider} "
+            f"(model: {settings.model})",
+            flush=True,
+        )
 
         schema_base = base_dir / "src" / "llm_storytell" / "schemas"
         section_length = settings.section_length
@@ -275,7 +285,7 @@ def run_pipeline(settings: RunSettings) -> int:
                 run_dir=run_dir,
                 context_dir=app_paths.context_dir,
                 prompts_dir=app_paths.prompts_dir,
-                llm_provider=llm_provider,
+                llm_provider=llm,
                 logger=logger,
                 schema_base=schema_base,
             )
@@ -324,7 +334,7 @@ def run_pipeline(settings: RunSettings) -> int:
                     run_dir=run_dir,
                     context_dir=app_paths.context_dir,
                     prompts_dir=app_paths.prompts_dir,
-                    llm_provider=llm_provider,
+                    llm_provider=llm,
                     logger=logger,
                     section_index=section_index,
                     section_length=section_length,
@@ -347,7 +357,7 @@ def run_pipeline(settings: RunSettings) -> int:
                 execute_summarize_step(
                     run_dir=run_dir,
                     prompts_dir=app_paths.prompts_dir,
-                    llm_provider=llm_provider,
+                    llm_provider=llm,
                     logger=logger,
                     section_index=section_index,
                     schema_base=schema_base,
@@ -371,7 +381,7 @@ def run_pipeline(settings: RunSettings) -> int:
                 run_dir=run_dir,
                 context_dir=app_paths.context_dir,
                 prompts_dir=app_paths.prompts_dir,
-                llm_provider=llm_provider,
+                llm_provider=llm,
                 logger=logger,
                 schema_base=schema_base,
             )

@@ -127,6 +127,7 @@ class TestInitializeRun:
         assert inputs["beats"] == 5
         assert inputs["run_id"] == "run-test-002"
         assert inputs.get("language", "en") == "en"
+        assert inputs.get("llm_provider") == "openai"
         assert "timestamp" in inputs
         assert str(context_dir) in inputs["context_dir"]
         assert str(prompts_dir) in inputs["prompts_dir"]
@@ -165,6 +166,25 @@ class TestInitializeRun:
         assert state["summaries"] == []
         assert state["continuity_ledger"] == {}
         assert state["token_usage"] == []
+
+    def test_llm_provider_persisted_in_inputs(self, temp_project: Path) -> None:
+        """When llm_provider is passed to initialize_run, it is stored in inputs.json."""
+        context_dir = temp_project / "context" / "test-app"
+        prompts_dir = temp_project / "prompts" / "apps" / "test-app"
+
+        run_dir = initialize_run(
+            app_name="test-app",
+            seed="A seed.",
+            context_dir=context_dir,
+            prompts_dir=prompts_dir,
+            beats=2,
+            run_id="run-llmprov-001",
+            base_dir=temp_project,
+            llm_provider="claude",
+        )
+        with (run_dir / "inputs.json").open() as f:
+            inputs = json.load(f)
+        assert inputs["llm_provider"] == "claude"
 
     def test_language_persisted_in_inputs_and_state(self, temp_project: Path) -> None:
         """When language is passed to initialize_run, it is stored in inputs.json and state.json."""

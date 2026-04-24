@@ -1,5 +1,6 @@
 """Tests for pipeline resolve_run_settings and RunSettings."""
 
+from dataclasses import replace
 from pathlib import Path
 
 from llm_storytell.config import AppConfig, AppPaths
@@ -340,6 +341,94 @@ class TestResolveRunSettings:
         assert settings.config_path == tmp_path / "config"
         assert settings.word_count is None
         assert settings.delivery is False
+        assert settings.llm_provider == "openai"
+
+    def test_llm_provider_from_cli_overrides_app(self, tmp_path: Path) -> None:
+        """--llm-provider is reflected on RunSettings (CLI overrides app)."""
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = _minimal_app_config()
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            llm_provider_arg="claude",
+            config_path=tmp_path / "config",
+        )
+        assert settings.llm_provider == "claude"
+
+    def test_claude_replaces_openai_style_model_when_no_model_arg(
+        self, tmp_path: Path
+    ) -> None:
+        """With claude provider and merged OpenAI-style model, default to claude-sonnet-4-6."""
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = replace(
+            _minimal_app_config(model="gpt-5.2"), llm_provider="claude"
+        )
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            model_arg=None,
+            config_path=tmp_path / "config",
+        )
+        assert settings.llm_provider == "claude"
+        assert settings.model == "claude-sonnet-4-6"
+
+    def test_only_cli_llm_provider_claude_replaces_merged_gpt_5_2_without_model_flag(
+        self, tmp_path: Path
+    ) -> None:
+        """--llm-provider claude alone (no --model): never leave gpt-5.2 as text model."""
+        app_paths = _minimal_app_paths(tmp_path)
+        # Same shape as apps/default_config.yaml today: openai + gpt-5.2 from merge
+        app_config = _minimal_app_config(model="gpt-5.2")
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            model_arg=None,
+            llm_provider_arg="claude",
+            config_path=tmp_path / "config",
+        )
+        assert settings.llm_provider == "claude"
+        assert settings.model == "claude-sonnet-4-6"
+        assert settings.model != "gpt-5.2"
+
+    def test_claude_keeps_explicit_claude_model_from_app(self, tmp_path: Path) -> None:
+        """When app already sets a Claude model id, do not replace it."""
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = replace(
+            _minimal_app_config(model="claude-opus-4-0"), llm_provider="claude"
+        )
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            model_arg=None,
+            config_path=tmp_path / "config",
+        )
+        assert settings.model == "claude-opus-4-0"
+
+    def test_model_arg_wins_even_if_openai_id_with_claude_provider(
+        self, tmp_path: Path
+    ) -> None:
+        """Explicit --model is never auto-replaced."""
+        app_paths = _minimal_app_paths(tmp_path)
+        app_config = replace(
+            _minimal_app_config(model="gpt-4.1-mini"), llm_provider="claude"
+        )
+        settings = resolve_run_settings(
+            app_paths,
+            app_config,
+            "A seed.",
+            beats_arg=1,
+            model_arg="gpt-4.1-mini",
+            config_path=tmp_path / "config",
+        )
+        assert settings.model == "gpt-4.1-mini"
 
     def test_delivery_true_when_passed(self, tmp_path: Path) -> None:
         """resolve_run_settings sets delivery=True when requested."""

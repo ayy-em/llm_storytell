@@ -1,1 +1,3 @@
-# Optional overrides; pipeline uses apps/default_config.yaml or built-in defaults when absent.
+# Optional overrides; pipeline merges with apps/default_config.yaml.
+# Text generation uses OpenAI unless you override llm_provider (e.g. claude) in this file or via CLI.
+llm_provider: openai

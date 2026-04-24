@@ -8,8 +8,10 @@ from unittest.mock import patch
 
 import pytest
 
+from llm_storytell.llm import ClaudeProvider
 from llm_storytell.pipeline.providers import (
     ProviderError,
+    create_llm_provider,
     create_tts_provider,
 )
 from llm_storytell.tts_providers.elevenlabs_tts import ElevenLabsTTSProvider
@@ -58,6 +60,50 @@ class TestCreateTTSProviderElevenlabs:
             )
         assert isinstance(provider, ElevenLabsTTSProvider)
         assert provider._default_voice == "custom_voice_id"
+
+
+class TestCreateLLMProvider:
+    """create_llm_provider for openai and claude."""
+
+    def test_claude_missing_key_raises(self, tmp_path: Path) -> None:
+        (tmp_path / "creds.json").write_text(json.dumps({}), encoding="utf-8")
+        with pytest.raises(ProviderError) as exc_info:
+            create_llm_provider(
+                tmp_path,
+                llm_provider="claude",
+                default_model="claude-sonnet-4-6",
+            )
+        assert (
+            "Anthropic" in str(exc_info.value)
+            or "anthropic" in str(exc_info.value).lower()
+        )
+
+    def test_claude_returns_claude_provider(self, tmp_path: Path) -> None:
+        (tmp_path / "creds.json").write_text(
+            json.dumps({"ANTHROPIC_API_KEY": "sk-ant"}), encoding="utf-8"
+        )
+        with patch("anthropic.Anthropic") as mock_a:
+            mock_msg = mock_a.return_value.messages.create.return_value
+            mock_msg.content = [type("B", (), {"type": "text", "text": "ok"})()]
+            mock_msg.usage = type("U", (), {"input_tokens": 2, "output_tokens": 3})()
+            provider = create_llm_provider(
+                tmp_path,
+                llm_provider="claude",
+                default_model="claude-sonnet-4-6",
+            )
+        assert isinstance(provider, ClaudeProvider)
+
+    def test_unknown_text_provider_raises(self, tmp_path: Path) -> None:
+        (tmp_path / "creds.json").write_text(
+            json.dumps({"OPENAI_KEY": "sk"}), encoding="utf-8"
+        )
+        with pytest.raises(ProviderError) as exc_info:
+            create_llm_provider(
+                tmp_path,
+                llm_provider="unknown-llm",
+                default_model="x",
+            )
+        assert "Unsupported text LLM provider" in str(exc_info.value)
 
 
 class TestCreateTTSProviderUnsupported:

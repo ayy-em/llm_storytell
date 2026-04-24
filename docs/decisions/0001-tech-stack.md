@@ -1,7 +1,8 @@
 # LLM-Storytell: Tech Stack
 - Python 3.12 because latest stable LTS version
-- OpenAI's API was chosen for all LLM prompts (both text-based content and TTS) for simplicity
-- **openai** (Python package, >=1.0.0): used for LLM chat completions and for TTS (text-to-speech) API calls. No alternative in the standard library.
+- OpenAI's API was chosen for the initial text LLM and TTS; **anthropic** was added for optional Claude text generation (`--llm-provider claude` or app config).
+- **openai** (Python package, >=1.0.0): used for OpenAI LLM chat completions and for TTS (text-to-speech) API calls. No alternative in the standard library.
+- **anthropic** (Python package, >=0.40.0): used when the text LLM provider is Claude (`messages.create`). Required only for Claude-backed runs; keys in `config/creds.json`. No standard-library alternative for the Anthropic REST API.
 - **elevenlabs** (Python package, >=1.0.0): optional TTS provider. Used when `--tts-provider elevenlabs` is set. API key in config/creds.json as ELEVENLABS_API_KEY.
 - ruff for linting is a personal preference
 - PyYAML (>=6.0) for parsing pipeline configuration YAML files. Python standard library does not include YAML support, and PyYAML is the de facto standard for YAML parsing in Python. Required for T0005 pipeline definition loader.

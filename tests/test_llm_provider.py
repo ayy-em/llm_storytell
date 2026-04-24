@@ -17,6 +17,7 @@ LLMResult = llm_module.LLMResult
 LLMProvider = llm_module.LLMProvider
 LLMProviderError = llm_module.LLMProviderError
 OpenAIProvider = llm_module.OpenAIProvider
+ClaudeProvider = llm_module.ClaudeProvider
 
 
 class TestLLMResult:
@@ -400,3 +401,46 @@ class TestOpenAIProviderModelNotRecognized:
         assert "does not exist" in msg
         # Must not retry: client called exactly once
         assert call_count == 1
+
+
+class _FakeClaudeClient:
+    """Test double for the Claude client callable."""
+
+    def __init__(self, responses: list[Mapping[str, Any]] | None = None) -> None:
+        self._responses = responses or []
+        self.calls: list[dict[str, Any]] = []
+
+    def __call__(self, *_, **kwargs: Any) -> Mapping[str, Any]:
+        self.calls.append(kwargs)
+        if not self._responses:
+            raise RuntimeError("no fake responses configured")
+        return self._responses.pop(0)
+
+
+class TestClaudeProviderSuccess:
+    """ClaudeProvider happy-path behaviour."""
+
+    def test_generate_returns_llm_result_with_usage(self) -> None:
+        """Successful call maps input_tokens/output_tokens to LLMResult."""
+        response: Mapping[str, Any] = {
+            "content": "Hello from Claude",
+            "usage": {"input_tokens": 10, "output_tokens": 20},
+        }
+        client = _FakeClaudeClient(responses=[response])
+        provider = ClaudeProvider(
+            client,
+            default_model="claude-sonnet-4-6",
+            temperature=0.2,
+        )
+        result = provider.generate("Hello", step="outline")
+
+        assert isinstance(result, LLMResult)
+        assert result.content == "Hello from Claude"
+        assert result.provider == "claude"
+        assert result.model == "claude-sonnet-4-6"
+        assert result.prompt_tokens == 10
+        assert result.completion_tokens == 20
+        assert result.total_tokens == 30
+        assert len(client.calls) == 1
+        assert client.calls[0]["max_tokens"] > 0
+        assert client.calls[0]["model"] == "claude-sonnet-4-6"

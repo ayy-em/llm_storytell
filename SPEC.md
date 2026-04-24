@@ -150,7 +150,8 @@ python -m llm_storytell run \
 | `--sections` | integer 1–20 | Alias for `--beats` (one section per beat). Use one or the other. |
 | `--run-id` | string | Override run ID. Default: `run-YYYYMMDD-HHMMSS`. |
 | `--config-path` | path | Config directory. Default: `config/`. |
-| `--model` | model identifier | Model used for **all** LLM calls in this run. Default: `gpt-4.1-mini`. Run fails immediately if the provider does not recognize the model. |
+| `--model` | model identifier | Model used for **all** text LLM calls in this run. Default comes from merged app config (and may be adjusted when `llm_provider` is `claude` and the merged model id still looks like an OpenAI chat model; see below). Run fails immediately if the provider does not recognize the model. |
+| `--llm-provider` | `openai` or `claude` | Text generation backend for outline, sections, summarize, and critic. Resolution order: CLI → `apps/<app_name>/app_config.yaml` → `apps/default_config.yaml` (default `openai`). OpenAI uses `config/creds.json` OpenAI key fields; Claude uses `ANTHROPIC_API_KEY` or `anthropic_api_key`. When the resolved provider is Claude and `--model` is not set and the merged `model` value looks like an OpenAI chat model id (e.g. `gpt-*`, `o1*`, `o3*`), the pipeline uses **`claude-sonnet-4-6`** as the text model unless the app/default config already sets a non–OpenAI-style model id. |
 | `--section-length` | integer N | Target words per section; pipeline uses range `[N*0.8, N*1.2]`. Overrides app config when set. |
 | `--word-count` | integer N (100 < N < 15000) | Target total word count for the story. Pipeline derives beat count and section length from N (and from app/CLI section length when only `--word-count` is set). When both `--beats` and `--word-count` are provided, `word-count / beats` must be in (100, 1000) (words per section). |
 | `--tts` | flag | Enable TTS (text-to-speech) after critic step. Default when neither `--tts` nor `--no-tts` is set. |
@@ -160,7 +161,9 @@ python -m llm_storytell run \
 | `--language` | ISO 639-1 code (e.g. `en`, `es`) | Language for story output. Overrides app config. Resolution order: CLI → `apps/<app_name>/app_config.yaml` → `apps/default_config.yaml` (default `en`). Must be a valid ISO 639-1 two-letter code; otherwise the pipeline fails immediately with a verbose exception. |
 | `--delivery` | flag (default off) | When set, after a successful run (including copy of the final deliverable to `runs/book/`), the pipeline sends that file to Telegram via the Bot API. Requires `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` in `config/creds.json`. Uses `sendAudio` for `.mp3`/`.m4a` and `sendDocument` for other types (e.g. `.pdf` when `--no-tts`). On failure, stderr and `run.log` include a verbose traceback; the process exits non-zero. |
 
-Defaults for beats and section_length come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits. The same merge applies to `language`: it may be set in `default_config.yaml` or in an app’s `app_config.yaml`; `--language` overrides when provided. Invalid language (non–ISO 639-1) in config or CLI causes startup failure with a clear error message.
+Defaults for beats, `section_length`, `llm_provider`, and `model` come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits. The same merge applies to `language`: it may be set in `default_config.yaml` or in an app’s `app_config.yaml`; `--language` overrides when provided. Invalid language (non–ISO 639-1) in config or CLI causes startup failure with a clear error message.
+
+**Text LLM provider (v1.3+):** The resolved `llm_provider` and `model` are printed at run start, logged to `run.log`, and persisted in `inputs.json` as `llm_provider` and `model` (when set). Chat token cost estimates use provider pricing tables where the model id is known (including **`claude-sonnet-4-6`** at $3 / 1M input and $15 / 1M output tokens for the estimate line only).
 
 **TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). The resolved voice name is **normalized to lowercase** before being sent to the TTS provider (e.g. OpenAI expects `onyx`, not `Onyx`); config and CLI may use either casing. When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`. When TTS is enabled, the pipeline runs the TTS step then the audio-prep step; **ffmpeg** (and ffprobe) must be on PATH for the audio-prep step (stitching, voiceover polish, and mixing).
 
@@ -549,8 +552,8 @@ class LLMProvider:
 
 ### Initial implementation
 
-* OpenAI-backed provider only (`OpenAIProvider`)
-* Token usage from the OpenAI response (`usage.prompt_tokens`, `usage.completion_tokens`, `usage.total_tokens`) is surfaced through `LLMResult`
+* OpenAI-backed provider (`OpenAIProvider`) and Claude-backed provider (`ClaudeProvider`, Anthropic Messages API)
+* Token usage from the provider response is surfaced through `LLMResult` (OpenAI: `usage.prompt_tokens` / `completion_tokens` / `total_tokens`; Claude: `input_tokens` / `output_tokens`, mapped to the same `LLMResult` fields for logging and `state.json`)
 * Pipeline steps use this metadata together with `record_token_usage()` to log and persist token usage into `run.log` and `state.json.token_usage[]`
 
 ### Rationale

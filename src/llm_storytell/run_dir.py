@@ -42,6 +42,7 @@ def _create_inputs_json(
     word_count: int | None = None,
     model: str | None = None,
     language: str = "en",
+    llm_provider: str = "openai",
 ) -> dict[str, Any]:
     """Create the inputs.json structure.
 
@@ -64,6 +65,7 @@ def _create_inputs_json(
         "seed": seed,
         "beats": beats,
         "language": language,
+        "llm_provider": llm_provider,
         "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "context_dir": str(context_dir),
         "prompts_dir": str(prompts_dir),
@@ -123,6 +125,7 @@ def initialize_run(
     resolved_tts_config: dict[str, Any] | None = None,
     model: str | None = None,
     language: str = "en",
+    llm_provider: str = "openai",
 ) -> Path:
     """Initialize a new run directory with all required files.
 
@@ -141,6 +144,7 @@ def initialize_run(
         resolved_tts_config: Optional resolved TTS/audio config to persist in state.json.
         model: Optional LLM model identifier (persisted in inputs.json for artifact naming).
         language: ISO 639-1 language code for story output (persisted in inputs and state).
+        llm_provider: Text LLM backend id (e.g. openai, claude); persisted in inputs.json.
 
     Returns:
         Path to the created run directory.
@@ -188,6 +192,7 @@ def initialize_run(
             word_count=word_count,
             model=model,
             language=language,
+            llm_provider=llm_provider,
         )
         inputs_path = temp_dir / "inputs.json"
 

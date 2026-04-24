@@ -4,7 +4,7 @@ A new section under level 3 heading and completion datetime is added to this fil
 
 ## Post-v1.2
 
-### [x] T01301 – Delivery step of the pipeline via Telegram (2026-04-05)
+### [x] T0134 – Delivery step of the pipeline via Telegram (2026-04-05)
 
 #### Goal
 After completing the run, if the run is started with delivery mode on, the finished artifact (one stored in /book/ dir as a final step), after the existing pipeline runs are all finished, the file is sent to a telegram user via Bot API as a file.
@@ -45,6 +45,28 @@ After completing the run, if the run is started with delivery mode on, the finis
 - **Tests**: `tests/test_telegram_delivery.py` (creds, newest file, sendAudio/sendDocument, retries, logging); `tests/test_cli.py` and `tests/test_pipeline_resolve.py` for `--delivery` / `delivery` flag. **`tests/test_audio_prep_step.py`**: `test_volume_envelope_uses_voice_duration` assertions updated to match current `_BG_DUCK` / `_BG_INTRO_START` (test was out of sync with `BG_VOLUME_SCALE`; not caused by this task).
 - **`logging.py`**: unchanged (no extra helpers needed).
 - Commands run: `uv run ruff format .`, `uv run ruff check --fix .`, `uv run ruff check .`, `uv run pytest -q` (**411 passed**).
+
+---
+
+### [x] T0135 – Add support for Claude as text generation LLM provider (2026-04-24)
+
+**Goal**
+Pipeline supports Claude (Anthropic Messages API) for text generation alongside OpenAI, selectable via `--llm-provider`, app YAML, or `apps/default_config.yaml`.
+
+**Acceptance criteria**
+- Pipeline runs with Claude when configured; credentials from `config/creds.json` (`ANTHROPIC_API_KEY` / `anthropic_api_key`); provider and model logged and printed; default `claude-sonnet-4-6` when provider is Claude and merged model still looks like an OpenAI chat id unless `--model` or a Claude model is set in YAML; docs and example_app updated; tests green.
+
+**Allowed files (expanded for this task)**
+- `src/llm_storytell/config/`, `cli.py`, `logging.py`, `llm/**`, `steps/**`, `pipeline/providers.py`, `pipeline/runner.py`, `pipeline/resolve.py`, `run_dir.py`, `tests/**`, `README.md`, `SPEC.md`, `TASKS.md`, `COMPLETED_TASKS.md`, `pyproject.toml`, `docs/decisions/0001-tech-stack.md`, `apps/example_app/app_config.yaml`
+
+**Result**
+- **`ClaudeProvider`** in `llm/__init__.py` (injectable client; maps `input_tokens`/`output_tokens` to `LLMResult`); **`create_llm_provider(..., *, llm_provider=..., default_model=...)`** in `pipeline/providers.py` (OpenAI unchanged; Claude via **anthropic** SDK).
+- **`RunSettings.llm_provider`** and **`resolve_run_settings(..., llm_provider_arg=...)`**; CLI **`--llm-provider`**; **`initialize_run` / `inputs.json`**: `llm_provider` field; **`runner`**: creates provider with settings, **`log_llm_text_config`**, stdout line for provider/model.
+- **Pricing**: `MODEL_COST_PER_1M["claude-sonnet-4-6"]` = **(3.0, 15.0)** USD per 1M input/output tokens.
+- **Docs**: `README.md`, `SPEC.md` (CLI, persistence, LLM abstraction); **`docs/decisions/0001-tech-stack.md`** (anthropic); **`apps/example_app/app_config.yaml`** explicit `llm_provider: openai`.
+- **Dependency**: `anthropic>=0.40.0` in `pyproject.toml`.
+- **Tests**: `test_pipeline_resolve.py`, `test_pipeline_providers.py`, `test_llm_provider.py`, `test_llm_pricing.py`, `test_cli.py`, `test_run_init.py`, `test_e2e.py` (mock signatures for keyword-only `create_llm_provider`).
+- Commands run: `uv run ruff format .`, `uv run ruff check .`, `uv run pytest -q` (**430 passed**).
 
 ---
 

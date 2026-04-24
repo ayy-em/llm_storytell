@@ -273,3 +273,141 @@ class OpenAIProvider(LLMProvider):
             total_tokens = prompt_tokens + completion_tokens
 
         return content, prompt_tokens, completion_tokens, total_tokens
+
+
+class ClaudeProvider(LLMProvider):
+    """Anthropic Claude-backed :class:`LLMProvider` implementation.
+
+    Uses the same injectable-client pattern as :class:`OpenAIProvider` so
+    tests can run without network access. The callable should perform a
+    Messages API call and return a mapping with:
+
+    * ``content`` (str): assistant text
+    * ``usage`` (optional dict): ``input_tokens``, ``output_tokens``
+    """
+
+    def __init__(
+        self,
+        client: Callable[..., Mapping[str, Any]],
+        *,
+        default_model: str,
+        max_retries: int = 2,
+        default_max_tokens: int = 16384,
+        **default_params: Any,
+    ) -> None:
+        """Create a new Claude provider.
+
+        Args:
+            client:
+                Callable invoked as ``client(prompt=..., model=..., **params)``
+                returning a mapping with ``content`` and optional ``usage``.
+            default_model:
+                Default model id when :meth:`generate` receives ``model=None``.
+            max_retries:
+                Retries for transient failures (not for unknown-model errors).
+            default_max_tokens:
+                Default ``max_tokens`` for Anthropic Messages API when not
+                overridden per call.
+            **default_params:
+                Extra default kwargs merged into each call (e.g. ``temperature``).
+        """
+        super().__init__(provider_name="claude")
+        if max_retries < 0:
+            raise ValueError("max_retries must be non-negative")
+
+        self._client = client
+        self._default_model = default_model
+        self._max_retries = max_retries
+        self._default_max_tokens = default_max_tokens
+        self._default_params = default_params
+
+    def generate(
+        self,
+        prompt: str,
+        *,
+        step: str,  # noqa: ARG002 - reserved for callers
+        model: str | None = None,
+        **kwargs: Any,
+    ) -> LLMResult:
+        """Generate content using Claude Messages API."""
+        del step
+
+        effective_model = model or self._default_model
+        params: dict[str, Any] = {**self._default_params, **kwargs}
+        max_tokens = int(params.pop("max_tokens", self._default_max_tokens))
+
+        last_error: Exception | None = None
+        attempts = 0
+        max_attempts = self._max_retries + 1
+
+        _MODEL_NOT_RECOGNIZED_PHRASES = (
+            "invalid_request_error",
+            "not_found_error",
+            "not found",
+            "unknown model",
+            "does not exist",
+            "invalid_model",
+            "could not find model",
+        )
+
+        while attempts < max_attempts:
+            try:
+                response = self._client(
+                    prompt=prompt,
+                    model=effective_model,
+                    max_tokens=max_tokens,
+                    **params,
+                )
+                break
+            except Exception as exc:  # pragma: no cover - exercised via tests
+                last_error = exc
+                msg_lower = str(exc).lower()
+                if any(phrase in msg_lower for phrase in _MODEL_NOT_RECOGNIZED_PHRASES):
+                    raise LLMProviderError(
+                        f"Provider API does not identify requested model: {effective_model}. {exc!s}"
+                    ) from exc
+                attempts += 1
+                if attempts >= max_attempts:
+                    msg = (
+                        f"Claude call failed after {attempts} attempts: {last_error!s}"
+                    )
+                    raise LLMProviderError(msg) from last_error
+        else:  # pragma: no cover - defensive
+            msg = f"Claude call failed after {attempts} attempts: {last_error!s}"
+            raise LLMProviderError(msg) from last_error
+
+        content, prompt_tokens, completion_tokens, total_tokens = (
+            self._extract_response(response)
+        )
+
+        return LLMResult(
+            content=content,
+            provider=self.provider_name,
+            model=effective_model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            raw_response=response,
+        )
+
+    @staticmethod
+    def _extract_response(
+        response: Mapping[str, Any],
+    ) -> tuple[str, int | None, int | None, int | None]:
+        """Extract assistant text and token usage from a normalized response."""
+        content = response.get("content")
+        if content is None:
+            raise LLMProviderError("Missing assistant content")
+        if not isinstance(content, str):
+            raise LLMProviderError("Missing assistant content")
+        if content == "" or content.strip() == "":
+            raise LLMProviderError("Empty assistant content")
+
+        usage = response.get("usage") or {}
+        prompt_tokens = usage.get("input_tokens")
+        completion_tokens = usage.get("output_tokens")
+        total_tokens: int | None = None
+        if isinstance(prompt_tokens, int) and isinstance(completion_tokens, int):
+            total_tokens = prompt_tokens + completion_tokens
+
+        return content, prompt_tokens, completion_tokens, total_tokens

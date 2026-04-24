@@ -66,6 +66,10 @@ class RunLogger:
         """
         self._write("WARNING", message)
 
+    def log_llm_text_config(self, llm_provider: str, model: str) -> None:
+        """Log resolved text LLM provider and model for the run."""
+        self.info(f"LLM text generation: provider={llm_provider}, model={model}")
+
     def log_run_init(
         self,
         app_name: str,

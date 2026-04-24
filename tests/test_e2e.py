@@ -255,7 +255,10 @@ def test_e2e_full_pipeline(
 
         # Patch the LLM provider creation to use our mock
         def mock_create_provider(
-            config_path: Path, default_model: str = "gpt-4"
+            config_path: Path,
+            *,
+            llm_provider: str = "openai",
+            default_model: str = "gpt-4",
         ) -> Any:
             return mock_provider
 
@@ -382,7 +385,12 @@ def test_e2e_run_completion_prints_token_summary(
     monkeypatch.chdir(temp_app_structure)
     mock_provider = MockLLMProvider()
 
-    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+    def mock_create_provider(
+        config_path: Path,
+        *,
+        llm_provider: str = "openai",
+        default_model: str = "gpt-4",
+    ) -> Any:
         return mock_provider
 
     with patch(
@@ -420,7 +428,12 @@ def test_e2e_fails_when_run_id_already_exists(
     monkeypatch.chdir(temp_app_structure)
     mock_provider = MockLLMProvider()
 
-    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+    def mock_create_provider(
+        config_path: Path,
+        *,
+        llm_provider: str = "openai",
+        default_model: str = "gpt-4",
+    ) -> Any:
         return mock_provider
 
     with patch(
@@ -471,7 +484,12 @@ def test_e2e_section_length_cli_override(
     monkeypatch.chdir(temp_app_structure)
     mock_provider = MockLLMProvider()
 
-    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+    def mock_create_provider(
+        config_path: Path,
+        *,
+        llm_provider: str = "openai",
+        default_model: str = "gpt-4",
+    ) -> Any:
         return mock_provider
 
     with patch(
@@ -510,7 +528,12 @@ def test_e2e_no_tts_pipeline_ends_after_critic(
     monkeypatch.chdir(temp_app_structure)
     mock_provider = MockLLMProvider()
 
-    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+    def mock_create_provider(
+        config_path: Path,
+        *,
+        llm_provider: str = "openai",
+        default_model: str = "gpt-4",
+    ) -> Any:
         return mock_provider
 
     with patch(
@@ -548,7 +571,12 @@ def test_e2e_full_pipeline_twenty_beats(
     monkeypatch.chdir(temp_app_structure)
     mock_provider = MockLLMProvider()
 
-    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+    def mock_create_provider(
+        config_path: Path,
+        *,
+        llm_provider: str = "openai",
+        default_model: str = "gpt-4",
+    ) -> Any:
         return mock_provider
 
     with patch(
@@ -592,7 +620,12 @@ def test_e2e_with_tts_succeeds(
     mock_llm = MockLLMProvider()
     mock_tts = MockTTSProvider()
 
-    def mock_create_llm(config_path: Path, default_model: str = "gpt-4") -> Any:
+    def mock_create_llm(
+        config_path: Path,
+        *,
+        llm_provider: str = "openai",
+        default_model: str = "gpt-4",
+    ) -> Any:
         return mock_llm
 
     def mock_create_tts(
@@ -671,7 +704,10 @@ def test_e2e_without_beats_override(
         mock_provider = MockLLMProvider()
 
         def mock_create_provider(
-            config_path: Path, default_model: str = "gpt-4"
+            config_path: Path,
+            *,
+            llm_provider: str = "openai",
+            default_model: str = "gpt-4",
         ) -> Any:
             return mock_provider
 
@@ -719,9 +755,12 @@ def test_e2e_model_flag_passed_to_provider_and_used_for_all_calls(
         provider_create_calls: list[tuple[Any, ...]] = []
 
         def spy_create_provider(
-            config_path: Path, default_model: str = "gpt-4.1-mini"
+            config_path: Path,
+            *,
+            llm_provider: str = "openai",
+            default_model: str = "gpt-4.1-mini",
         ) -> Any:
-            provider_create_calls.append((config_path, default_model))
+            provider_create_calls.append((config_path, llm_provider, default_model))
             return mock_provider
 
         with patch(
@@ -746,7 +785,7 @@ def test_e2e_model_flag_passed_to_provider_and_used_for_all_calls(
 
         assert exit_code == 0
         assert len(provider_create_calls) == 1
-        _, default_model = provider_create_calls[0]
+        _, _, default_model = provider_create_calls[0]
         assert default_model == "gpt-4.1-nano"
         # Provider is created once; all steps use it without passing model=, so all calls use that model
         assert len(mock_provider.calls) > 0
@@ -766,9 +805,12 @@ def test_e2e_default_model_when_no_model_flag(
         provider_create_calls: list[tuple[Any, ...]] = []
 
         def spy_create_provider(
-            config_path: Path, default_model: str = "gpt-4.1-mini"
+            config_path: Path,
+            *,
+            llm_provider: str = "openai",
+            default_model: str = "gpt-4.1-mini",
         ) -> Any:
-            provider_create_calls.append((config_path, default_model))
+            provider_create_calls.append((config_path, llm_provider, default_model))
             return mock_provider
 
         with patch(
@@ -791,7 +833,7 @@ def test_e2e_default_model_when_no_model_flag(
 
         assert exit_code == 0
         assert len(provider_create_calls) == 1
-        _, default_model = provider_create_calls[0]
+        _, _, default_model = provider_create_calls[0]
         assert default_model == "gpt-4.1-mini"
     finally:
         monkeypatch.chdir(original_cwd)
@@ -813,9 +855,12 @@ def test_e2e_model_default_from_app_config_when_no_model_flag(
         provider_create_calls: list[tuple[Any, ...]] = []
 
         def spy_create_provider(
-            config_path: Path, default_model: str = "gpt-4.1-mini"
+            config_path: Path,
+            *,
+            llm_provider: str = "openai",
+            default_model: str = "gpt-4.1-mini",
         ) -> Any:
-            provider_create_calls.append((config_path, default_model))
+            provider_create_calls.append((config_path, llm_provider, default_model))
             return mock_provider
 
         with patch(
@@ -838,7 +883,7 @@ def test_e2e_model_default_from_app_config_when_no_model_flag(
 
         assert exit_code == 0
         assert len(provider_create_calls) == 1
-        _, default_model = provider_create_calls[0]
+        _, _, default_model = provider_create_calls[0]
         assert default_model == "gpt-4.1-nano"
     finally:
         monkeypatch.chdir(original_cwd)
@@ -1031,7 +1076,10 @@ def test_e2e_succeeds_when_optional_locations_missing(
         mock_provider = MockLLMProvider()
 
         def mock_create_provider(
-            config_path: Path, default_model: str = "gpt-4"
+            config_path: Path,
+            *,
+            llm_provider: str = "openai",
+            default_model: str = "gpt-4",
         ) -> Any:
             return mock_provider
 
@@ -1156,7 +1204,12 @@ def test_e2e_word_count_derives_beats_and_persists_word_count(
     monkeypatch.chdir(temp_app_structure)
     mock_provider = MockLLMProvider()
 
-    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+    def mock_create_provider(
+        config_path: Path,
+        *,
+        llm_provider: str = "openai",
+        default_model: str = "gpt-4",
+    ) -> Any:
         return mock_provider
 
     with patch(
@@ -1196,7 +1249,12 @@ def test_e2e_word_count_with_beats_valid_ratio(
     monkeypatch.chdir(temp_app_structure)
     mock_provider = MockLLMProvider()
 
-    def mock_create_provider(config_path: Path, default_model: str = "gpt-4") -> Any:
+    def mock_create_provider(
+        config_path: Path,
+        *,
+        llm_provider: str = "openai",
+        default_model: str = "gpt-4",
+    ) -> Any:
         return mock_provider
 
     with patch(

@@ -53,7 +53,7 @@ Each task includes:
 * Goal
 * Acceptance criteria
 * Allowed files (Hard constraint)
-* Commands to run
+* Commands to run (Optional; if blank - lint/format/pytest)
 * Notes (Optional)
 * Output requests (Optional)
 * Result (empty section upon creation, to be populated prior to moving task to COMPLETED_TASKS.py)
@@ -76,9 +76,50 @@ Agent is to stop after reading task and request clarification if any of the non-
 7. README.md and SPEC.md are up-to-date and accurately reflect actual scope, technical solution design and other project information.
 8. No finished tasks are found in TASKS.md file.
 
+---
+
 ## Tasks
 
-_(No open tasks.)_
+### [ ] T0136 - Add support for Gemini as text generation LLM provider
+
+**Goal**
+Pipeline now supports Gemini for text generation as alternative to ChatGPT and Claude. LLM provider to be used can be set via either a CLI arg (`--llm-provider gemini`), defined in app's config file, and the default provider is set in default_config.yaml.
+
+**Acceptance criteria**
+- Pipeline successfully runs with Gemini set as a preferred LLM provider, via either CLI argument, as part of the app's config file, or if set in `default_config.yaml`
+- Credentials (e.g. API key) for the provider are fetched from `config/creds.json` file, with `README.md` reflecting the requirement for users to add the key to config
+- Provider selection is reflected both in console output and in run logs
+- Default model for provider is set to Gemini 3 and it's possible to override it via `--model` CLI arg, via app config or default_config.yaml
+- New functionality is fully reflected in repository's docs
+- example_app's templates adjusted to reflect LLM provider selection (defaults to OpenAI)
+- token cost estimates added
+- Tests added for new use cases
+- Linting, formatting and running tests all succeed
+
+**Allowed files (Hard constraint)**
+- `src/llm_storytell/config/`
+- `src/llm_storytell/cli.py`
+- `src/llm_storytell/logging.py`
+- `src/llm_storytell/llm/**`
+- `src/llm_storytell/steps/**`
+- `src/llm_storytell/schemas/**`
+- `src/llm_storytell/llm/**`
+- `src/llm_storytell/pipeline/runner.py`
+- `src/llm_storytell/pipeline/resolve.py`
+- `src/llm_storytell/pipeline/providers.py`
+- `src/llm_storytell/run_dir.py`
+- `apps/example_app/app_config.yaml`
+- `tests/**`
+- `README.md`
+- `SPEC.md`
+- `TASKS.md`
+- `COMPLETED_TASKS.md`
+
+**Notes**
+For this task, if task's proper and sensible completion requires modifying files outside of the allowed list, please propose expanding that list prior to starting on the task. You can also propose thrid-party dependencies to handle LLM provider interactions, if official ones are present.
+
+**Result**
+...
 
 ---
 

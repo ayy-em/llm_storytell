@@ -69,6 +69,12 @@ def create_parser() -> argparse.ArgumentParser:
         help="Model identifier for all LLM calls in this run (default: gpt-4.1-mini). Fails immediately if the provider does not recognize the model.",
     )
     run_parser.add_argument(
+        "--llm-provider",
+        dest="llm_provider",
+        required=False,
+        help="Text LLM provider: openai or claude. Overrides app config. Resolution: CLI → app_config.yaml → default_config.yaml.",
+    )
+    run_parser.add_argument(
         "--section-length",
         type=int,
         required=False,
@@ -257,6 +263,7 @@ def main(argv: list[str] | None = None) -> int:
             word_count=word_count,
             section_length_arg=args.section_length,
             model_arg=args.model,
+            llm_provider_arg=getattr(args, "llm_provider", None),
             tts_enabled=tts_enabled,
             tts_provider=tts_provider,
             tts_provider_cli=tts_provider_cli,

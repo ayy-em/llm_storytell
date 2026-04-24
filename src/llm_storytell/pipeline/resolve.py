@@ -17,6 +17,19 @@ TTS_PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
     "elevenlabs": {"tts_model": DEFAULT_MODEL_ID, "tts_voice": DEFAULT_VOICE_ID},
 }
 
+# Default Claude text model when provider is claude but merged config still has an OpenAI-style model id.
+CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-6"
+
+
+def _looks_like_openai_chat_model(model: str) -> bool:
+    """True if *model* looks like an OpenAI chat model id (not a Claude id)."""
+    m = model.strip().lower()
+    if m.startswith("gpt-"):
+        return True
+    if m.startswith(("o1", "o2", "o3", "o4")):
+        return True
+    return False
+
 
 def _section_length_midpoint(section_length_str: str) -> int:
     """Parse section_length string (e.g. '400-600') to midpoint; fallback 500."""
@@ -53,6 +66,7 @@ class RunSettings:
     run_id: str | None
     config_path: Path
     model: str
+    llm_provider: str
     word_count: int | None
     language: str
     tts_enabled: bool
@@ -70,6 +84,7 @@ def resolve_run_settings(
     word_count: int | None = None,
     section_length_arg: int | None = None,
     model_arg: str | None = None,
+    llm_provider_arg: str | None = None,
     tts_enabled: bool = True,
     tts_provider: str | None = None,
     tts_provider_cli: str | None = None,
@@ -95,6 +110,7 @@ def resolve_run_settings(
         word_count: --word-count value (optional).
         section_length_arg: --section-length N value (optional).
         model_arg: --model value (optional).
+        llm_provider_arg: --llm-provider value (optional); overrides app default.
         tts_enabled: Whether TTS is enabled (not --no-tts).
         tts_provider: Resolved provider (CLI or app).
         tts_provider_cli: Raw --tts-provider value (None if not passed). When set, missing voice/model use provider defaults; when None, use app config.
@@ -105,9 +121,15 @@ def resolve_run_settings(
         delivery: Whether to send the runs/book deliverable via Telegram after success.
 
     Returns:
-        RunSettings with derived beats, section_length, model, resolved_tts_config.
+        RunSettings with derived beats, section_length, model, llm_provider,
+        resolved_tts_config.
     """
     config_path = config_path or Path("config/")
+
+    raw_lp = (
+        llm_provider_arg if llm_provider_arg is not None else app_config.llm_provider
+    )
+    llm_provider = (raw_lp or "openai").strip().lower() or "openai"
 
     if word_count is not None:
         if beats_arg is not None:
@@ -138,6 +160,12 @@ def resolve_run_settings(
             section_length = app_config.section_length
 
     model = model_arg if model_arg is not None else app_config.model
+    if (
+        llm_provider == "claude"
+        and model_arg is None
+        and _looks_like_openai_chat_model(str(model))
+    ):
+        model = CLAUDE_DEFAULT_MODEL
     language = language_arg if language_arg is not None else app_config.language
 
     resolved_tts_config: dict[str, Any] | None = None
@@ -174,6 +202,7 @@ def resolve_run_settings(
         run_id=run_id,
         config_path=config_path,
         model=model,
+        llm_provider=llm_provider,
         word_count=word_count,
         language=language,
         tts_enabled=tts_enabled,
