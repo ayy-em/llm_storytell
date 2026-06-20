@@ -11,11 +11,13 @@ import pytest
 from llm_storytell.logging import RunLogger
 from llm_storytell.steps.audio_prep import (
     ALBUM_COVER_FILENAME,
+    BG_ENVELOPE_BODY_LEVEL,
+    BG_ENVELOPE_INTRO_PEAK,
+    BG_ENVELOPE_OUTRO_PEAK,
     MAX_SEGMENTS,
     AudioPrepStepError,
     VOICEOVER_POLISH_AF,
     _app_prefix_four_chars,
-    _bg_envelope_levels,
     _default_audio_title_from_seed,
     _discover_segments,
     _get_app_name,
@@ -25,6 +27,9 @@ from llm_storytell.steps.audio_prep import (
     _resolve_existing_voiceover,
     _voiceover_artifact_filename,
     execute_audio_prep_step,
+    finalize_story_audio_mix,
+    rebuild_background_loop_and_envelope,
+    stitch_voiceover_from_tts_segments,
 )
 
 
@@ -347,6 +352,189 @@ class TestResolveAlbumCover:
         assert _resolve_album_cover(base, "my_app") == app_cover
 
 
+class TestStitchVoiceoverFromTtsSegments:
+    """Rebuild voiceover from segment files only (no polish / mix)."""
+
+    def test_stitch_only_runs_concat_copy(self, tmp_path: Path) -> None:
+        run_dir = _run_dir(tmp_path, ["segment_01.mp3", "segment_02.mp3"])
+        log_path = run_dir / "run.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+
+        ffmpeg_calls: list[list[str]] = []
+
+        def fake_run(cmd: list[str], *args: object, **kwargs: object) -> MagicMock:
+            out = MagicMock()
+            out.returncode = 0
+            out.stderr = ""
+            out.stdout = ""
+            if cmd[0] == "ffmpeg":
+                ffmpeg_calls.append(cmd)
+                Path(cmd[-1]).parent.mkdir(parents=True, exist_ok=True)
+                Path(cmd[-1]).write_bytes(b"x")
+            return out
+
+        with patch(
+            "llm_storytell.steps.audio_prep.subprocess.run",
+            side_effect=fake_run,
+        ):
+            out = stitch_voiceover_from_tts_segments(run_dir, logger)
+
+        assert out == run_dir / "voiceover" / "voiceover.mp3"
+        assert out.is_file()
+        assert len(ffmpeg_calls) == 1
+        cmd = ffmpeg_calls[0]
+        assert "concat" in " ".join(cmd)
+        assert "copy" in cmd
+
+
+class TestFinalizeStoryAudioMix:
+    """Mix only: voiceover.* + bg_enveloped.wav."""
+
+    def test_finalize_mix_invokes_amix(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "run-final"
+        run_dir.mkdir()
+        (run_dir / "inputs.json").write_text(
+            json.dumps(
+                {
+                    "app": "example_app",
+                    "run_id": "run-final",
+                    "model": "gpt-4.1-mini",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (run_dir / "state.json").write_text(
+            json.dumps(
+                {
+                    "tts_config": {
+                        "tts_model": "tts-m",
+                        "tts_voice": "vo1",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        vo = run_dir / "voiceover"
+        vo.mkdir(parents=True)
+        (vo / "voiceover.mp3").write_bytes(b"x")
+        (vo / "bg_enveloped.wav").write_bytes(b"x")
+
+        base = tmp_path / "base"
+        base.mkdir()
+        log_path = run_dir / "run.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+
+        mix_cmd: list[str] | None = None
+
+        def fake_run(cmd: list[str], *args: object, **kwargs: object) -> MagicMock:
+            nonlocal mix_cmd
+            out = MagicMock()
+            out.returncode = 0
+            out.stderr = ""
+            if cmd[0] == "ffprobe":
+                out.stdout = "120.0"
+            else:
+                out.stdout = ""
+            if cmd[0] == "ffmpeg":
+                if "-filter_complex" in cmd and "amix" in " ".join(cmd):
+                    mix_cmd = cmd
+                Path(cmd[-1]).parent.mkdir(parents=True, exist_ok=True)
+                Path(cmd[-1]).write_bytes(b"x")
+            return out
+
+        with (
+            patch(
+                "llm_storytell.steps.audio_prep.subprocess.run",
+                side_effect=fake_run,
+            ),
+            patch(
+                "llm_storytell.steps.audio_prep._cet_dd_mm_stamp",
+                return_value="00-00",
+            ),
+        ):
+            out_path = finalize_story_audio_mix(run_dir, base, logger)
+
+        assert mix_cmd is not None
+        assert "adelay" in " ".join(mix_cmd)
+        assert "amix" in " ".join(mix_cmd)
+        assert "bg_enveloped.wav" in " ".join(mix_cmd)
+        assert "story-" in out_path.name
+        assert out_path.suffix == ".mp3"
+
+    def test_finalize_mix_missing_enveloped_raises(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "run-final2"
+        run_dir.mkdir()
+        (run_dir / "inputs.json").write_text(
+            json.dumps({"app": "example_app", "run_id": "run-final2"}),
+            encoding="utf-8",
+        )
+        vo = run_dir / "voiceover"
+        vo.mkdir(parents=True)
+        (vo / "voiceover.mp3").write_bytes(b"x")
+
+        base = tmp_path / "base"
+        base.mkdir()
+        logger = RunLogger((run_dir / "run.log"))
+
+        with pytest.raises(AudioPrepStepError, match="Missing enveloped background"):
+            finalize_story_audio_mix(run_dir, base, logger)
+
+
+class TestRebuildBackgroundLoopAndEnvelope:
+    """Regenerate bg intermediates from existing voiceover only."""
+
+    def test_rebuild_writes_looped_and_enveloped(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "run-bg"
+        run_dir.mkdir()
+        (run_dir / "inputs.json").write_text(
+            json.dumps({"app": "example_app", "run_id": "run-bg"}),
+            encoding="utf-8",
+        )
+        vo = run_dir / "voiceover"
+        vo.mkdir(parents=True)
+        (vo / "voiceover.mp3").write_bytes(b"x")
+
+        base = tmp_path / "base"
+        base.mkdir()
+        (base / "assets").mkdir()
+        (base / "assets" / "default-bg-music.wav").write_bytes(b"x")
+
+        log_path = run_dir / "run.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+
+        probe_returns = ["12.0", "120.0"]  # voice, then bg asset duration
+        probe_i = [0]
+
+        def fake_run(cmd: list[str], *args: object, **kwargs: object) -> MagicMock:
+            out = MagicMock()
+            out.returncode = 0
+            out.stderr = ""
+            if cmd[0] == "ffprobe":
+                out.stdout = probe_returns[probe_i[0]]
+                probe_i[0] += 1
+            else:
+                out.stdout = ""
+            if cmd[0] == "ffmpeg":
+                Path(cmd[-1]).parent.mkdir(parents=True, exist_ok=True)
+                Path(cmd[-1]).write_bytes(b"x")
+            return out
+
+        with patch(
+            "llm_storytell.steps.audio_prep.subprocess.run",
+            side_effect=fake_run,
+        ):
+            looped, env = rebuild_background_loop_and_envelope(
+                run_dir, base, logger, app_name="example_app"
+            )
+
+        assert looped == run_dir / "voiceover" / "bg_looped.wav"
+        assert env == run_dir / "voiceover" / "bg_enveloped.wav"
+        assert looped.is_file() and env.is_file()
+
+
 class TestExecuteAudioPrepStep:
     """Full step execution with mocked subprocess."""
 
@@ -618,13 +806,14 @@ class TestExecuteAudioPrepStep:
 
         assert envelope_cmd is not None
         full = " ".join(envelope_cmd)
-        # Envelope: 0-3s fade, 3 to 3+voice_duration flat, then 3s fade. For voice_duration=12: 3, 15, 18.
-        assert "3" in full and "15" in full and "18" in full
-        # BG envelope levels from audio_prep (BG_VOLUME_SCALE and _BG_*); keep in sync with implementation.
-        from llm_storytell.steps.audio_prep import _BG_DUCK, _BG_INTRO_START
-
-        assert str(_BG_DUCK) in full
-        assert str(_BG_INTRO_START) in full
+        normalized = full.replace("\\,", ",")
+        assert "eval=frame" in full
+        assert "asetpts=PTS-STARTPTS" in full
+        # Envelope breakpoints: pad_start/pad_end=3 and voice_duration=12 → flat_end 15, end 18.
+        assert "15" in full and "18" in full
+        assert str(BG_ENVELOPE_INTRO_PEAK) in normalized
+        assert str(BG_ENVELOPE_BODY_LEVEL) in normalized
+        assert str(BG_ENVELOPE_OUTRO_PEAK) in normalized
 
     def test_loop_target_duration_voice_plus_six(self, tmp_path: Path) -> None:
         """Step runs and produces narration artifact when voice duration is 10s (loop target 16s)."""
@@ -846,7 +1035,6 @@ class TestAudioPrepOverrides:
 
         envelope_cmd: list[str] | None = None
         scale = 0.5
-        _, _, duck, _, _ = _bg_envelope_levels(scale)
 
         def fake_run(cmd: list[str], *args: object, **kwargs: object) -> MagicMock:
             nonlocal envelope_cmd
@@ -880,7 +1068,90 @@ class TestAudioPrepOverrides:
             )
 
         assert envelope_cmd is not None
-        assert str(duck) in " ".join(envelope_cmd)
+        joined = " ".join(envelope_cmd)
+        normalized = joined.replace("\\,", ",")
+        assert "eval=frame" in joined
+        # scale=0.5 → body 0.45, intro peak 0.65 embedded in volume expression
+        assert "0.45" in normalized
+        assert "0.65" in normalized
+
+    def test_voiceover_atempo_applied(self, tmp_path: Path) -> None:
+        """Optional voiceover_atempo runs ffmpeg atempo after polish."""
+        run_dir = _run_dir(tmp_path, ["segment_01.mp3"])
+        base = tmp_path / "base"
+        base.mkdir()
+        (base / "assets").mkdir()
+        (base / "assets" / "default-bg-music.wav").write_bytes(b"x")
+        log_path = run_dir / "run.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+
+        calls: list[list[str]] = []
+
+        def capture(cmd: list[str], *args: object, **kwargs: object) -> MagicMock:
+            calls.append(cmd)
+            out = MagicMock()
+            out.returncode = 0
+            out.stderr = ""
+            out.stdout = "12.0" if "ffprobe" in cmd else ""
+            if cmd[0] == "ffmpeg":
+                Path(cmd[-1]).parent.mkdir(parents=True, exist_ok=True)
+                Path(cmd[-1]).write_bytes(b"x")
+            return out
+
+        with (
+            patch(
+                "llm_storytell.steps.audio_prep.subprocess.run",
+                side_effect=capture,
+            ),
+            patch(
+                "llm_storytell.steps.audio_prep._cet_dd_mm_stamp",
+                return_value="00-00",
+            ),
+        ):
+            execute_audio_prep_step(
+                run_dir,
+                base,
+                logger,
+                app_name="example_app",
+                voiceover_atempo=0.96,
+            )
+
+        ffmpeg_af = " ".join(" ".join(c) for c in calls if c and c[0] == "ffmpeg")
+        assert "atempo=0.96" in ffmpeg_af
+
+    def test_voiceover_atempo_out_of_range_raises(self, tmp_path: Path) -> None:
+        run_dir = _run_dir(tmp_path, ["segment_01.mp3"])
+        base = tmp_path / "base"
+        base.mkdir()
+        (base / "assets").mkdir()
+        (base / "assets" / "default-bg-music.wav").write_bytes(b"x")
+        log_path = run_dir / "run.log"
+        log_path.touch()
+        logger = RunLogger(log_path)
+
+        def fake_run(cmd: list[str], *args: object, **kwargs: object) -> MagicMock:
+            out = MagicMock()
+            out.returncode = 0
+            out.stderr = ""
+            out.stdout = "12.0" if "ffprobe" in cmd else ""
+            if cmd[0] == "ffmpeg":
+                Path(cmd[-1]).parent.mkdir(parents=True, exist_ok=True)
+                Path(cmd[-1]).write_bytes(b"x")
+            return out
+
+        with patch(
+            "llm_storytell.steps.audio_prep.subprocess.run",
+            side_effect=fake_run,
+        ):
+            with pytest.raises(AudioPrepStepError, match="voiceover_atempo"):
+                execute_audio_prep_step(
+                    run_dir,
+                    base,
+                    logger,
+                    app_name="example_app",
+                    voiceover_atempo=3.0,
+                )
 
     def test_explicit_bg_music_path(self, tmp_path: Path) -> None:
         run_dir = _run_dir(tmp_path, ["segment_01.mp3"])

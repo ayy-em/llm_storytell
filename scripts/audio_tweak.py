@@ -8,6 +8,8 @@ Run from project root, for example::
         --voiceover-mix-gain 1.4 \\
         --bg-volume-scale 0.45
 
+About 4 percent slower voiceover (``--voiceover-atempo``); BG levels follow fixed intro/body/outro ramps in ``audio_prep`` (optional ``--bg-volume-scale`` scales the whole curve).
+
 Or import ``run_audio_tweak`` and pass the same options as keyword arguments to
 ``execute_audio_prep_step`` (except ``bg_music_path``, which maps from ``bg_music_filepath``).
 """
@@ -47,6 +49,8 @@ def run_audio_tweak(
     - ``bg_loop_crossfade``: crossfade length when looping the bg file.
     - ``apply_voiceover_polish`` / ``voiceover_polish_af``: control the polish ffmpeg chain.
     - ``use_existing_voiceover``: if True, use ``voiceover/voiceover.<ext>`` and skip stitch.
+    - ``voiceover_atempo``: ffmpeg atempo factor (0.5–2.0); below 1 slows the voiceover.
+    - ``bg_volume_scale``: multiplies the fixed BG intro/body/outro envelope.
 
     Args:
         bg_music_filepath: Path to the background music file to loop and envelope.
@@ -99,6 +103,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--bg-duck-ramp", type=float, default=None)
     p.add_argument("--bg-loop-crossfade", type=float, default=None)
     p.add_argument(
+        "--voiceover-atempo",
+        type=float,
+        default=None,
+        help="ffmpeg atempo on voiceover after polish (0.5–2.0; e.g. 0.96 ≈ 4% slower)",
+    )
+    p.add_argument(
         "--no-voiceover-polish",
         action="store_true",
         help="Skip the voiceover polish ffmpeg pass",
@@ -132,6 +142,8 @@ def main() -> None:
         kw["bg_duck_ramp"] = args.bg_duck_ramp
     if args.bg_loop_crossfade is not None:
         kw["bg_loop_crossfade"] = args.bg_loop_crossfade
+    if args.voiceover_atempo is not None:
+        kw["voiceover_atempo"] = args.voiceover_atempo
     if args.no_voiceover_polish:
         kw["apply_voiceover_polish"] = False
     if args.use_existing_voiceover:

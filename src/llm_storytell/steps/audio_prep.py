@@ -251,6 +251,108 @@ def _stitch_segments(
     return out_path
 
 
+def stitch_voiceover_from_tts_segments(run_dir: Path, logger: RunLogger) -> Path:
+    """Rebuild ``voiceover/voiceover.<ext>`` from ``tts/outputs/segment_*`` via ffmpeg concat (-c copy).
+
+    Does not apply polish, atempo, or mixing. Use after manual experiments have altered
+    ``voiceover/voiceover.*`` when the original per-segment TTS files are still intact.
+
+    Args:
+        run_dir: Run directory (runs/<run_id>/).
+        logger: Run logger (e.g. from ``get_run_logger(run_dir)``).
+
+    Returns:
+        Path to the written ``voiceover/voiceover.<ext>``.
+
+    Raises:
+        AudioPrepStepError: If segments are missing or ffmpeg fails.
+    """
+    run_dir = run_dir.resolve()
+    segments, ext = _discover_segments(run_dir)
+    logger.info(f"Stitch-only: joining {len(segments)} TTS segment(s) → voiceover{ext}")
+    return _stitch_segments(run_dir, segments, ext, logger)
+
+
+def rebuild_background_loop_and_envelope(
+    run_dir: Path,
+    base_dir: Path,
+    logger: RunLogger,
+    *,
+    app_name: str | None = None,
+    bg_music_path: Path | str | None = None,
+    bg_volume_scale: float | None = None,
+    pad_start: float | None = None,
+    pad_end: float | None = None,
+    bg_duck_ramp: float | None = None,
+    bg_loop_crossfade: float | None = None,
+) -> tuple[Path, Path]:
+    """Rebuild ``voiceover/bg_looped.wav`` and ``voiceover/bg_enveloped.wav`` from ``voiceover/voiceover.<ext>``.
+
+    Uses ffprobe-measured duration of the existing stitched voiceover (e.g. after manual slowdown
+    in a DAW) and the same looping / envelope logic as :func:`execute_audio_prep_step`. Does not
+    alter the voiceover file or run the final mix.
+
+    Args:
+        run_dir: Run directory (runs/<run_id>/).
+        base_dir: Project root (contains apps/, assets/).
+        logger: Run logger.
+        app_name: For resolving bg music path; if None, read from run_dir/inputs.json.
+        bg_music_path: If set, use this file instead of app/default bg music.
+        bg_volume_scale: Multiplies intro/body/outro BG levels (default 1).
+        pad_start / pad_end: Timeline padding matching the eventual mix (defaults 3 / 3).
+        bg_loop_crossfade: Crossfade when looping bg.
+        bg_duck_ramp: Ignored (API compat).
+
+    Returns:
+        ``(bg_looped.wav path, bg_enveloped.wav path)`` under run_dir/voiceover/.
+
+    Raises:
+        AudioPrepStepError: If voiceover is missing or ffmpeg/ffprobe fails.
+    """
+    run_dir = run_dir.resolve()
+    base_dir = base_dir.resolve()
+
+    if app_name is None:
+        app_name = _get_app_name(run_dir)
+
+    voiceover_path, _ext = _resolve_existing_voiceover(run_dir)
+    logger.info(f"BG rebuild: using voiceover {voiceover_path}")
+
+    ps = PAD_START if pad_start is None else float(pad_start)
+    pe = PAD_END if pad_end is None else float(pad_end)
+
+    voice_duration = _get_duration_seconds(voiceover_path)
+    logger.info(f"BG rebuild: voiceover duration {voice_duration:.2f}s")
+
+    bg_target_length = voice_duration + ps + pe
+    if bg_music_path is not None:
+        bg_path = Path(bg_music_path).expanduser().resolve()
+        if not bg_path.is_file():
+            raise AudioPrepStepError(f"Background music file not found: {bg_path}")
+    else:
+        bg_path = _resolve_bg_music(base_dir, app_name)
+    logger.info(f"BG rebuild: background source {bg_path}")
+
+    looped_bg = _build_looped_bg_with_crossfade(
+        bg_path,
+        bg_target_length,
+        run_dir,
+        logger,
+        crossfade_seconds=bg_loop_crossfade,
+    )
+    enveloped_bg = _apply_bg_volume_envelope(
+        looped_bg,
+        voice_duration,
+        run_dir,
+        pad_start=pad_start,
+        pad_end=pad_end,
+        bg_duck_ramp=bg_duck_ramp,
+        bg_volume_scale=bg_volume_scale,
+    )
+    logger.info(f"BG rebuild complete: {looped_bg}, {enveloped_bg}")
+    return looped_bg, enveloped_bg
+
+
 # Single-pass voiceover polish: clean rumble/harshness, normalize, very light reverb, de-ess, limit
 # Adjusted to minimize sudden boundary clicks:
 #   - Short fade-in at t=0 only (do NOT use afade=t=out:st=0 — in ffmpeg that fades out from the
@@ -298,6 +400,36 @@ def _apply_voiceover_polish(
     size = voiceover_path.stat().st_size
     logger.log_artifact_write(Path("voiceover") / voiceover_path.name, size)
     logger.info("Voiceover polish applied")
+
+
+def _apply_voiceover_atempo(
+    voiceover_path: Path,
+    ext: str,
+    logger: RunLogger,
+    tempo: float,
+) -> None:
+    """Scale voiceover playback speed with ffmpeg atempo (in place). tempo < 1 slows down."""
+    t = float(tempo)
+    if not (0.5 <= t <= 2.0):
+        raise AudioPrepStepError(
+            f"voiceover_atempo must be between 0.5 and 2.0 (ffmpeg atempo), got {tempo}"
+        )
+    voiceover_dir = voiceover_path.parent
+    out_path = voiceover_dir / f"voiceover_atempo{ext}"
+    _run_ffmpeg(
+        [
+            "-i",
+            str(voiceover_path),
+            "-af",
+            f"atempo={t}",
+            str(out_path),
+        ],
+        "voiceover tempo (atempo)",
+    )
+    out_path.replace(voiceover_path)
+    size = voiceover_path.stat().st_size
+    logger.log_artifact_write(Path("voiceover") / voiceover_path.name, size)
+    logger.info(f"Voiceover tempo applied (atempo={t})")
 
 
 def _resolve_bg_music(base_dir: Path, app_name: str) -> Path:
@@ -440,34 +572,17 @@ def _build_looped_bg_with_crossfade(
     return looped_path
 
 
-# Intro/outro padding (seconds): voiceover sits from PAD_START to PAD_START+voice_duration on the track.
+# Intro/outro padding (seconds): VO starts after PAD_START music-only; PAD_END trailing music-only.
 PAD_START = 3
 PAD_END = 3
 
-# Seconds over which bg fades from intro-end level down to duck level (avoids abrupt cliff).
-BG_DUCK_RAMP = 1.5
+# Linear gain on bg_looped.wav (relative to nominal full scale); voice stays at nominal 1.0 (see ``voiceover_mix_gain``).
+BG_ENVELOPE_INTRO_PEAK = 1.3  # start of timeline (music-only intro)
+BG_ENVELOPE_BODY_LEVEL = 0.9  # while voice plays (music + narration)
+BG_ENVELOPE_OUTRO_PEAK = 1.3  # end of file after outro ramp (music-only tail)
 
-# BG volume scale: 0.5 = 50% quieter than previous (more background, less competing with voice).
-BG_VOLUME_SCALE = 0.35
-
-
-def _bg_envelope_levels(
-    bg_volume_scale: float,
-) -> tuple[float, float, float, float, float]:
-    """Return (intro_start, intro_end, duck, outro_end, outro_tail) for a given scale."""
-    return (
-        0.65 * bg_volume_scale,
-        0.30 * bg_volume_scale,
-        0.05 * bg_volume_scale,
-        0.70 * bg_volume_scale,
-        0.75 * bg_volume_scale,
-    )
-
-
-# Envelope levels (after scale): intro 39%→18%, ramp 18%→3%, during narration 3%, outro 3%→42% then 45%.
-_BG_INTRO_START, _BG_INTRO_END, _BG_DUCK, _BG_OUTRO_END, _BG_OUTRO_TAIL = (
-    _bg_envelope_levels(BG_VOLUME_SCALE)
-)
+# Default uniform multiplier applied to all three BG levels (advanced tuning only).
+_BG_ENVELOPE_UNITY_SCALE_DEFAULT = 1.0
 
 
 def _apply_bg_volume_envelope(
@@ -480,37 +595,60 @@ def _apply_bg_volume_envelope(
     bg_duck_ramp: float | None = None,
     bg_volume_scale: float | None = None,
 ) -> Path:
-    """Apply volume envelope to bg: intro fade, ramp to duck, flat during voice, outro fade up (scaled by BG_VOLUME_SCALE)."""
-    ps = PAD_START if pad_start is None else float(pad_start)
-    pe = PAD_END if pad_end is None else float(pad_end)
-    ramp = BG_DUCK_RAMP if bg_duck_ramp is None else float(bg_duck_ramp)
-    scale = BG_VOLUME_SCALE if bg_volume_scale is None else float(bg_volume_scale)
-    intro_start, intro_end, duck, outro_end, outro_tail = _bg_envelope_levels(scale)
+    """Apply a deterministic linear BG envelope on looped ambient.
 
+    Timeline (matching final mix semantics):
+
+    * ``t in [0, pad_start)``: BG linear ``BG_ENVELOPE_INTRO_PEAK`` → ``BG_ENVELOPE_BODY_LEVEL``.
+    * ``t in [pad_start, pad_start + voice_duration)``: BG flat at ``BG_ENVELOPE_BODY_LEVEL`` (voice runs here too).
+    * ``t`` in trailing ``pad_end`` seconds before EOF: BG linear ``BG_ENVELOPE_BODY_LEVEL`` →
+      ``BG_ENVELOPE_OUTRO_PEAK`` (voice finishes at start of this region).
+
+    ``bg_volume_scale`` multiplies the whole curve (default 1); ``bg_duck_ramp`` is ignored (API compat).
+    """
+    _ = bg_duck_ramp
+
+    ps = PAD_START if pad_start is None else float(pad_start)
+    ps_tm = max(float(ps), 1e-9)
+    pe_raw = PAD_END if pad_end is None else float(pad_end)
+    pe = max(float(pe_raw), 1e-9)
+
+    unity = (
+        _BG_ENVELOPE_UNITY_SCALE_DEFAULT
+        if bg_volume_scale is None
+        else float(bg_volume_scale)
+    )
+    hi = BG_ENVELOPE_INTRO_PEAK * unity
+    lo = BG_ENVELOPE_BODY_LEVEL * unity
+    oph = BG_ENVELOPE_OUTRO_PEAK * unity
+    intro_drop = hi - lo
+    outro_rise = oph - lo
     voiceover_dir = run_dir / "voiceover"
     enveloped_path = voiceover_dir / "bg_enveloped.wav"
     v = voice_duration
-    ramp_end = ps + ramp
     flat_end = ps + v
-    end_fade_end = ps + pe + v
-    intro_delta = intro_start - intro_end
-    ramp_delta = duck - intro_end  # negative: 0.03 - 0.18
-    outro_delta = outro_end - duck
-    # Intro 0→ps; ramp ps→ps+ramp; flat duck; outro fade; tail
-    # Commas inside -af separate filters; escape literal commas so ffmpeg parses one volume filter
+    end_fade_end = flat_end + pe
+
+    # Single expression — VO starts exactly at pad_start on the timeline in the mix stage.
     expr = (
-        f"if(lt(t,{ps}),{intro_start}-t/{ps}*{intro_delta},"
-        f"if(lt(t,{ramp_end}),{intro_end}+(t-{ps})/{ramp}*{ramp_delta},"
-        f"if(lt(t,{flat_end}),{duck},"
-        f"if(lt(t,{end_fade_end}),{duck}+(t-{flat_end})/{pe}*{outro_delta},{outro_tail}))))"
+        f"if(lt(t,{ps}),{hi}-t/{ps_tm}*{intro_drop},"
+        f"if(lt(t,{flat_end}),{lo},"
+        f"if(lt(t,{end_fade_end}),{lo}+(t-{flat_end})/{pe}*{outro_rise},{oph})))"
     )
+    # Commas inside volume= must be \, so -af doesn't split filters; commas between filters do not escape.
     expr_escaped = expr.replace(",", "\\,")
+    af_chain = (
+        "asetpts=PTS-STARTPTS,"
+        f"volume={expr_escaped}:eval=frame"
+    )
+    # eval=frame: time-varying volume; eval=once leaves ``t`` undefined (silent/wrong levels).
+    # asetpts: stable timeline/presentation time for ``t`` on some bg sources/decodes.
     _run_ffmpeg(
         [
             "-i",
             str(looped_bg_path),
             "-af",
-            f"volume={expr_escaped}",
+            af_chain,
             "-c:a",
             "pcm_s16le",
             str(enveloped_path),
@@ -583,6 +721,88 @@ def _mp3_metadata_args(metadata: dict[str, str]) -> list[str]:
     return args
 
 
+BG_ENVELOPED_FILENAME = "bg_enveloped.wav"
+
+
+def finalize_story_audio_mix(
+    run_dir: Path,
+    base_dir: Path,
+    logger: RunLogger,
+    *,
+    app_name: str | None = None,
+    pad_start: float | None = None,
+    pad_end: float | None = None,
+    voiceover_mix_gain: float | None = None,
+) -> Path:
+    """Mix existing ``voiceover/voiceover.<ext>`` with ``voiceover/bg_enveloped.wav`` into ``artifacts/story-...``.
+
+    Does not stitch TTS segments, polish, tempo-change the voiceover, loop source music, or rebuild
+    the envelope. Use when both files are already correct; ``bg_enveloped.wav`` should match the same
+    timeline as in the full audio-prep step (length ≈ ``pad_start + voice_duration + pad_end``).
+
+    Raises:
+        AudioPrepStepError: If voiceover or ``bg_enveloped.wav`` is missing, or ffmpeg/ffprobe fails.
+    """
+    run_dir = run_dir.resolve()
+    base_dir = base_dir.resolve()
+    if app_name is None:
+        app_name = _get_app_name(run_dir)
+
+    voiceover_path, ext = _resolve_existing_voiceover(run_dir)
+    enveloped_bg = run_dir / "voiceover" / BG_ENVELOPED_FILENAME
+    if not enveloped_bg.is_file():
+        raise AudioPrepStepError(
+            f"Missing enveloped background: {enveloped_bg}. "
+            "Rebuild with the main audio-prep step or scripts/regenerate_bg_tracks.py."
+        )
+
+    voice_duration = _get_duration_seconds(voiceover_path)
+    logger.info(
+        f"Final mix only: voiceover {voice_duration:.2f}s + {BG_ENVELOPED_FILENAME}"
+    )
+
+    artifacts_dir = run_dir / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    out_name = _voiceover_artifact_filename(run_dir, app_name, ext)
+    out_path = artifacts_dir / out_name
+    out_basename_no_ext = out_path.stem
+
+    story_seed: str | None = None
+    try:
+        from llm_storytell.pipeline.state import StateIOError, load_inputs
+
+        inp = load_inputs(run_dir)
+        raw = inp.get("seed")
+        if raw is not None:
+            story_seed = str(raw)
+    except StateIOError:
+        pass
+
+    metadata = _load_audio_metadata_from_app_config(
+        base_dir, app_name, out_basename_no_ext, story_seed=story_seed
+    )
+    cover_path = _resolve_album_cover(base_dir, app_name)
+    if cover_path is not None:
+        logger.info(f"Album cover: {cover_path}")
+
+    _mix_voiceover_and_bg(
+        voiceover_path,
+        enveloped_bg,
+        out_path,
+        run_dir,
+        logger,
+        ext,
+        voice_duration,
+        metadata=metadata,
+        cover_path=cover_path,
+        pad_start=pad_start,
+        pad_end=pad_end,
+        voiceover_mix_gain=voiceover_mix_gain,
+    )
+    logger.info(f"Final mix complete: {out_path}")
+    return out_path
+
+
 def _mix_voiceover_and_bg(
     voiceover_path: Path,
     bg_path: Path,
@@ -602,7 +822,7 @@ def _mix_voiceover_and_bg(
 
     Voiceover is placed from PAD_START to PAD_START+voice_duration on the track
     (3s intro of music only, then voice+music, then PAD_END s of music only).
-    Voice track gets a configurable gain (default 1.25).
+    Voice track gets a configurable gain (default 1.0 = ``100%``).
     For MP3/M4A, optional metadata (e.g. artist, title, album) is written as ID3/tags.
     When cover_path is set and ext is .mp3 or .m4a, the image is embedded as album cover.
     """
@@ -614,12 +834,14 @@ def _mix_voiceover_and_bg(
         meta_args = _mp3_metadata_args(metadata or {})
     ps = PAD_START if pad_start is None else float(pad_start)
     pe = PAD_END if pad_end is None else float(pad_end)
-    vgain = 1.25 if voiceover_mix_gain is None else float(voiceover_mix_gain)
+    vgain = 1.0 if voiceover_mix_gain is None else float(voiceover_mix_gain)
     delay_ms = int(ps * 1000)
     # Delay voice by ps; pad end by pe so total = bg length
+    # duration=first: match padded voice timeline; normalize=0: do not attenuate summed signals
+    # (ffmpeg amix defaults normalize=true, which strongly ducks beds under narration).
     filter_complex = (
         f"[0:a]volume={vgain},adelay={delay_ms}|{delay_ms},apad=pad_dur={pe}[vo];"
-        "[vo][1:a]amix=inputs=2:duration=first[aout]"
+        "[vo][1:a]amix=inputs=2:duration=first:normalize=0[aout]"
     )
     embed_cover = (
         cover_path is not None
@@ -657,7 +879,7 @@ def _mix_voiceover_and_bg(
     ffmpeg_args.append(str(out_path))
     _run_ffmpeg(
         ffmpeg_args,
-        "mix voiceover and bg with boosted voiceover volume",
+        "mix voiceover and bg",
     )
     size = out_path.stat().st_size
     rel = out_path.relative_to(run_dir)
@@ -677,6 +899,7 @@ def execute_audio_prep_step(
     pad_end: float | None = None,
     bg_duck_ramp: float | None = None,
     bg_loop_crossfade: float | None = None,
+    voiceover_atempo: float | None = None,
     apply_voiceover_polish: bool = True,
     voiceover_polish_af: str | None = None,
     use_existing_voiceover: bool = False,
@@ -686,12 +909,13 @@ def execute_audio_prep_step(
     Steps:
     1. Stitch segments from run_dir/tts/outputs/ into one voiceover track (unless use_existing_voiceover).
     2. Apply voiceover polish (highpass/lowpass, EQ, dynaudnorm, reverb, de-ess, limiter) unless disabled.
-    3. Get voiceover duration.
-    4. Load bg music: explicit bg_music_path, else apps/<app_name>/assets/bg-music.*, else assets/default-bg-music.wav.
-    5. Loop bg with crossfade to voice_duration + pad_start + pad_end.
-    6. Apply bg volume envelope (shape scaled by bg_volume_scale when set).
-    7. Resolve album cover: apps/<app_name>/assets/album-cover.png if present, else base_dir/assets/album-cover.png; if neither exists, no cover.
-    8. Mix: voiceover delayed by pad_start; write to run_dir/artifacts/story-<app4>-<llm_model>-<tts_model>-<tts_voice>-<DD-MM>.<ext>. When cover is present and output is MP3/M4A, embed cover as attached picture.
+    3. Optionally apply voiceover ``atempo`` when ``voiceover_atempo`` is set.
+    4. Measure voiceover duration.
+    5. Load bg music: explicit bg_music_path, else apps/<app_name>/assets/bg-music.*, else assets/default-bg-music.wav.
+    6. Loop bg with crossfade to voice_duration + pad_start + pad_end.
+    7. Apply bg volume envelope (shape scaled by bg_volume_scale when set).
+    8. Resolve album cover: apps/<app_name>/assets/album-cover.png if present, else base_dir/assets/album-cover.png; if neither exists, no cover.
+    9. Mix: voiceover delayed by pad_start; write to run_dir/artifacts/story-<app4>-<llm_model>-<tts_model>-<tts_voice>-<DD-MM>.<ext>. When cover is present and output is MP3/M4A, embed cover as attached picture.
 
     Optional tuning (defaults match module constants) is intended for manual iteration via scripts/audio_tweak.py.
 
@@ -701,12 +925,13 @@ def execute_audio_prep_step(
         logger: Run logger.
         app_name: App name for output filename and bg path; if None, read from run_dir/inputs.json.
         bg_music_path: If set, use this file instead of resolving app/default assets.
-        voiceover_mix_gain: Linear gain on voiceover in the final mix (default 1.25).
-        bg_volume_scale: Scales background envelope levels (default ``BG_VOLUME_SCALE``).
+        voiceover_mix_gain: Linear gain on voiceover in the final mix (default ``1.0`` = nominal TTS loudness).
+        bg_volume_scale: Multiplies BG intro/body/outro envelope (default ``1``; see ``BG_ENVELOPE_*``).
         pad_start: Seconds of music-only intro before voice (default ``PAD_START``).
         pad_end: Seconds of music-only outro after voice (default ``PAD_END``).
-        bg_duck_ramp: Seconds to ramp bg from intro level to duck level (default ``BG_DUCK_RAMP``).
+        bg_duck_ramp: Ignored (reserved for API compat).
         bg_loop_crossfade: Crossfade duration when looping bg (default ``BG_LOOP_CROSSFADE``).
+        voiceover_atempo: If set, ffmpeg ``atempo`` applied after polish (0.5–2.0; <1 slows down).
         apply_voiceover_polish: When False, skip the polish ffmpeg pass after stitch.
         voiceover_polish_af: Full ``-af`` chain for polish; only used when polish is enabled.
         use_existing_voiceover: When True, use run_dir/voiceover/voiceover.<ext> and skip stitch (and polish if disabled).
@@ -737,6 +962,11 @@ def execute_audio_prep_step(
         )
     else:
         logger.info("Skipping voiceover polish")
+
+    if voiceover_atempo is not None:
+        _apply_voiceover_atempo(
+            voiceover_path, ext, logger, float(voiceover_atempo)
+        )
 
     voice_duration = _get_duration_seconds(voiceover_path)
     logger.info(f"Voiceover duration: {voice_duration:.2f}s")
