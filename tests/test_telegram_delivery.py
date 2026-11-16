@@ -190,3 +190,43 @@ def test_log_and_print_failure_includes_traceback_for_telegram_error(
     out_err = capsys.readouterr().err
     assert "telegram delivery failed" in out_err.lower()
     assert "Traceback" in out_err
+
+
+def test_execute_telegram_delivery_sends_given_file_not_newest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An explicit book_file is sent even when a newer file exists in runs/book/."""
+    import os
+
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "creds.json").write_text(
+        json.dumps({"TELEGRAM_BOT_API_TOKEN": "t", "TELEGRAM_RECEIVER_ID": "1"}),
+        encoding="utf-8",
+    )
+    book = tmp_path / "runs" / "book"
+    book.mkdir(parents=True)
+    mine = book / "mine.mp3"
+    mine.write_bytes(b"x")
+    newer = book / "newer.mp3"
+    newer.write_bytes(b"y")
+    os.utime(mine, (1, 1))
+
+    sent: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request.content.decode("latin-1"))
+        return httpx.Response(200, json={"ok": True, "result": {}})
+
+    transport = httpx.MockTransport(handler)
+    real_client = httpx.Client
+    monkeypatch.setattr(
+        runner_mod.httpx,
+        "Client",
+        lambda *a, **k: real_client(*a, **{**k, "transport": transport}),
+    )
+    _execute_telegram_delivery(
+        cfg, tmp_path, RunLogger(tmp_path / "run.log"), book_file=mine
+    )
+    assert len(sent) == 1
+    assert 'filename="mine.mp3"' in sent[0]

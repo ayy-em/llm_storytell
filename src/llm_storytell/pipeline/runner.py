@@ -157,11 +157,14 @@ def _execute_telegram_delivery(
     config_path: Path,
     base_dir: Path,
     logger,
+    book_file: Path | None = None,
 ) -> None:
+    """Send *book_file* (default: newest file in runs/book/) via Telegram."""
     token, chat_id = _load_telegram_creds(config_path)
     book_dir = (base_dir / "runs" / "book").resolve()
-    book_file = _newest_file_in_dir(book_dir)
     if book_file is None:
+        book_file = _newest_file_in_dir(book_dir)
+    if book_file is None or not book_file.is_file():
         raise TelegramDeliveryError(
             f"No deliverable file found in {book_dir} (expected copy from pipeline)"
         )
@@ -391,8 +394,9 @@ def run_pipeline(settings: RunSettings) -> int:
             _log_and_print_failure(logger, run_dir, "critic stage failed", e)
             return 1
 
+        book_file: Path | None = None
         if not settings.tts_enabled:
-            copy_no_tts_deliverable_to_book(
+            book_file = copy_no_tts_deliverable_to_book(
                 run_dir=run_dir, base_dir=base_dir, logger=logger
             )
 
@@ -437,7 +441,7 @@ def run_pipeline(settings: RunSettings) -> int:
                     app_name=app_paths.app_name,
                 )
                 logger.log_stage_end("audio_prep", success=True)
-                copy_tts_deliverable_to_book(
+                book_file = copy_tts_deliverable_to_book(
                     run_dir=run_dir, base_dir=base_dir, logger=logger
                 )
             except AudioPrepStepError as e:
@@ -509,10 +513,18 @@ def run_pipeline(settings: RunSettings) -> int:
             print("[llm_storytell] Delivering to Telegram...", flush=True)
             logger.log_stage_start("telegram_delivery")
             try:
+                if book_file is None:
+                    # Never fall back to the newest runs/book/ file here: that
+                    # would deliver a stale deliverable from a previous run.
+                    raise TelegramDeliveryError(
+                        "This run produced no runs/book/ deliverable "
+                        "(see 'Book copy failed' in run.log); nothing to deliver"
+                    )
                 _execute_telegram_delivery(
                     config_path=settings.config_path,
                     base_dir=base_dir,
                     logger=logger,
+                    book_file=book_file,
                 )
                 logger.log_stage_end("telegram_delivery", success=True)
             except TelegramDeliveryError as e:

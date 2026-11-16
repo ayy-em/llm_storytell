@@ -128,7 +128,12 @@ class TestBookBasename:
         )
         name = _book_basename_no_tts(run_dir)
         assert name.endswith(".pdf")
-        assert "01-01-00" in name
+        # Unparseable run id: today's date (Europe/Berlin), not a bogus 01-01-00.
+        from datetime import datetime
+
+        from llm_storytell.steps.audio_prep import _CET
+
+        assert name.startswith(datetime.now(_CET).strftime("%d-%m-%y") + "_")
 
 
 class TestCopyTtsDeliverableToBook:
@@ -238,3 +243,30 @@ class TestCopyNoTtsDeliverableToBook:
 
         book_dir = base_dir / "runs" / "book"
         assert not book_dir.exists() or len(list(book_dir.iterdir())) == 0
+
+
+def test_no_tts_copy_returns_path_or_none(tmp_path: Path) -> None:
+    run_dir = _run_dir_no_tts(tmp_path)
+    base_dir = tmp_path / "base"
+    base_dir.mkdir()
+    logger = RunLogger(tmp_path / "run.log")
+
+    with patch(
+        "llm_storytell.pipeline.deliverable_to_book._markdown_to_pdf",
+        side_effect=lambda _md, out: out.write_bytes(b"%PDF"),
+    ):
+        dest = copy_no_tts_deliverable_to_book(
+            run_dir=run_dir, base_dir=base_dir, logger=logger
+        )
+    assert dest is not None and dest.is_file()
+
+    with patch(
+        "llm_storytell.pipeline.deliverable_to_book._markdown_to_pdf",
+        side_effect=OSError("cannot load library 'libgobject-2.0-0'"),
+    ):
+        assert (
+            copy_no_tts_deliverable_to_book(
+                run_dir=run_dir, base_dir=base_dir, logger=logger
+            )
+            is None
+        )

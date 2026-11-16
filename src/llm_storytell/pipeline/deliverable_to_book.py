@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import sys
 from pathlib import Path
 
 from llm_storytell.logging import RunLogger
@@ -19,15 +20,21 @@ def _sanitize(s: str) -> str:
 
 
 def _run_id_to_dd_mm_yy(run_id: str) -> tuple[str, str, str]:
-    """Parse run-YYYYMMDD-HHMMSS to (dd, mm, yy) as two-digit strings. ('01','01','00') if not matching."""
-    if not run_id or not isinstance(run_id, str):
-        return "01", "01", "00"
-    m = re.match(r"run-(\d{4})(\d{2})(\d{2})", run_id.strip())
+    """Parse run-YYYYMMDD-HHMMSS to (dd, mm, yy) two-digit strings.
+
+    Custom run ids (``--run-id``) carry no date; fall back to today's date in
+    Europe/Berlin, matching the TTS deliverable naming.
+    """
+    m = re.match(r"run-(\d{4})(\d{2})(\d{2})", (run_id or "").strip())
     if not m:
-        return "01", "01", "00"
+        from datetime import datetime
+
+        from llm_storytell.steps.audio_prep import _CET
+
+        dd, mm, yy = datetime.now(_CET).strftime("%d-%m-%y").split("-")
+        return dd, mm, yy
     yyyy, mm, dd = m.group(1), m.group(2), m.group(3)
-    yy = yyyy[-2:] if len(yyyy) >= 2 else "00"
-    return dd, mm, yy
+    return dd, mm, yyyy[-2:]
 
 
 def _allocate_unique_book_filename(book_dir: Path, filename: str) -> str:
@@ -82,14 +89,20 @@ def _book_basename_no_tts(run_dir: Path) -> str:
     return f"{dd}-{mm}-{yy}_{_sanitize(app_name)}_{_sanitize(model)}.pdf"
 
 
+def _report_book_failure(logger: RunLogger, reason: str) -> None:
+    logger.error(f"Book copy failed: {reason}")
+    print(f"[llm_storytell] Warning: book copy failed: {reason}", file=sys.stderr)
+
+
 def copy_tts_deliverable_to_book(
     run_dir: Path,
     base_dir: Path,
     logger: RunLogger,
-) -> None:
+) -> Path | None:
     """Copy the final TTS artifact (artifacts/story-*.mp3) to runs/book/ with canonical name.
 
-    Best-effort: on failure logs error and returns without raising.
+    Best-effort: on failure logs an error (also to stderr) and returns None
+    instead of raising. Returns the written runs/book/ path on success.
     """
     run_dir = run_dir.resolve()
     base_dir = base_dir.resolve()
@@ -103,8 +116,8 @@ def copy_tts_deliverable_to_book(
         artifact_name = _voiceover_artifact_filename(run_dir, app_name, ".mp3")
         src = run_dir / "artifacts" / artifact_name
         if not src.is_file():
-            logger.error(f"Book copy skipped: TTS artifact not found: {src}")
-            return
+            _report_book_failure(logger, f"TTS artifact not found: {src}")
+            return None
         book_dir = base_dir / "runs" / "book"
         book_dir.mkdir(parents=True, exist_ok=True)
         dest_name = _allocate_unique_book_filename(
@@ -113,8 +126,10 @@ def copy_tts_deliverable_to_book(
         dest = book_dir / dest_name
         shutil.copy2(src, dest)
         logger.info(f"Deliverable copied to runs/book/{dest_name}")
+        return dest
     except Exception as e:
-        logger.error(f"Book copy failed: {e}")
+        _report_book_failure(logger, str(e))
+        return None
 
 
 def _markdown_to_pdf(md_content: str, out_path: Path) -> None:
@@ -137,10 +152,11 @@ def copy_no_tts_deliverable_to_book(
     run_dir: Path,
     base_dir: Path,
     logger: RunLogger,
-) -> None:
+) -> Path | None:
     """Convert final_script.md to PDF and write to runs/book/ with canonical name.
 
-    Best-effort: on failure logs error and returns without raising.
+    Best-effort: on failure logs an error (also to stderr) and returns None
+    instead of raising. Returns the written runs/book/ path on success.
     """
     run_dir = run_dir.resolve()
     base_dir = base_dir.resolve()
@@ -149,14 +165,18 @@ def copy_no_tts_deliverable_to_book(
         script_path_rel = state.get("final_script_path") or "artifacts/final_script.md"
         src = run_dir / script_path_rel
         if not src.is_file():
-            logger.error(f"Book copy skipped: final script not found: {src}")
-            return
+            _report_book_failure(logger, f"final script not found: {src}")
+            return None
         md_content = src.read_text(encoding="utf-8")
         book_dir = base_dir / "runs" / "book"
         book_dir.mkdir(parents=True, exist_ok=True)
-        dest_name = _book_basename_no_tts(run_dir)
+        dest_name = _allocate_unique_book_filename(
+            book_dir, _book_basename_no_tts(run_dir)
+        )
         dest = book_dir / dest_name
         _markdown_to_pdf(md_content, dest)
         logger.info(f"Deliverable copied to runs/book/{dest_name}")
+        return dest
     except Exception as e:
-        logger.error(f"Book copy failed: {e}")
+        _report_book_failure(logger, str(e))
+        return None
