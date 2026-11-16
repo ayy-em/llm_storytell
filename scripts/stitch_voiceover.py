@@ -12,7 +12,10 @@ import argparse
 from pathlib import Path
 
 from llm_storytell.run_dir import get_run_logger
-from llm_storytell.steps.audio_prep import AudioPrepStepError, stitch_voiceover_from_tts_segments
+from llm_storytell.steps.audio_prep import (
+    AudioPrepStepError,
+    stitch_voiceover_from_tts_segments,
+)
 
 
 def _project_root() -> Path:

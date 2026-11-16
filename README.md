@@ -227,6 +227,7 @@ App-specific structure may evolve. Generated content must never be committed.
 * OpenAI API key for the default text LLM and for TTS when using OpenAI TTS
 * Anthropic API key only if you use **`--llm-provider claude`** (or set `llm_provider: claude` in app / default config)
 * **ffmpeg** (required when TTS/audio is enabled): used for stitching TTS segments, polishing the voiceover (clean/reverb/de-ess/limit), and mixing with background music. Must be on PATH.
+* **Pango** (for the `--no-tts` PDF copy in `runs/book/`, via WeasyPrint). On macOS: `brew install pango`; with uv-managed Python also `export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib`, otherwise the PDF step logs `Book copy failed: cannot load library 'libgobject-2.0-0'` and is skipped.
 
 ### Setup
 
@@ -249,7 +250,7 @@ Credentials are read from a file; no environment variables are required. Create 
 
 For Claude text runs you may use **`ANTHROPIC_API_KEY`** or **`anthropic_api_key`** in `config/creds.json` (same file as OpenAI). OpenAI keys are accepted under the existing field names (`OPENAI_KEY`, `openai_api_key`, etc.).
 
-For **`--delivery`**, both `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` must be set in `config/creds.json`. The pipeline sends the file most recently written under `runs/book/` (the same deliverable as the book-copy step). See `docs/telegram-delivery.md` for details.
+For **`--delivery`**, both `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` must be set in `config/creds.json`. The pipeline sends the deliverable this run wrote under `runs/book/` (the book-copy step); if that copy failed, delivery fails rather than sending an older file. See `docs/telegram-delivery.md` for details.
 
 **Minimal .gitignore:** The repo ignores `runs/`, `apps/` (except `apps/example_app/`), and `config/creds.json`. App data lives under `apps/<app_name>/`; only `apps/example_app/` is committed as an example.
 
@@ -302,7 +303,7 @@ On completion, the CLI and `run.log` show combined Chat token and TTS character 
 | `--tts-provider` | string | TTS provider (e.g. openai). Overrides app config. Resolution: CLI → app_config → default. |
 | `--tts-voice` | string | TTS voice (e.g. Onyx). Overrides app config. Resolution: CLI → app_config → default. |
 | `--language` | ISO 639-1 code (e.g. `en`, `es`) | Language for story output. Overrides app config. Resolution: CLI → `app_config.yaml` → `default_config.yaml` (default `en`). Invalid code fails immediately with error. |
-| `--delivery` | flag | After success, upload the newest file in `runs/book/` to Telegram (`sendAudio` for MP3/M4A, `sendDocument` for PDF). Requires `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` in `config/creds.json`. Retries on transient errors. |
+| `--delivery` | flag | After success, upload this run's `runs/book/` deliverable to Telegram (`sendAudio` for MP3/M4A, `sendDocument` for PDF). Requires `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` in `config/creds.json`. Retries on transient errors. |
 
 **Multi-language:** Stories can be generated in any language. Set `language` in `apps/default_config.yaml` or `apps/<app_name>/app_config.yaml` to an ISO 639-1 two-letter code (e.g. `en`, `es`, `fr`), or pass `--language <code>` on the CLI. The pipeline instructs the LLM to write in that language; the final script and TTS input are in the chosen language. Invalid codes (non–ISO 639-1) cause the run to fail at startup with a clear error.
 

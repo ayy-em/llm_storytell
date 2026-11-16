@@ -40,3 +40,7 @@ scripts/manual_tts_run.py
 
 # random IDE extensions
 .VSCodeCounter/
+# Local agent instructions
+CLAUDE.md
+.claude/
+.coverage

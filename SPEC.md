@@ -169,7 +169,7 @@ Defaults for beats, `section_length`, `llm_provider`, and `model` come from `app
 
 **Target word count (v1.0.3):** When `--word-count N` is used, the pipeline derives `beat_count` (round N / baseline section length, clamped to 1–20) and per-section length (N / beat_count), then passes the range `[per_section*0.8, per_section*1.2]` as section_length. Generated stories are intended to fall within approximately 10% of the target word count; this is best-effort and can be verified manually or via tests.
 
-**Telegram delivery (v1.3):** With `--delivery`, the newest file in `runs/book/` after the normal book-copy step is uploaded using `https://api.telegram.org/bot<token>/sendAudio` or `sendDocument` as appropriate. Credentials are read only from `config/creds.json` (`TELEGRAM_BOT_API_TOKEN`, `TELEGRAM_RECEIVER_ID`). The delivery step retries transient failures (network errors and HTTP 429 / 5xx) up to three attempts with backoff.
+**Telegram delivery (v1.3):** With `--delivery`, the file this run wrote to `runs/book/` in the book-copy step is uploaded (if the book copy failed, delivery fails instead of sending an older file) using `https://api.telegram.org/bot<token>/sendAudio` or `sendDocument` as appropriate. Credentials are read only from `config/creds.json` (`TELEGRAM_BOT_API_TOKEN`, `TELEGRAM_RECEIVER_ID`). The delivery step retries transient failures (network errors and HTTP 429 / 5xx) up to three attempts with backoff.
 
 ---
 
@@ -482,6 +482,7 @@ These metrics must be:
 
 When the TTS step runs, the pipeline records TTS usage and estimates cost:
 
+* **Chunking:** The final script is split into 300–500 word segments (`MIN_WORDS`/`MAX_WORDS` in `steps/llm_tts.py`). Between word 300 and word 500 the cut goes at the first newline, else the first sentence end (`.`, `!`, `?`, `…`, optionally followed by closing quotes/brackets); only if neither exists is the segment hard-cut at 500 words, which logs a warning. A remainder of ≤500 words becomes the last segment as-is.
 * **Per segment:** Each TTS call logs the number of characters sent; `state.json` `tts_token_usage[]` entries include `input_characters` per segment.
 * **Run completion:** The pipeline logs and prints a combined summary: Chat token counts (input, output, total) and TTS characters requested, then a line such as `Estimated cost: $X Chat + $Y TTS = $Z total`. Cost is derived from provider/model pricing (e.g. per 1M characters for TTS).
 
@@ -577,7 +578,7 @@ The orchestrator executes strictly in order:
 3. **For each beat:** section, then summarize.
 4. **Critic** — final script and editor report.
 5. **When TTS is enabled (default):** **TTS step** (chunk final script, synthesize segments to audio) → **audio-prep step** (stitch segments, polish voiceover, add background music, mix to final narration). Voiceover polish is a single ffmpeg pass: highpass/lowpass, EQ, dynaudnorm, light reverb (aecho), de-ess, and limiter. The audio-prep step resolves **album cover** for the final file: it checks `apps/<app_name>/assets/album-cover.png`, then repo-root `assets/album-cover.png`; if either exists, that image is embedded as attached picture (ID3/metadata) in the final MP3 or M4A. If neither exists, no cover is added and the pipeline continues normally. When `--no-tts` is set, the pipeline ends after the critic step (after copying the text deliverable to `runs/book/` as PDF where applicable).
-6. **When `--delivery` is set:** After a successful run, token/cost summary, and the `runs/book/` copy, **Telegram delivery** uploads the newest file in `runs/book/` to the configured chat via the Bot API (`sendAudio` for `.mp3`/`.m4a`, `sendDocument` otherwise). Requires `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` in `config/creds.json`. Failures are logged with traceback and exit non-zero.
+6. **When `--delivery` is set:** After a successful run, token/cost summary, and the `runs/book/` copy, **Telegram delivery** uploads the `runs/book/` file written by this run to the configured chat via the Bot API (`sendAudio` for `.mp3`/`.m4a`, `sendDocument` otherwise). Requires `TELEGRAM_BOT_API_TOKEN` and `TELEGRAM_RECEIVER_ID` in `config/creds.json`. Failures are logged with traceback and exit non-zero.
 
 ---
 
@@ -625,7 +626,7 @@ Runs are immutable once complete.
 * **Missing required context** (e.g. no `lore_bible.md` or no character file): run fails at initialization with a clear error message; no run directory is left behind (or init is atomic so partial state is not committed).
 * **Step failure** (outline, section, summarize, critic): process exits non-zero; error is printed to stderr; details are written to `run.log`; `state.json` is not updated for the failed step (state is only updated after successful step completion).
 * **Validation failure** (schema or prompt variable): step raises; orchestrator logs and exits non-zero; see `run.log` for the failing step and artifact.
-* **TTS step failure:** Missing final script, chunking producing no segments or more than 22, or TTS provider error raises `LLMTTSStepError`; process exits non-zero; error printed to stderr; state not updated for TTS. Imperfect chunking (no newline by max words) logs a warning but does not fail.
+* **TTS step failure:** Missing final script, chunking producing no segments or more than 45 (`MAX_SEGMENTS`), or TTS provider error raises `LLMTTSStepError`; process exits non-zero; error printed to stderr; state not updated for TTS. Imperfect chunking (no newline by max words) logs a warning but does not fail.
 * **Audio-prep step failure:** Missing `tts/outputs`, ffmpeg/ffprobe not on PATH or non-zero exit, or no background music file found raises `AudioPrepStepError`; process exits non-zero; error printed to stderr. **ffmpeg** (and ffprobe) must be on PATH when TTS/audio is run.
 
 ---

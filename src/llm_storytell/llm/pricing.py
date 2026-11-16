@@ -4,12 +4,26 @@ Prices are per 1M tokens (input, output). Used only for CLI summary;
 not authoritative. Update from provider pricing when needed.
 """
 
+import re
+
 # Standard tier, USD per 1M tokens (input, output).
-# Source: OpenAI platform pricing (Standard tier).
-# Anthropic Claude Sonnet 4.6: $3 / 1M input, $15 / 1M output (project task rate).
+# Sources: OpenAI platform pricing (Standard tier); Anthropic model pricing
+# (first-party API, prompts without caching). Last reviewed 2026-11.
 MODEL_COST_PER_1M: dict[str, tuple[float, float]] = {
-    "claude-sonnet-4-6": (3.0, 15.0),
+    # Anthropic Claude
+    "claude-opus-5-5": (4.00, 20.00),
+    "claude-opus-5": (5.00, 25.00),
+    "claude-opus-4-8": (5.00, 25.00),
+    "claude-opus-4-7": (5.00, 25.00),
+    "claude-opus-4-6": (5.00, 25.00),
+    "claude-sonnet-5-5": (2.00, 10.00),
+    "claude-sonnet-5": (2.00, 10.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-haiku-5-5": (0.10, 0.50),
+    "claude-haiku-4-5": (1.00, 5.00),
     # GPT-5 family
+    "gpt-5.5": (5.00, 30.00),
+    "gpt-5.4": (2.50, 15.00),
     "gpt-5.2": (1.75, 14.00),
     "gpt-5.1": (1.25, 10.00),
     "gpt-5": (1.25, 10.00),
@@ -43,6 +57,17 @@ TTS_COST_PER_1M_CHARS: dict[str, float] = {
     "eleven_flash_v2_5": 80.00,  # $0.08 per 1k
     "eleven_multilingual_v2": 170.00,  # $0.17 per 1k
 }
+
+
+# Dated snapshot suffixes, e.g. gpt-5-mini-2025-08-07 or claude-haiku-4-5-20251001.
+_SNAPSHOT_SUFFIX = re.compile(r"-(\d{4}-\d{2}-\d{2}|\d{8})$")
+
+
+def _lookup_model_rates(model: str) -> tuple[float, float] | None:
+    """Return (input, output) USD per 1M tokens; falls back to the undated alias."""
+    if model in MODEL_COST_PER_1M:
+        return MODEL_COST_PER_1M[model]
+    return MODEL_COST_PER_1M.get(_SNAPSHOT_SUFFIX.sub("", model))
 
 
 def estimate_run_cost(
@@ -80,8 +105,9 @@ def estimate_run_cost(
             model = str(entry["model"]).strip() or None
 
     cost_usd: float | None = None
-    if model and model in MODEL_COST_PER_1M:
-        inp, out = MODEL_COST_PER_1M[model]
+    rates = _lookup_model_rates(model) if model else None
+    if rates is not None:
+        inp, out = rates
         cost_usd = (prompt_total * inp + completion_total * out) / 1_000_000.0
         cost_usd = round(cost_usd, 4)
 

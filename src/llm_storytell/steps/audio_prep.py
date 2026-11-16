@@ -637,10 +637,7 @@ def _apply_bg_volume_envelope(
     )
     # Commas inside volume= must be \, so -af doesn't split filters; commas between filters do not escape.
     expr_escaped = expr.replace(",", "\\,")
-    af_chain = (
-        "asetpts=PTS-STARTPTS,"
-        f"volume={expr_escaped}:eval=frame"
-    )
+    af_chain = f"asetpts=PTS-STARTPTS,volume={expr_escaped}:eval=frame"
     # eval=frame: time-varying volume; eval=once leaves ``t`` undefined (silent/wrong levels).
     # asetpts: stable timeline/presentation time for ``t`` on some bg sources/decodes.
     _run_ffmpeg(
@@ -964,9 +961,7 @@ def execute_audio_prep_step(
         logger.info("Skipping voiceover polish")
 
     if voiceover_atempo is not None:
-        _apply_voiceover_atempo(
-            voiceover_path, ext, logger, float(voiceover_atempo)
-        )
+        _apply_voiceover_atempo(voiceover_path, ext, logger, float(voiceover_atempo))
 
     voice_duration = _get_duration_seconds(voiceover_path)
     logger.info(f"Voiceover duration: {voice_duration:.2f}s")

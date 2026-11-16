@@ -66,7 +66,7 @@ def create_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--model",
         required=False,
-        help="Model identifier for all LLM calls in this run (default: gpt-4.1-mini). Fails immediately if the provider does not recognize the model.",
+        help="Model identifier for all text LLM calls in this run (default: from app config / apps/default_config.yaml). Fails immediately if the provider does not recognize the model.",
     )
     run_parser.add_argument(
         "--llm-provider",

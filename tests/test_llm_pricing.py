@@ -232,3 +232,23 @@ class TestModelCostPer1M:
             assert pair[0] >= 0 and pair[1] >= 0, (
                 f"{model!r} prices should be non-negative"
             )
+
+
+def test_dated_snapshot_falls_back_to_alias_rates() -> None:
+    from llm_storytell.llm.pricing import estimate_run_cost
+
+    usage = [
+        {
+            "model": "gpt-5-mini-2025-08-07",
+            "prompt_tokens": 1_000_000,
+            "completion_tokens": 0,
+        }
+    ]
+    assert estimate_run_cost(usage)[4] == 0.25
+
+
+def test_current_models_are_priced() -> None:
+    from llm_storytell.llm.pricing import MODEL_COST_PER_1M
+
+    for model in ("gpt-5.4", "claude-opus-5-5", "claude-sonnet-5-5"):
+        assert model in MODEL_COST_PER_1M

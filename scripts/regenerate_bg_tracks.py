@@ -22,7 +22,10 @@ from pathlib import Path
 from typing import Any
 
 from llm_storytell.run_dir import get_run_logger
-from llm_storytell.steps.audio_prep import AudioPrepStepError, rebuild_background_loop_and_envelope
+from llm_storytell.steps.audio_prep import (
+    AudioPrepStepError,
+    rebuild_background_loop_and_envelope,
+)
 
 
 def _project_root() -> Path:

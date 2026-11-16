@@ -11,5 +11,5 @@ include_world: true
 llm_provider: openai
 model: gpt-5.2
 # TTS
-tts_model: gpt-4o-mini
+tts_model: gpt-4o-mini-tts
 tts_voice: onyx
