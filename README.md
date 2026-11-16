@@ -136,6 +136,8 @@ All LLM calls go through a small provider interface (`LLMProvider`) instead of u
 
 Pipeline steps are responsible for taking this metadata and recording token usage into `run.log` and `state.json` via the logging and token-tracking utilities.
 
+**Prompt caching:** the default outline, section and critic templates share an identical "Story context" prefix (seed, language, lore, style, location, characters) ending in a `<!-- cache-break -->` marker. Claude gets an explicit cache breakpoint there and OpenAI caches the prefix automatically, so in a typical run most context tokens after the first call are billed at the cached rate. The run summary shows `N input (M from cache)`. See `SPEC.md` → Prompt caching.
+
 ### Prompt Templates and Variable Contracts
 
 Each pipeline step uses a prompt template from `apps/<app_name>/prompts/` if that directory exists, otherwise from `prompts/app-defaults/`. Templates are `.md` files and use Python string formatting with variables provided by the pipeline code.

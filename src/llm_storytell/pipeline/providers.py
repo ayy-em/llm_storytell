@@ -4,11 +4,17 @@ Creates provider instances from config path and resolved settings.
 Raises on error; no sys.exit. Caller (CLI or runner) prints and exits.
 """
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
-from llm_storytell.llm import ClaudeProvider, LLMProvider, OpenAIProvider
+from llm_storytell.llm import (
+    ClaudeProvider,
+    LLMProvider,
+    OpenAIProvider,
+    split_cache_prefix,
+)
 from llm_storytell.tts_providers import TTSProvider
 from llm_storytell.tts_providers.elevenlabs_tts import (
     DEFAULT_VOICE_ID,
@@ -68,6 +74,25 @@ def _load_elevenlabs_api_key(config_path: Path) -> str | None:
         return None
 
 
+def _claude_user_content(prompt: str) -> str | list[dict[str, Any]]:
+    """Build Claude user content, with a cache breakpoint at the cache-break marker.
+
+    Without a marker the prompt is sent as plain text (no caching). With one,
+    the run-constant prefix becomes its own text block marked
+    ``cache_control: ephemeral`` so later calls sharing it read from cache.
+    Prefixes below the model's minimum cacheable length are simply not cached.
+    """
+    prefix, rest = split_cache_prefix(prompt)
+    if prefix is None or not prefix.strip():
+        return rest
+    blocks: list[dict[str, Any]] = [
+        {"type": "text", "text": prefix, "cache_control": {"type": "ephemeral"}}
+    ]
+    if rest.strip():
+        blocks.append({"type": "text", "text": rest})
+    return blocks
+
+
 def create_llm_provider(
     config_path: Path,
     *,
@@ -111,17 +136,22 @@ def create_llm_provider(
             def claude_client_wrapper(
                 prompt: str, model: str, max_tokens: int, **kwargs: Any
             ) -> dict[str, Any]:
-                msg = client.messages.create(
+                # Streaming avoids HTTP timeouts on long outputs (critic) and
+                # high max_tokens; get_final_message() returns the full Message.
+                with client.messages.stream(
                     model=model,
                     max_tokens=max_tokens,
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=[
+                        {"role": "user", "content": _claude_user_content(prompt)}
+                    ],
                     **kwargs,
+                ) as stream:
+                    msg = stream.get_final_message()
+                text = "".join(
+                    block.text
+                    for block in msg.content
+                    if getattr(block, "type", None) == "text"
                 )
-                text_parts: list[str] = []
-                for block in msg.content:
-                    if getattr(block, "type", None) == "text":
-                        text_parts.append(block.text)
-                text = "".join(text_parts)
                 usage = msg.usage
                 return {
                     "content": text,
@@ -129,6 +159,12 @@ def create_llm_provider(
                     "usage": {
                         "input_tokens": usage.input_tokens,
                         "output_tokens": usage.output_tokens,
+                        "cache_creation_input_tokens": getattr(
+                            usage, "cache_creation_input_tokens", None
+                        ),
+                        "cache_read_input_tokens": getattr(
+                            usage, "cache_read_input_tokens", None
+                        ),
                     },
                 }
 
@@ -166,9 +202,18 @@ def create_llm_provider(
         def openai_client_wrapper(
             prompt: str, model: str, **kwargs: Any
         ) -> dict[str, Any]:
+            prefix, rest = split_cache_prefix(prompt)
+            if prefix is not None:
+                # OpenAI caches shared prefixes (>=1024 tokens) automatically;
+                # a stable key routes calls sharing the prefix to the same cache.
+                kwargs.setdefault(
+                    "prompt_cache_key",
+                    "llm_storytell-"
+                    + hashlib.sha256(prefix.encode("utf-8")).hexdigest()[:24],
+                )
             response = client.chat.completions.create(
                 model=model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": (prefix or "") + rest}],
                 **kwargs,
             )
             choice = response.choices[0]
@@ -183,6 +228,13 @@ def create_llm_provider(
                     "prompt_tokens": response.usage.prompt_tokens,
                     "completion_tokens": response.usage.completion_tokens,
                     "total_tokens": response.usage.total_tokens,
+                    "prompt_tokens_details": {
+                        "cached_tokens": getattr(
+                            response.usage.prompt_tokens_details,
+                            "cached_tokens",
+                            None,
+                        )
+                    },
                 },
             }
 

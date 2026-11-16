@@ -1,3 +1,24 @@
+# Story context
+Seed:
+{seed}
+
+Language (ISO 639-1 code; the story is written in this language):
+{language}
+
+Lore bible:
+{lore_bible}
+
+Style rules:
+{style_rules}
+
+Location context:
+{location_context}
+
+Character context:
+{character_context}
+
+<!-- cache-break -->
+
 # Outline generation
 
 ## Inputs
@@ -22,27 +43,11 @@ The story must be written in the language indicated by `language` (ISO 639-1 cod
 - Beats must represent meaningful narrative transitions.
 - Do not contradict lore or context.
 
-## Context
-Seed:
-{seed}
-
-Lore bible:
-{lore_bible}
-
-Style rules:
-{style_rules}
-
-Location context:
-{location_context}
-
-Character context:
-{character_context}
+## Inputs for this step
+Seed, lore bible, style rules, location and character context, and language are given in "Story context" above.
 
 Beats count:
 {beats_count}
-
-Language (ISO 639-1 code; write the story in this language):
-{language}
 
 ## Output
 - Output valid JSON only (no markdown, no commentary).

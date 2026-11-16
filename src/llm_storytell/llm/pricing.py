@@ -59,6 +59,34 @@ TTS_COST_PER_1M_CHARS: dict[str, float] = {
 }
 
 
+# Prompt-cache pricing as a multiple of the model's input rate.
+# Anthropic: reads 0.1x, 5-minute cache writes 1.25x. OpenAI: no write fee;
+# cached reads are 0.1x on the GPT-5 family, 0.25x on GPT-4.1, 0.5x on GPT-4o.
+CACHE_WRITE_MULTIPLIER_CLAUDE = 1.25
+
+
+def _cache_read_multiplier(model: str) -> float:
+    if model.startswith("gpt-4.1"):
+        return 0.25
+    if model.startswith("gpt-4o"):
+        return 0.5
+    return 0.1
+
+
+def _cache_write_multiplier(model: str) -> float:
+    return CACHE_WRITE_MULTIPLIER_CLAUDE if model.startswith("claude-") else 1.0
+
+
+def sum_cache_tokens(token_usage: list[dict]) -> tuple[int, int]:
+    """Total (cache_read_tokens, cache_write_tokens) across usage entries."""
+    read = write = 0
+    for entry in token_usage:
+        if isinstance(entry, dict):
+            read += entry.get("cache_read_tokens", 0) or 0
+            write += entry.get("cache_write_tokens", 0) or 0
+    return read, write
+
+
 # Dated snapshot suffixes, e.g. gpt-5-mini-2025-08-07 or claude-haiku-4-5-20251001.
 _SNAPSHOT_SUFFIX = re.compile(r"-(\d{4}-\d{2}-\d{2}|\d{8})$")
 
@@ -77,7 +105,9 @@ def estimate_run_cost(
 
     Args:
         token_usage: List of entries from state.json token_usage (each
-            with prompt_tokens, completion_tokens, total_tokens, model).
+            with prompt_tokens, completion_tokens, total_tokens, model and
+            optional cache_read_tokens / cache_write_tokens, which are a
+            subset of prompt_tokens priced at cache rates).
 
     Returns:
         (model, prompt_total, completion_total, total_tokens, cost_usd).
@@ -106,9 +136,16 @@ def estimate_run_cost(
 
     cost_usd: float | None = None
     rates = _lookup_model_rates(model) if model else None
-    if rates is not None:
+    if model and rates is not None:
         inp, out = rates
-        cost_usd = (prompt_total * inp + completion_total * out) / 1_000_000.0
+        cache_read, cache_write = sum_cache_tokens(token_usage)
+        uncached = max(0, prompt_total - cache_read - cache_write)
+        input_cost = inp * (
+            uncached
+            + cache_read * _cache_read_multiplier(model)
+            + cache_write * _cache_write_multiplier(model)
+        )
+        cost_usd = (input_cost + completion_total * out) / 1_000_000.0
         cost_usd = round(cost_usd, 4)
 
     return (model, prompt_total, completion_total, total_tokens, cost_usd)

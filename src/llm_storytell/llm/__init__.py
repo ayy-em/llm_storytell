@@ -39,6 +39,12 @@ class LLMResult:
             Total tokens consumed by the call, if reported by the
             provider. When not provided explicitly by the provider it
             may be derived as ``prompt_tokens + completion_tokens``.
+        cache_read_tokens:
+            Prompt tokens served from the provider's prompt cache (included
+            in ``prompt_tokens``), if reported.
+        cache_write_tokens:
+            Prompt tokens written to the prompt cache (included in
+            ``prompt_tokens``; Anthropic bills these at a premium), if reported.
         raw_response:
             Provider-specific raw response object, retained for
             debugging and future extension. Callers should not rely on
@@ -52,6 +58,30 @@ class LLMResult:
     completion_tokens: int | None = None
     total_tokens: int | None = None
     raw_response: Any | None = None
+    cache_read_tokens: int | None = None
+    cache_write_tokens: int | None = None
+
+
+# Prompt templates may contain this marker on its own line to separate a
+# run-constant prefix (lore, style, characters, ...) from the per-call part.
+# Providers strip it; Claude places a prompt-cache breakpoint there, OpenAI
+# caches the shared prefix automatically.
+CACHE_BREAK_MARKER = "<!-- cache-break -->"
+
+
+def split_cache_prefix(prompt: str) -> tuple[str | None, str]:
+    """Split *prompt* at the first cache-break marker.
+
+    Returns ``(prefix, rest)`` with the marker removed, so ``prefix + rest``
+    is the prompt without the marker. ``prefix`` is None when there is no
+    marker. Any further markers are dropped from ``rest``.
+    """
+    idx = prompt.find(CACHE_BREAK_MARKER)
+    if idx == -1:
+        return None, prompt
+    prefix = prompt[:idx]
+    rest = prompt[idx + len(CACHE_BREAK_MARKER) :].replace(CACHE_BREAK_MARKER, "")
+    return prefix, rest
 
 
 class LLMProviderError(RuntimeError):
@@ -292,6 +322,7 @@ class OpenAIProvider(LLMProvider):
         content, prompt_tokens, completion_tokens, total_tokens = (
             self._extract_response(response)
         )
+        cache_read, cache_write = self._extract_cache_usage(response)
 
         return LLMResult(
             content=content,
@@ -301,7 +332,19 @@ class OpenAIProvider(LLMProvider):
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
             raw_response=response,
+            cache_read_tokens=cache_read,
+            cache_write_tokens=cache_write,
         )
+
+    @staticmethod
+    def _extract_cache_usage(
+        response: Mapping[str, Any],
+    ) -> tuple[int | None, int | None]:
+        """(cache_read, cache_write) tokens; OpenAI caching has no write fee."""
+        usage = response.get("usage") or {}
+        details = usage.get("prompt_tokens_details") or {}
+        cached = details.get("cached_tokens")
+        return (cached if isinstance(cached, int) else None), None
 
     @staticmethod
     def _extract_response(
@@ -364,7 +407,7 @@ class ClaudeProvider(LLMProvider):
         *,
         default_model: str,
         max_retries: int = 2,
-        default_max_tokens: int = 16384,
+        default_max_tokens: int = 64000,
         **default_params: Any,
     ) -> None:
         """Create a new Claude provider.
@@ -379,7 +422,9 @@ class ClaudeProvider(LLMProvider):
                 Retries for transient failures (not for unknown-model errors).
             default_max_tokens:
                 Default ``max_tokens`` for Anthropic Messages API when not
-                overridden per call.
+                overridden per call. Calls are streamed, so a high ceiling
+                does not risk HTTP timeouts; it leaves room for adaptive
+                thinking, which counts toward ``max_tokens`` on newer models.
             **default_params:
                 Extra default kwargs merged into each call (e.g. ``temperature``).
         """
@@ -423,6 +468,7 @@ class ClaudeProvider(LLMProvider):
         content, prompt_tokens, completion_tokens, total_tokens = (
             self._extract_response(response)
         )
+        cache_read, cache_write = self._extract_cache_usage(response)
 
         return LLMResult(
             content=content,
@@ -432,6 +478,21 @@ class ClaudeProvider(LLMProvider):
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
             raw_response=response,
+            cache_read_tokens=cache_read,
+            cache_write_tokens=cache_write,
+        )
+
+    @staticmethod
+    def _extract_cache_usage(
+        response: Mapping[str, Any],
+    ) -> tuple[int | None, int | None]:
+        """(cache_read, cache_write) input tokens from a normalized response."""
+        usage = response.get("usage") or {}
+        read = usage.get("cache_read_input_tokens")
+        write = usage.get("cache_creation_input_tokens")
+        return (
+            read if isinstance(read, int) else None,
+            write if isinstance(write, int) else None,
         )
 
     @staticmethod
@@ -458,6 +519,13 @@ class ClaudeProvider(LLMProvider):
 
         usage = response.get("usage") or {}
         prompt_tokens = usage.get("input_tokens")
+        if isinstance(prompt_tokens, int):
+            # Anthropic reports cached input separately; count all input here
+            # so totals match OpenAI semantics (cached tokens are a subset).
+            for key in ("cache_creation_input_tokens", "cache_read_input_tokens"):
+                extra = usage.get(key)
+                if isinstance(extra, int):
+                    prompt_tokens += extra
         completion_tokens = usage.get("output_tokens")
         total_tokens: int | None = None
         if isinstance(prompt_tokens, int) and isinstance(completion_tokens, int):

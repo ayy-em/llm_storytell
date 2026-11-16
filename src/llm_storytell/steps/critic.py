@@ -590,6 +590,8 @@ def execute_critic_step(
             prompt_tokens=result.prompt_tokens or 0,
             completion_tokens=result.completion_tokens or 0,
             total_tokens=result.total_tokens,
+            cache_read_tokens=result.cache_read_tokens or 0,
+            cache_write_tokens=result.cache_write_tokens or 0,
         )
 
         # Update state with paths (relative to run_dir, normalized to forward slashes)

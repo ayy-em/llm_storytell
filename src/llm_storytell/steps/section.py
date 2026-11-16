@@ -264,6 +264,8 @@ def execute_section_step(
         result = None
         accum_prompt = 0
         accum_completion = 0
+        accum_cache_read = 0
+        accum_cache_write = 0
         total_tokens_sum: int | None = 0
         frontmatter: dict[str, Any] = {}
         section_text = ""
@@ -314,6 +316,8 @@ def execute_section_step(
 
             accum_prompt += result.prompt_tokens or 0
             accum_completion += result.completion_tokens or 0
+            accum_cache_read += result.cache_read_tokens or 0
+            accum_cache_write += result.cache_write_tokens or 0
             if result.total_tokens is None:
                 total_tokens_sum = None
             elif total_tokens_sum is not None:
@@ -419,6 +423,8 @@ def execute_section_step(
             model=result.model,
             prompt_tokens=accum_prompt,
             completion_tokens=accum_completion,
+            cache_read_tokens=accum_cache_read,
+            cache_write_tokens=accum_cache_write,
             total_tokens=total_tokens_sum,
         )
 

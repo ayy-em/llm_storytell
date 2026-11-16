@@ -11,7 +11,11 @@ import httpx
 
 from llm_storytell.context import ContextLoaderError
 from llm_storytell.llm import LLMProvider, LLMProviderError
-from llm_storytell.llm.pricing import estimate_run_cost, estimate_tts_cost
+from llm_storytell.llm.pricing import (
+    estimate_run_cost,
+    estimate_tts_cost,
+    sum_cache_tokens,
+)
 from llm_storytell.pipeline.context import load_and_persist_context
 from llm_storytell.pipeline.deliverable_to_book import (
     copy_no_tts_deliverable_to_book,
@@ -464,9 +468,11 @@ def run_pipeline(settings: RunSettings) -> int:
             # One line: Chat tokens and optionally TTS characters
             tokens_line_parts: list[str] = []
             if prompt_total or completion_total or total_tokens:
+                cache_read, _cache_write = sum_cache_tokens(usage)
+                cached_note = f" ({cache_read:,} from cache)" if cache_read else ""
                 tokens_line_parts.append(
-                    f"Chat Tokens: {prompt_total:,} input, {completion_total:,} output, "
-                    f"{total_tokens:,} total"
+                    f"Chat Tokens: {prompt_total:,} input{cached_note}, "
+                    f"{completion_total:,} output, {total_tokens:,} total"
                 )
             if total_tts_chars:
                 tokens_line_parts.append(

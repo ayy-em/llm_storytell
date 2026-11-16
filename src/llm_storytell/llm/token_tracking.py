@@ -24,6 +24,8 @@ class TokenUsage:
         prompt_tokens: Number of prompt tokens used.
         completion_tokens: Number of completion tokens used.
         total_tokens: Total tokens used.
+        cache_read_tokens: Prompt tokens read from the prompt cache.
+        cache_write_tokens: Prompt tokens written to the prompt cache.
     """
 
     step: str
@@ -32,6 +34,8 @@ class TokenUsage:
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert token usage to dictionary for JSON serialization.
@@ -39,7 +43,7 @@ class TokenUsage:
         Returns:
             Dictionary representation suitable for state.json.
         """
-        return {
+        data: dict[str, Any] = {
             "step": self.step,
             "provider": self.provider,
             "model": self.model,
@@ -47,6 +51,13 @@ class TokenUsage:
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
         }
+        # Only present when the provider used its prompt cache (subset of
+        # prompt_tokens); keeps entries for uncached calls unchanged.
+        if self.cache_read_tokens:
+            data["cache_read_tokens"] = self.cache_read_tokens
+        if self.cache_write_tokens:
+            data["cache_write_tokens"] = self.cache_write_tokens
+        return data
 
 
 def _calculate_cumulative_tokens(
@@ -118,6 +129,8 @@ def record_token_usage(
     prompt_tokens: int,
     completion_tokens: int,
     total_tokens: int | None = None,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
 ) -> dict[str, Any]:
     """Record token usage for an LLM call.
 
@@ -134,6 +147,10 @@ def record_token_usage(
         completion_tokens: Number of completion tokens used.
         total_tokens: Total tokens used. If None, calculated as
             prompt_tokens + completion_tokens.
+        cache_read_tokens: Prompt tokens served from the prompt cache
+            (subset of prompt_tokens).
+        cache_write_tokens: Prompt tokens written to the prompt cache
+            (subset of prompt_tokens).
 
     Returns:
         Dictionary representation of token usage for state.json.
@@ -147,6 +164,11 @@ def record_token_usage(
         f"Token usage: prompt_tokens={prompt_tokens}, "
         f"completion_tokens={completion_tokens}, total_tokens={total_tokens}"
     )
+    if cache_read_tokens or cache_write_tokens:
+        message += (
+            f" (cache_read_tokens={cache_read_tokens}, "
+            f"cache_write_tokens={cache_write_tokens})"
+        )
     entry = f"[{timestamp}] [INFO] {message}\n"
     with logger.log_path.open("a", encoding="utf-8") as f:
         f.write(entry)
@@ -172,6 +194,8 @@ def record_token_usage(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_write_tokens=cache_write_tokens,
     )
 
     return usage.to_dict()

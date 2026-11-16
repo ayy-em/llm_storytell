@@ -1,3 +1,24 @@
+# Story context
+Seed:
+{seed}
+
+Language (ISO 639-1 code; the story is written in this language):
+{language}
+
+Lore bible:
+{lore_bible}
+
+Style rules:
+{style_rules}
+
+Location context:
+{location_context}
+
+Character context:
+{character_context}
+
+<!-- cache-break -->
+
 # Critic / fixer prompt
 
 ## Required inputs
@@ -51,27 +72,11 @@ Corrections must preserve intent, continuity, and lore consistency.
 - Apply style rules to fix inconsistencies in voice.
 - Do NOT add decorative flourish if it changes intent.
 
-## Context
-Seed:
-{seed}
-
-Lore bible:
-{lore_bible}
-
-Style rules:
-{style_rules}
+## Inputs for this step
+Seed, lore bible, style rules, location and character context, and language are given in "Story context" above.
 
 Outline:
 {outline}
-
-Location context (if any):
-{location_context}
-
-Character context (if any):
-{character_context}
-
-Language (ISO 639-1 code of the story):
-{language}
 
 Full draft:
 {full_draft}

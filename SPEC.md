@@ -163,7 +163,7 @@ python -m llm_storytell run \
 
 Defaults for beats, `section_length`, `llm_provider`, and `model` come from `apps/default_config.yaml` merged with optional `apps/<app_name>/app_config.yaml`. Apps define *recommended* values; the pipeline enforces *absolute* limits. The same merge applies to `language`: it may be set in `default_config.yaml` or in an app’s `app_config.yaml`; `--language` overrides when provided. Invalid language (non–ISO 639-1) in config or CLI causes startup failure with a clear error message.
 
-**Text LLM provider (v1.3+):** The resolved `llm_provider` and `model` are printed at run start, logged to `run.log`, and persisted in `inputs.json` as `llm_provider` and `model` (when set). Chat token cost estimates use provider pricing tables where the model id is known (including **`claude-sonnet-4-6`** at $3 / 1M input and $15 / 1M output tokens for the estimate line only).
+**Text LLM provider (v1.3+):** The resolved `llm_provider` and `model` are printed at run start, logged to `run.log`, and persisted in `inputs.json` as `llm_provider` and `model` (when set). Chat token cost estimates use provider pricing tables where the model id is known (see `MODEL_COST_PER_1M` in `src/llm_storytell/llm/pricing.py`, which covers current OpenAI and Claude models; dated snapshot ids fall back to their alias).
 
 **TTS (v1.1+):** TTS flags control whether a text-to-speech step runs after the critic. Resolution order for `--tts-provider` and `--tts-voice` is: CLI flags → `apps/<app_name>/app_config.yaml` → pipeline defaults (OpenAI / gpt-4o-mini-tts / Onyx). The resolved voice name is **normalized to lowercase** before being sent to the TTS provider (e.g. OpenAI expects `onyx`, not `Onyx`); config and CLI may use either casing. When `--no-tts` is set, the pipeline ends after the critic step and no TTS step is run; `state.json` does not contain `tts_config`. When TTS is enabled, the pipeline runs the TTS step then the audio-prep step; **ffmpeg** (and ffprobe) must be on PATH for the audio-prep step (stitching, voiceover polish, and mixing).
 
@@ -344,6 +344,15 @@ Variables come from three sources:
 2. **Context files**: `lore_bible`, `style_rules`, `location_context`, `character_context`
 3. **Step-specific**: `beats_count`, `section_index`, `section_id`, `outline_beat`, `rolling_summary`, `full_draft`
 
+### Prompt caching (cache-break marker)
+
+Templates may contain the line `<!-- cache-break -->` once. Everything before it is treated as a run-constant prefix and everything after as per-call input. Providers strip the marker before sending:
+
+* **Claude:** the prefix becomes its own text block with `cache_control: {"type": "ephemeral"}` (5-minute cache, refreshed on each hit). Prefixes below the model's minimum cacheable length are silently not cached.
+* **OpenAI:** the prompt is sent unchanged minus the marker; OpenAI caches shared prefixes of ≥1024 tokens automatically, and a `prompt_cache_key` derived from the prefix is set to improve cache routing.
+
+The default `10_outline.md`, `20_section.md` and `30_critic.md` all start with the same "Story context" block (`seed`, `language`, `lore_bible`, `style_rules`, `location_context`, `character_context`) followed by the marker, so one cache entry serves the outline, every section, and the critic within a run. The block must stay byte-identical across the three templates (enforced by `tests/test_prompt_caching.py`). Custom app templates without the marker are sent as before, uncached.
+
 ### Per-Step Contracts
 
 #### Outline Step (`10_outline.md`)
@@ -477,6 +486,10 @@ These metrics must be:
 
 * Logged to `run.log`
 * Stored in `state.json` under a `token_usage[]` field
+
+When a call used the provider's prompt cache, the entry also has `cache_read_tokens` and/or `cache_write_tokens` (both are subsets of `prompt_tokens`; Claude's uncached `input_tokens` plus cache reads/writes are summed into `prompt_tokens`). Cost estimates price cache reads at 0.1× the input rate (0.25× for GPT-4.1, 0.5× for GPT-4o) and Claude cache writes at 1.25×. The end-of-run summary shows how many input tokens came from cache.
+
+Claude calls are streamed (`messages.stream` → final message) with `max_tokens` 64000 by default, so long critic outputs and adaptive thinking on newer models don't hit HTTP timeouts or the output cap. Responses that stop at `max_tokens` (or `finish_reason=length` on OpenAI) or with `stop_reason=refusal` fail the step instead of being parsed.
 
 ### TTS usage and cost (v1.2)
 
