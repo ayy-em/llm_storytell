@@ -444,3 +444,129 @@ class TestClaudeProviderSuccess:
         assert len(client.calls) == 1
         assert client.calls[0]["max_tokens"] > 0
         assert client.calls[0]["model"] == "claude-sonnet-4-6"
+
+
+class _StatusError(Exception):
+    """Mimics SDK API errors that expose ``status_code``."""
+
+    def __init__(self, message: str, status_code: int) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _ok_openai(content: str = "ok", finish_reason: str | None = "stop") -> dict:
+    return {
+        "choices": [{"message": {"content": content}, "finish_reason": finish_reason}],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    }
+
+
+class TestProviderErrorClassification:
+    """Shared retry / error classification for OpenAI and Claude providers."""
+
+    def test_unrelated_invalid_request_is_not_reported_as_unknown_model(self) -> None:
+        """A generic 400 must not be misreported as 'model not recognized' or retried."""
+        calls = 0
+
+        def client(**_: Any) -> Mapping[str, Any]:
+            nonlocal calls
+            calls += 1
+            raise _StatusError(
+                "Error code: 400 - {'type': 'invalid_request_error', "
+                "'message': 'prompt is too long'}",
+                400,
+            )
+
+        provider = ClaudeProvider(client, default_model="claude-sonnet-4-6")
+        with pytest.raises(LLMProviderError) as exc_info:
+            provider.generate("Hi", step="outline")
+        assert "does not identify requested model" not in str(exc_info.value)
+        assert "prompt is too long" in str(exc_info.value)
+        assert calls == 1
+
+    def test_404_model_error_reported_as_unknown_model(self) -> None:
+        def client(**_: Any) -> Mapping[str, Any]:
+            raise _StatusError("not_found_error: model: claude-nope", 404)
+
+        provider = ClaudeProvider(client, default_model="claude-nope")
+        with pytest.raises(LLMProviderError, match="does not identify requested model"):
+            provider.generate("Hi", step="outline")
+
+    def test_rate_limit_is_retried(self) -> None:
+        calls = 0
+
+        def client(**_: Any) -> Mapping[str, Any]:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise _StatusError("rate limited", 429)
+            return _ok_openai()
+
+        provider = OpenAIProvider(client, default_model="gpt-5.2", max_retries=2)
+        assert provider.generate("Hi", step="outline").content == "ok"
+        assert calls == 2
+
+    def test_rejected_temperature_is_dropped_and_remembered(self) -> None:
+        """Models that reject temperature get it stripped, without burning retries."""
+        seen: list[dict[str, Any]] = []
+
+        def client(**kwargs: Any) -> Mapping[str, Any]:
+            seen.append(kwargs)
+            if "temperature" in kwargs:
+                raise _StatusError(
+                    "`temperature` is deprecated for this model.", status_code=400
+                )
+            return {"content": "ok", "usage": {}}
+
+        provider = ClaudeProvider(
+            client, default_model="claude-sonnet-5-5", max_retries=0, temperature=0.7
+        )
+        assert provider.generate("Hi", step="a", temperature=0.7).content == "ok"
+        assert provider.generate("Hi", step="b", temperature=0.7).content == "ok"
+        assert "temperature" in seen[0]
+        assert all("temperature" not in c for c in seen[1:])
+        # Second generate() call goes straight through without the param.
+        assert len(seen) == 3
+
+    def test_openai_unsupported_temperature_is_dropped(self) -> None:
+        seen: list[dict[str, Any]] = []
+
+        def client(**kwargs: Any) -> Mapping[str, Any]:
+            seen.append(kwargs)
+            if "temperature" in kwargs:
+                raise _StatusError(
+                    "Unsupported value: 'temperature' does not support 0.7 with this "
+                    "model. Only the default (1) value is supported.",
+                    400,
+                )
+            return _ok_openai()
+
+        provider = OpenAIProvider(client, default_model="gpt-5-mini", temperature=0.7)
+        assert provider.generate("Hi", step="outline").content == "ok"
+        assert len(seen) == 2
+
+
+class TestTruncationAndRefusal:
+    def test_openai_length_finish_reason_raises(self) -> None:
+        provider = OpenAIProvider(
+            lambda **_: _ok_openai("partial", finish_reason="length"),
+            default_model="gpt-5.2",
+        )
+        with pytest.raises(LLMProviderError, match="truncated"):
+            provider.generate("Hi", step="critic")
+
+    def test_claude_max_tokens_stop_reason_raises(self) -> None:
+        client = _FakeClaudeClient(
+            responses=[{"content": "partial", "stop_reason": "max_tokens"}]
+        )
+        provider = ClaudeProvider(client, default_model="claude-sonnet-4-6")
+        with pytest.raises(LLMProviderError, match="truncated"):
+            provider.generate("Hi", step="critic")
+
+    def test_claude_refusal_raises(self) -> None:
+        client = _FakeClaudeClient(
+            responses=[{"content": "", "stop_reason": "refusal"}]
+        )
+        provider = ClaudeProvider(client, default_model="claude-sonnet-5-5")
+        with pytest.raises(LLMProviderError, match="refusal"):
+            provider.generate("Hi", step="critic")

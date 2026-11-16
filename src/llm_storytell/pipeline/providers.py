@@ -125,6 +125,7 @@ def create_llm_provider(
                 usage = msg.usage
                 return {
                     "content": text,
+                    "stop_reason": getattr(msg, "stop_reason", None),
                     "usage": {
                         "input_tokens": usage.input_tokens,
                         "output_tokens": usage.output_tokens,
@@ -170,9 +171,13 @@ def create_llm_provider(
                 messages=[{"role": "user", "content": prompt}],
                 **kwargs,
             )
+            choice = response.choices[0]
             return {
                 "choices": [
-                    {"message": {"content": response.choices[0].message.content}}
+                    {
+                        "message": {"content": choice.message.content},
+                        "finish_reason": getattr(choice, "finish_reason", None),
+                    }
                 ],
                 "usage": {
                     "prompt_tokens": response.usage.prompt_tokens,

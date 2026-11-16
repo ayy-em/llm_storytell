@@ -103,6 +103,100 @@ class LLMProvider:
         raise NotImplementedError(msg)
 
 
+# Phrases that indicate the requested model id is unknown / unavailable.
+# Kept deliberately narrow: generic words like "invalid" or "not found" also
+# appear in unrelated 400s (bad params, prompt too long) and must not be
+# misreported as an unknown model.
+_MODEL_NOT_RECOGNIZED_PHRASES = (
+    "model_not_found",
+    "invalid_model",
+    "unknown model",
+    "no such model",
+    "could not find model",
+    "model does not exist",
+    "does not exist or you do not have access",
+)
+
+# Sampling parameters some models reject (e.g. Claude Opus 4.7+/Sonnet 5+,
+# OpenAI gpt-5/-mini/-nano and o-series only accept the default temperature).
+_SAMPLING_PARAMS = ("temperature", "top_p", "top_k")
+_SAMPLING_REJECTED_PHRASES = (
+    "deprecated",
+    "unsupported",
+    "not supported",
+    "does not support",
+)
+
+# HTTP statuses worth retrying; any other 4xx is a request problem that a
+# retry cannot fix.
+_RETRYABLE_STATUS = frozenset({408, 409, 429})
+
+
+def _is_model_not_recognized(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    if any(phrase in msg for phrase in _MODEL_NOT_RECOGNIZED_PHRASES):
+        return True
+    return getattr(exc, "status_code", None) == 404 and "model" in msg
+
+
+def _rejected_sampling_params(exc: Exception, params: Mapping[str, Any]) -> list[str]:
+    """Return sampling params present in *params* that the API rejected."""
+    msg = str(exc).lower()
+    if not any(phrase in msg for phrase in _SAMPLING_REJECTED_PHRASES):
+        return []
+    return [p for p in _SAMPLING_PARAMS if p in params and p in msg]
+
+
+def _is_non_retryable(exc: Exception) -> bool:
+    status = getattr(exc, "status_code", None)
+    return (
+        isinstance(status, int)
+        and 400 <= status < 500
+        and status not in _RETRYABLE_STATUS
+    )
+
+
+def _call_with_retries(
+    client: Callable[..., Mapping[str, Any]],
+    *,
+    label: str,
+    prompt: str,
+    model: str,
+    params: dict[str, Any],
+    max_retries: int,
+    dropped_params: set[str],
+) -> Mapping[str, Any]:
+    """Invoke *client* with retry and error classification shared by providers.
+
+    * Unknown model -> fail immediately with a clear message.
+    * A sampling param rejected by the model (e.g. ``temperature``) -> drop it,
+      remember that in *dropped_params* (so later calls skip it) and retry
+      without consuming a retry attempt.
+    * Other non-retryable 4xx -> fail immediately.
+    * Anything else -> retry up to *max_retries* times.
+    """
+    attempts = 0
+    max_attempts = max_retries + 1
+    while True:
+        call_params = {k: v for k, v in params.items() if k not in dropped_params}
+        try:
+            return client(prompt=prompt, model=model, **call_params)
+        except Exception as exc:  # noqa: BLE001 - classified below
+            if _is_model_not_recognized(exc):
+                raise LLMProviderError(
+                    f"Provider API does not identify requested model: {model}. {exc!s}"
+                ) from exc
+            rejected = _rejected_sampling_params(exc, call_params)
+            if rejected:
+                dropped_params.update(rejected)
+                continue
+            attempts += 1
+            if _is_non_retryable(exc) or attempts >= max_attempts:
+                raise LLMProviderError(
+                    f"{label} call failed after {attempts} attempt(s): {exc!s}"
+                ) from exc
+
+
 class OpenAIProvider(LLMProvider):
     """OpenAI-backed :class:`LLMProvider` implementation.
 
@@ -168,6 +262,8 @@ class OpenAIProvider(LLMProvider):
         self._default_model = default_model
         self._max_retries = max_retries
         self._default_params = default_params
+        # Sampling params the API rejected for this provider's model(s).
+        self._dropped_params: set[str] = set()
 
     def generate(
         self,
@@ -183,44 +279,15 @@ class OpenAIProvider(LLMProvider):
         effective_model = model or self._default_model
         params: dict[str, Any] = {**self._default_params, **kwargs}
 
-        last_error: Exception | None = None
-        attempts = 0
-        max_attempts = self._max_retries + 1
-
-        _MODEL_NOT_RECOGNIZED_PHRASES = (
-            "does not exist",
-            "not found",
-            "invalid",
-            "unknown model",
-            "no such model",
-            "model_not_found",
-            "invalid_model",
+        response = _call_with_retries(
+            self._client,
+            label="OpenAI",
+            prompt=prompt,
+            model=effective_model,
+            params=params,
+            max_retries=self._max_retries,
+            dropped_params=self._dropped_params,
         )
-
-        while attempts < max_attempts:
-            try:
-                response = self._client(
-                    prompt=prompt,
-                    model=effective_model,
-                    **params,
-                )
-                break
-            except Exception as exc:  # pragma: no cover - exercised via tests
-                last_error = exc
-                msg_lower = str(exc).lower()
-                if any(phrase in msg_lower for phrase in _MODEL_NOT_RECOGNIZED_PHRASES):
-                    raise LLMProviderError(
-                        f"Provider API does not identify requested model: {effective_model}. {exc!s}"
-                    ) from exc
-                attempts += 1
-                if attempts >= max_attempts:
-                    msg = (
-                        f"OpenAI call failed after {attempts} attempts: {last_error!s}"
-                    )
-                    raise LLMProviderError(msg) from last_error
-        else:  # pragma: no cover - defensive, loop always breaks or raises
-            msg = f"OpenAI call failed after {attempts} attempts: {last_error!s}"
-            raise LLMProviderError(msg) from last_error
 
         content, prompt_tokens, completion_tokens, total_tokens = (
             self._extract_response(response)
@@ -259,6 +326,11 @@ class OpenAIProvider(LLMProvider):
             raise LLMProviderError("Missing assistant content")
         if content == "" or content.strip() == "":
             raise LLMProviderError("Empty assistant content")
+
+        if first_choice.get("finish_reason") == "length":
+            raise LLMProviderError(
+                "OpenAI response truncated (finish_reason=length); output is incomplete"
+            )
 
         usage = response.get("usage") or {}
         prompt_tokens = usage.get("prompt_tokens")
@@ -320,6 +392,8 @@ class ClaudeProvider(LLMProvider):
         self._max_retries = max_retries
         self._default_max_tokens = default_max_tokens
         self._default_params = default_params
+        # Sampling params the API rejected for this provider's model(s).
+        self._dropped_params: set[str] = set()
 
     def generate(
         self,
@@ -334,47 +408,17 @@ class ClaudeProvider(LLMProvider):
 
         effective_model = model or self._default_model
         params: dict[str, Any] = {**self._default_params, **kwargs}
-        max_tokens = int(params.pop("max_tokens", self._default_max_tokens))
+        params["max_tokens"] = int(params.pop("max_tokens", self._default_max_tokens))
 
-        last_error: Exception | None = None
-        attempts = 0
-        max_attempts = self._max_retries + 1
-
-        _MODEL_NOT_RECOGNIZED_PHRASES = (
-            "invalid_request_error",
-            "not_found_error",
-            "not found",
-            "unknown model",
-            "does not exist",
-            "invalid_model",
-            "could not find model",
+        response = _call_with_retries(
+            self._client,
+            label="Claude",
+            prompt=prompt,
+            model=effective_model,
+            params=params,
+            max_retries=self._max_retries,
+            dropped_params=self._dropped_params,
         )
-
-        while attempts < max_attempts:
-            try:
-                response = self._client(
-                    prompt=prompt,
-                    model=effective_model,
-                    max_tokens=max_tokens,
-                    **params,
-                )
-                break
-            except Exception as exc:  # pragma: no cover - exercised via tests
-                last_error = exc
-                msg_lower = str(exc).lower()
-                if any(phrase in msg_lower for phrase in _MODEL_NOT_RECOGNIZED_PHRASES):
-                    raise LLMProviderError(
-                        f"Provider API does not identify requested model: {effective_model}. {exc!s}"
-                    ) from exc
-                attempts += 1
-                if attempts >= max_attempts:
-                    msg = (
-                        f"Claude call failed after {attempts} attempts: {last_error!s}"
-                    )
-                    raise LLMProviderError(msg) from last_error
-        else:  # pragma: no cover - defensive
-            msg = f"Claude call failed after {attempts} attempts: {last_error!s}"
-            raise LLMProviderError(msg) from last_error
 
         content, prompt_tokens, completion_tokens, total_tokens = (
             self._extract_response(response)
@@ -395,6 +439,15 @@ class ClaudeProvider(LLMProvider):
         response: Mapping[str, Any],
     ) -> tuple[str, int | None, int | None, int | None]:
         """Extract assistant text and token usage from a normalized response."""
+        stop_reason = response.get("stop_reason")
+        if stop_reason == "max_tokens":
+            raise LLMProviderError(
+                "Claude response truncated (stop_reason=max_tokens); output is incomplete"
+            )
+        if stop_reason == "refusal":
+            raise LLMProviderError(
+                "Claude declined the request (stop_reason=refusal); see llm_io for the prompt"
+            )
         content = response.get("content")
         if content is None:
             raise LLMProviderError("Missing assistant content")
