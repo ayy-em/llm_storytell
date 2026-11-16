@@ -43,13 +43,14 @@ class TestChunkText:
         assert len(segments) == 1
         assert len(imperfect) == 1
         assert segments[0].strip().split() == [f"w{i}" for i in range(100)]
-        assert imperfect[0] is True
+        # Whole text fits in one segment: not an imperfect (mid-sentence) cut.
+        assert imperfect[0] is False
 
-    def test_under_700_words_one_segment_imperfect(self) -> None:
+    def test_max_words_fits_in_one_segment(self) -> None:
         text = _make_words(500)
         segments, imperfect = _chunk_text(text)
         assert len(segments) == 1
-        assert imperfect[0] is True
+        assert imperfect[0] is False
 
     def test_700_words_with_newline_at_500_cuts_at_newline(self) -> None:
         text = _make_words(1500, with_newline_every=500)
@@ -60,11 +61,11 @@ class TestChunkText:
         assert imperfect[0] is False or imperfect[0] is True
 
     def test_no_newline_by_1000_imperfect_flag(self) -> None:
-        """1000 words with no newline → 2 segments (500 words each), both imperfect."""
+        """1000 words, no newline/sentence end → 2×500; only the hard cut is imperfect."""
         text = _make_words(1000)
         segments, imperfect = _chunk_text(text)
         assert len(segments) == 2
-        assert imperfect[0] is True and imperfect[1] is True
+        assert imperfect == [True, False]
 
     def test_many_segments_merged_to_max_22(self) -> None:
         """Many segments are merged so result is at most MAX_SEGMENTS (45)."""
@@ -79,7 +80,29 @@ class TestChunkText:
         segments, imperfect = _chunk_text(text)
         assert len(segments) == 22
         assert len(imperfect) == len(segments)
-        assert all(imperfect)
+        assert all(imperfect[:-1]) and imperfect[-1] is False
+
+    def test_cuts_at_sentence_end_when_no_newline(self) -> None:
+        words = [f"w{i}" for i in range(800)]
+        words[349] += "."  # sentence ends at word 350
+        segments, imperfect = _chunk_text(" ".join(words))
+        assert len(segments[0].split()) == 350
+        assert segments[0].rstrip().endswith("w349.")
+        assert imperfect == [False, False]
+
+    def test_newline_preferred_over_sentence_end(self) -> None:
+        words = [f"w{i}" for i in range(800)]
+        words[319] += "."
+        text = " ".join(words[:400]) + "\n" + " ".join(words[400:])
+        segments, _ = _chunk_text(text)
+        assert len(segments[0].split()) == 400
+
+    def test_sentence_end_with_closing_quote(self) -> None:
+        words = [f"w{i}" for i in range(800)]
+        words[309] += '."'
+        segments, imperfect = _chunk_text(" ".join(words))
+        assert segments[0].rstrip().endswith('w309."')
+        assert imperfect[0] is False
 
 
 class _FakeTTSProvider(TTSProvider):

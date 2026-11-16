@@ -27,17 +27,25 @@ def _word_spans(text: str) -> list[re.Match[str]]:
     return list(re.finditer(r"\S+", text))
 
 
+# Sentence end: terminal punctuation, optional closing quotes/brackets, then whitespace.
+_SENTENCE_END = re.compile(r"[.!?…][\"'»”’)\]]*\s")
+
+
 def _chunk_text(
     text: str,
     min_words: int = MIN_WORDS,
     max_words: int = MAX_WORDS,
     max_segments: int = MAX_SEGMENTS,
 ) -> tuple[list[str], list[bool]]:
-    """Split text into segments of 700–1000 words, cutting at first newline after 700.
+    """Split text into segments of MIN_WORDS–MAX_WORDS words.
+
+    Cut preference, searched between the MIN_WORDS-th and MAX_WORDS-th word:
+    first newline, else first sentence end, else a hard cut at MAX_WORDS.
+    When the remaining text fits in one segment it is taken whole.
 
     Returns:
         (segments, imperfect_flags): list of segment strings and per-segment
-        True if cut was at 1000 with no newline (imperfect split).
+        True only when the segment was hard-cut at MAX_WORDS (mid-sentence).
     """
     text = text.strip()
     if not text:
@@ -54,25 +62,35 @@ def _chunk_text(
 
     while i < n:
         start_char = words[i].start()
-        j_700 = min(i + min_words, n)
-        j_1000 = min(i + max_words, n)
-        end_700 = words[j_700 - 1].end() if j_700 > i else start_char
-        end_1000 = words[j_1000 - 1].end() if j_1000 > i else end_700
-
-        newline_pos = text.find("\n", end_700)
-        if newline_pos != -1 and newline_pos < end_1000:
-            cut = newline_pos + 1
-            segment_text = text[start_char:cut]
-            segments.append(segment_text)
+        if n - i <= max_words:
+            segments.append(text[start_char:])
             imperfect.append(False)
-            while i < n and words[i].start() < cut:
-                i += 1
+            break
+
+        j_min = i + min_words
+        j_max = i + max_words
+        end_min = words[j_min - 1].end()
+        end_max = words[j_max - 1].end()
+
+        newline_pos = text.find("\n", end_min, end_max)
+        if newline_pos != -1:
+            cut = newline_pos + 1
+            is_imperfect = False
         else:
-            cut = end_1000
-            segment_text = text[start_char:cut]
-            segments.append(segment_text)
-            imperfect.append(True)
-            i = j_1000
+            # Search from the end of word MIN_WORDS (inclusive) so a period on
+            # that word counts; +1 to include the following whitespace char.
+            sentence = _SENTENCE_END.search(text, end_min - 1, end_max + 1)
+            if sentence is not None:
+                cut = sentence.end()
+                is_imperfect = False
+            else:
+                cut = end_max
+                is_imperfect = True
+
+        segments.append(text[start_char:cut])
+        imperfect.append(is_imperfect)
+        while i < n and words[i].start() < cut:
+            i += 1
 
     if len(segments) > max_segments:
         merged = segments[: max_segments - 1]
@@ -120,8 +138,8 @@ def execute_llm_tts_step(
     """Chunk the final script and synthesize each segment to audio.
 
     Reads artifacts/final_script.md (or state.final_script_path), chunks into
-    700–1000 word segments (cut at first newline after 700; if none by 1000,
-    cut at 1000 and log warning). Enforces 1 ≤ segments ≤ 22. Writes
+    MIN_WORDS–MAX_WORDS word segments (see ``_chunk_text``; a hard mid-sentence
+    cut logs a warning). Enforces 1 ≤ segments ≤ MAX_SEGMENTS. Writes
     tts/prompts/segment_NN.txt and tts/outputs/segment_NN.<audio_ext>, logs
     progress and cumulative token usage, and appends TTS usage to
     state.tts_token_usage.
@@ -185,8 +203,8 @@ def execute_llm_tts_step(
         logger.info(f"TTS segment {seg_num}/{num_segments}")
         if is_imperfect:
             logger.warning(
-                f"TTS segment {seg_num}: no newline found by {MAX_WORDS} words; "
-                "cut at max words"
+                f"TTS segment {seg_num}: no newline or sentence end found by "
+                f"{MAX_WORDS} words; cut mid-sentence at max words"
             )
 
         prompt_path = prompts_dir / f"segment_{seg_num:02d}.txt"
