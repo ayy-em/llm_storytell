@@ -20,6 +20,7 @@ from llm_storytell.prompt_render import (
 )
 from llm_storytell.schemas import SchemaValidationError, validate_json_schema
 from llm_storytell.steps.llm_io import save_llm_io
+from llm_storytell.steps.response_utils import strip_code_fence
 
 
 class SummarizeStepError(Exception):
@@ -194,7 +195,7 @@ def execute_summarize_step(
 
         # Parse JSON response
         try:
-            summary_data = json.loads(result.content)
+            summary_data = json.loads(strip_code_fence(result.content))
         except json.JSONDecodeError as e:
             raise SummarizeStepError(f"Invalid JSON in LLM response: {e}") from e
 

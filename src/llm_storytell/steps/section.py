@@ -25,6 +25,7 @@ from llm_storytell.prompt_render import (
 )
 from llm_storytell.schemas import SchemaValidationError, validate_json_schema
 from llm_storytell.steps.llm_io import save_llm_io
+from llm_storytell.steps.response_utils import normalize_frontmatter_document
 
 
 class SectionStepError(Exception):
@@ -96,6 +97,7 @@ def _parse_markdown_with_frontmatter(content: str) -> tuple[dict[str, Any], str]
         SectionStepError: If frontmatter cannot be parsed.
     """
     # Match YAML frontmatter between --- markers
+    content = normalize_frontmatter_document(content)
     frontmatter_pattern = r"^---\s*\n(.*?)\n---\s*\n(.*)$"
     match = re.match(frontmatter_pattern, content, re.DOTALL)
 
